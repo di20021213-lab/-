@@ -36,3 +36,22 @@ sudo systemctl status memcached
 Запишите в Redis несколько ключей с любыми именами и значениями.
 
 Через redis-cli достаньте все записанные ключи и значения из базы, приведите скриншот этой операции.
+# Установка и проверка redis
+#sudo apt install -y redis
+#sudo systemctl status redis
+
+
+<img width="1310" height="775" alt="image" src="https://github.com/user-attachments/assets/af778919-2cce-4d89-a3a5-b5146dc2d72a" />
+
+# Листинг команд
+#redis-cli
+#scan 0
+#set k1 test
+#set k2 100
+#scan 0
+#get k1
+#get k2
+#flushall
+#exit
+<img width="764" height="706" alt="image" src="https://github.com/user-attachments/assets/caf4657f-2131-4e08-a8e1-115efb4412a0" />
+
