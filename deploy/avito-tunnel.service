@@ -1,0 +1,27 @@
+# SSH-туннель: российская VDS -> зарубежная VDS. Даёт локальный SOCKS5 для Telegram.
+# Копировать в /etc/systemd/system/avito-tunnel.service
+#
+# Заменить: ВАШ_ЮЗЕР@ВАША_ЗАРУБЕЖНАЯ_VDS
+
+[Unit]
+Description=SSH SOCKS5 tunnel for Telegram (foreign VDS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=avito
+# AUTOSSH_GATETIME=0 — перезапускаться даже если самое первое соединение упало сразу.
+Environment=AUTOSSH_GATETIME=0
+# -D 127.0.0.1:1080 — слушать ТОЛЬКО localhost. Наружу порт не выставляем.
+ExecStart=/usr/bin/autossh -M 0 -N -C -D 127.0.0.1:1080 \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    -o ExitOnForwardFailure=yes \
+    -o StrictHostKeyChecking=accept-new \
+    -i /home/avito/.ssh/id_ed25519 \
+    ВАШ_ЮЗЕР@ВАША_ЗАРУБЕЖНАЯ_VDS
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

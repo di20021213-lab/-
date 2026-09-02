@@ -1,0 +1,22 @@
+# Бот. Копировать в /etc/systemd/system/avito-watcher.service
+#
+# Wants (а не Requires) намеренно: если туннель лёг, бот продолжает мониторить
+# Авито. Неотправленные объявления НЕ теряются — они не помечаются виденными
+# и уйдут, когда туннель вернётся.
+
+[Unit]
+Description=Avito GPU Watcher
+After=network-online.target avito-tunnel.service
+Wants=network-online.target avito-tunnel.service
+
+[Service]
+User=avito
+WorkingDirectory=/opt/avito-watcher
+ExecStart=/opt/avito-watcher/.venv/bin/python -m avito_watcher.main
+Restart=always
+RestartSec=15
+# Браузер лежит в общей папке, куда его положил root при установке.
+Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
+
+[Install]
+WantedBy=multi-user.target

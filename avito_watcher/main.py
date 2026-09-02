@@ -96,10 +96,17 @@ def process_search(
                     continue
                 warning = reason  # режим flag: покажем с пометкой ⚠️
             ok = notifier.send_listing(lst, search.label, warning=warning)
-            store.mark_seen(search.label, lst.id, notified=ok, title=lst.title, price=lst.price)
             if ok:
+                store.mark_seen(search.label, lst.id, notified=True,
+                                title=lst.title, price=lst.price)
                 sent += 1
                 log.info("[%s] уведомление: %s | %s", search.label, lst.title, lst.price)
+            else:
+                # НЕ помечаем виденным: Telegram мог быть временно недоступен
+                # (моргнул туннель/сеть). Иначе объявление потеряется навсегда.
+                # Останется «новым» и уйдёт в следующем цикле.
+                log.warning("[%s] не отправилось, повторю в следующем цикле: %s | %s",
+                            search.label, lst.title, lst.price)
             time.sleep(0.5)  # мягкий троттлинг Telegram
         else:
             store.mark_seen(search.label, lst.id, notified=False, title=lst.title, price=lst.price)
