@@ -25,12 +25,20 @@ def main() -> int:
         print("Не найден TELEGRAM_BOT_TOKEN. Задай его в .env или в переменных окружения.")
         return 2
 
-    url = f"https://api.telegram.org/bot{token}/getUpdates"
+    # Те же настройки, что и у бота: за туннелем/прокси иначе не достучаться.
+    api_base = (os.getenv("TELEGRAM_API_BASE") or "https://api.telegram.org").rstrip("/")
+    proxy = (os.getenv("TELEGRAM_PROXY") or os.getenv("PROXY") or "").strip()
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    if proxy:
+        print(f"(через прокси {proxy})")
+
+    url = f"{api_base}/bot{token}/getUpdates"
     try:
-        resp = requests.get(url, timeout=30)
+        resp = requests.get(url, timeout=30, proxies=proxies)
         data = resp.json()
-    except requests.RequestException as e:
+    except (requests.RequestException, ValueError) as e:
         print(f"Ошибка запроса к Telegram: {e}")
+        print("Если ты за туннелем — проверь, что он поднят и задан TELEGRAM_PROXY.")
         return 1
 
     if not data.get("ok"):
