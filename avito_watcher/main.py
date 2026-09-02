@@ -161,7 +161,7 @@ def run_check(settings: Settings) -> int:
     print("\n### Проверка настройки ###")
 
     notifier = TelegramNotifier(settings.telegram_token, settings.telegram_chat_id,
-                                proxy=settings.proxy, api_base=settings.telegram_api_base)
+                                proxy=settings.telegram_proxy, api_base=settings.telegram_api_base)
     bot = notifier.check()
     if bot:
         print(f"  ✓ Telegram: токен рабочий, бот @{bot}")
@@ -171,8 +171,8 @@ def run_check(settings: Settings) -> int:
 
     print(f"  · Поисков в конфиге: {len(settings.searches)}")
     print(f"  · База виденных: {settings.db_path}")
-    if settings.proxy:
-        print(f"  · Прокси: {settings.proxy}")
+    print(f"  · Прокси для Авито: {settings.proxy or 'нет (напрямую)'}")
+    print(f"  · Прокси для Telegram: {settings.telegram_proxy or 'нет (напрямую)'}")
 
     total = 0
     try:
@@ -233,7 +233,7 @@ def run(argv: Optional[list[str]] = None) -> int:
     notifier = TelegramNotifier(
         settings.telegram_token,
         settings.telegram_chat_id,
-        proxy=settings.proxy,
+        proxy=settings.telegram_proxy,
         api_base=settings.telegram_api_base,
     )
 

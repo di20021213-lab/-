@@ -51,6 +51,9 @@ class Settings:
     poll_interval_max: int = 180
     headless: bool = True
     proxy: Optional[str] = None
+    # Отдельный прокси для Telegram. Нужен, когда Авито открывается напрямую
+    # (ты в РФ), а api.telegram.org — нет. Если не задан, берётся общий proxy.
+    telegram_proxy: Optional[str] = None
     db_path: str = "seen.sqlite3"
     max_notifications_per_cycle: int = 15
     request_timeout_ms: int = 45000
@@ -182,6 +185,10 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
             "и вставь полученный chat_id в .env."
         )
 
+    proxy = (os.getenv("PROXY") or s.get("proxy") or "").strip() or None
+    # TELEGRAM_PROXY не задан -> общий PROXY (обратная совместимость).
+    telegram_proxy = (os.getenv("TELEGRAM_PROXY") or "").strip() or proxy
+
     interval_min = _as_int(os.getenv("POLL_INTERVAL_MIN"),
                            _as_int(s.get("poll_interval_min"), 90, "poll_interval_min"),
                            "POLL_INTERVAL_MIN")
@@ -198,7 +205,8 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
         poll_interval_min=interval_min,
         poll_interval_max=interval_max,
         headless=_as_bool(os.getenv("HEADLESS"), _as_bool(s.get("headless"), True)),
-        proxy=(os.getenv("PROXY") or s.get("proxy") or None) or None,
+        proxy=proxy,
+        telegram_proxy=telegram_proxy,
         db_path=os.getenv("DB_PATH") or s.get("db_path") or "seen.sqlite3",
         max_notifications_per_cycle=_as_int(s.get("max_notifications_per_cycle"), 15,
                                             "max_notifications_per_cycle"),
