@@ -43,6 +43,19 @@ class TelegramNotifier:
             log.warning("Telegram %s request failed: %s", method, e)
             return False
 
+    def check(self) -> Optional[str]:
+        """Проверяет токен через getMe. Возвращает @username бота или None."""
+        try:
+            resp = self.session.post(f"{self.api_base}/bot{self.token}/getMe", timeout=30)
+            data = resp.json()
+        except (requests.RequestException, ValueError) as e:
+            log.warning("Telegram getMe failed: %s", e)
+            return None
+        if not data.get("ok"):
+            log.warning("Telegram getMe error: %s", data.get("description"))
+            return None
+        return (data.get("result") or {}).get("username") or "?"
+
     def send_message(self, text: str, disable_preview: bool = False) -> bool:
         return self._call(
             "sendMessage",

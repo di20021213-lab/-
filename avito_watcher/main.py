@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import logging
 import random
 import signal
@@ -11,6 +12,7 @@ from typing import Optional
 
 from . import filters, quality
 from .config import ConfigError, SearchConfig, Settings, load_settings
+from .dates import format_age
 from .notifier import TelegramNotifier
 from .scraper import AntibotError, AvitoScraper
 from .storage import SeenStore
@@ -107,7 +109,108 @@ def process_search(
                     search.label, max_notifications)
 
 
-def run() -> int:
+def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings) -> int:
+    """Разовая проверка: показать, что бот видит и как отработали фильтры.
+
+    Ничего не шлёт и не пишет в базу — безопасно гонять сколько угодно.
+    Возвращает число подходящих объявлений.
+    """
+    listings = scraper.fetch(search.url)
+    print(f"\n=== [{search.label}] найдено на странице: {len(listings)} ===")
+    if not listings:
+        print("  Ничего не найдено. Проверь URL (открой его в браузере) — "
+              "или Авито отдал антибот-страницу.")
+        return 0
+
+    good = 0
+    for lst in listings[:25]:
+        price = f"{lst.price_value} ₽" if lst.price_value is not None else "цена не указана"
+        age = format_age(lst.age_minutes)
+        head = f"{lst.title} | {price} | {age}"
+
+        reason = filters.explain(lst, search)
+        if reason:
+            print(f"  ✗ {head}\n      — {reason}")
+            continue
+
+        broken = None
+        if search.on_broken != "ignore":
+            broken = quality.broken_reason(lst.title, extra=search.extra_broken_markers)
+            if broken is None and search.check_description and lst.url:
+                broken = quality.broken_reason(
+                    _fetch_details_safe(scraper, lst.url, search.label),
+                    extra=search.extra_broken_markers,
+                )
+        if broken and search.on_broken == "skip":
+            print(f"  ✗ {head}\n      — похоже нерабочая («{broken}»)")
+            continue
+
+        good += 1
+        mark = f"  ⚠ {head}\n      — прошло, но похоже нерабочая («{broken}»)" if broken else f"  ✓ {head}"
+        print(mark)
+        print(f"      {lst.url}")
+
+    if len(listings) > 25:
+        print(f"  … и ещё {len(listings) - 25} (показаны первые 25)")
+    print(f"  ИТОГО подходящих: {good}")
+    return good
+
+
+def run_check(settings: Settings) -> int:
+    """Режим --check: проверить конфиг, Telegram и каждый поиск. Ничего не отправляя."""
+    print("\n### Проверка настройки ###")
+
+    notifier = TelegramNotifier(settings.telegram_token, settings.telegram_chat_id,
+                                proxy=settings.proxy, api_base=settings.telegram_api_base)
+    bot = notifier.check()
+    if bot:
+        print(f"  ✓ Telegram: токен рабочий, бот @{bot}")
+    else:
+        print("  ✗ Telegram: токен не принят. Проверь TELEGRAM_BOT_TOKEN в .env "
+              "(и доступность api.telegram.org — при блокировках задай TELEGRAM_API_BASE).")
+
+    print(f"  · Поисков в конфиге: {len(settings.searches)}")
+    print(f"  · База виденных: {settings.db_path}")
+    if settings.proxy:
+        print(f"  · Прокси: {settings.proxy}")
+
+    total = 0
+    try:
+        with AvitoScraper(headless=settings.headless, proxy=settings.proxy,
+                          user_agent=settings.user_agent, timeout_ms=settings.request_timeout_ms,
+                          executable_path=settings.executable_path) as scraper:
+            for search in settings.searches:
+                try:
+                    total += check_search(search, scraper, settings)
+                except AntibotError as e:
+                    print(f"\n=== [{search.label}] ===\n  ✗ {e}\n"
+                          "     Нужен российский IP или PROXY в .env.")
+                except Exception as e:  # noqa: BLE001
+                    print(f"\n=== [{search.label}] ===\n  ✗ ошибка: {e}")
+    except Exception as e:  # noqa: BLE001
+        print(f"\n✗ Не удалось запустить браузер: {e}\n"
+              "  Скорее всего не установлен Chromium: выполни `playwright install chromium`.")
+        return 1
+
+    print(f"\nГотово. Подходящих объявлений сейчас: {total}.")
+    print("Если всё выглядит правильно — запускай без флагов: python -m avito_watcher.main\n")
+    return 0
+
+
+def run(argv: Optional[list[str]] = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="avito_watcher",
+        description="Мониторинг новых объявлений на Авито с уведомлениями в Telegram.",
+    )
+    parser.add_argument("--check", action="store_true",
+                        help="разовая проверка настройки: что бот видит и как отработали "
+                             "фильтры. Ничего не шлёт и не пишет в базу")
+    parser.add_argument("--once", action="store_true",
+                        help="один проход по всем поискам и выход (удобно для cron)")
+    parser.add_argument("--config", default="config.yaml",
+                        help="путь к config.yaml (по умолчанию ./config.yaml)")
+    args = parser.parse_args(argv)
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -115,10 +218,13 @@ def run() -> int:
     )
 
     try:
-        settings: Settings = load_settings()
+        settings: Settings = load_settings(args.config)
     except ConfigError as e:
         log.error("Ошибка конфигурации: %s", e)
         return 2
+
+    if args.check:
+        return run_check(settings)
 
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
@@ -132,11 +238,15 @@ def run() -> int:
     )
 
     labels = ", ".join(s.label for s in settings.searches)
-    log.info("Старт мониторинга. Поисков: %d (%s). Интервал: %d-%d сек.",
-             len(settings.searches), labels, settings.poll_interval_min, settings.poll_interval_max)
-    notifier.send_message(
-        f"✅ Бот запущен. Слежу за {len(settings.searches)} поиском(ами): {labels}"
-    )
+    if args.once:
+        log.info("Разовый проход. Поисков: %d (%s).", len(settings.searches), labels)
+    else:
+        log.info("Старт мониторинга. Поисков: %d (%s). Интервал: %d-%d сек.",
+                 len(settings.searches), labels,
+                 settings.poll_interval_min, settings.poll_interval_max)
+        notifier.send_message(
+            f"✅ Бот запущен. Слежу за {len(settings.searches)} поиском(ами): {labels}"
+        )
 
     try:
         with AvitoScraper(
@@ -161,7 +271,7 @@ def run() -> int:
                         log.exception("[%s] ошибка при обработке: %s", search.label, e)
                     time.sleep(random.uniform(2, 5))  # пауза между разными поисками
 
-                if _stop:
+                if _stop or args.once:
                     break
 
                 delay = random.uniform(settings.poll_interval_min, settings.poll_interval_max)
