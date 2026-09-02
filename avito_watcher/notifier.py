@@ -10,19 +10,27 @@ import requests
 
 log = logging.getLogger(__name__)
 
-API = "https://api.telegram.org/bot{token}/{method}"
+DEFAULT_API_BASE = "https://api.telegram.org"
 
 
 class TelegramNotifier:
-    def __init__(self, token: str, chat_id: str, proxy: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        token: str,
+        chat_id: str,
+        proxy: Optional[str] = None,
+        api_base: Optional[str] = None,
+    ) -> None:
         self.token = token
         self.chat_id = chat_id
+        # Базу API можно переопределить: Bot API-прокси / локальный сервер (актуально при блокировках).
+        self.api_base = (api_base or DEFAULT_API_BASE).rstrip("/")
         self.session = requests.Session()
         if proxy:
             self.session.proxies = {"http": proxy, "https": proxy}
 
     def _call(self, method: str, payload: dict) -> bool:
-        url = API.format(token=self.token, method=method)
+        url = f"{self.api_base}/bot{self.token}/{method}"
         try:
             resp = self.session.post(url, data=payload, timeout=30)
             data = resp.json()
@@ -30,7 +38,8 @@ class TelegramNotifier:
                 log.warning("Telegram %s error: %s", method, data.get("description"))
                 return False
             return True
-        except requests.RequestException as e:
+        except (requests.RequestException, ValueError) as e:
+            # ValueError — Telegram вернул не-JSON (например, HTML-страницу 502).
             log.warning("Telegram %s request failed: %s", method, e)
             return False
 

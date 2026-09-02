@@ -46,6 +46,7 @@ class Settings:
     request_timeout_ms: int = 45000
     user_agent: str = DEFAULT_USER_AGENT
     executable_path: Optional[str] = None
+    telegram_api_base: Optional[str] = None
 
 
 def _as_bool(value, default: bool) -> bool:
@@ -56,10 +57,23 @@ def _as_bool(value, default: bool) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
-def _as_int(value, default: int) -> int:
+def _as_int(value, default: int, name: str = "значение") -> int:
     if value is None or value == "":
         return default
-    return int(value)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ConfigError(f"'{name}' должно быть целым числом, получено: {value!r}") from None
+
+
+def _as_opt_int(value, name: str) -> Optional[int]:
+    """Необязательное целое (цена): None/пусто -> None, иначе int или ConfigError."""
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ConfigError(f"'{name}' должно быть целым числом, получено: {value!r}") from None
 
 
 def load_settings(config_path: str = "config.yaml") -> Settings:
@@ -88,8 +102,8 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
             SearchConfig(
                 label=label,
                 url=url,
-                max_price=item.get("max_price"),
-                min_price=item.get("min_price"),
+                max_price=_as_opt_int(item.get("max_price"), f"{label}.max_price"),
+                min_price=_as_opt_int(item.get("min_price"), f"{label}.min_price"),
                 keywords=[str(k).lower() for k in (item.get("keywords") or [])],
                 exclude_keywords=[str(k).lower() for k in (item.get("exclude_keywords") or [])],
             )
@@ -109,8 +123,12 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
             "и вставь полученный chat_id в .env."
         )
 
-    interval_min = _as_int(os.getenv("POLL_INTERVAL_MIN"), _as_int(s.get("poll_interval_min"), 90))
-    interval_max = _as_int(os.getenv("POLL_INTERVAL_MAX"), _as_int(s.get("poll_interval_max"), 180))
+    interval_min = _as_int(os.getenv("POLL_INTERVAL_MIN"),
+                           _as_int(s.get("poll_interval_min"), 90, "poll_interval_min"),
+                           "POLL_INTERVAL_MIN")
+    interval_max = _as_int(os.getenv("POLL_INTERVAL_MAX"),
+                           _as_int(s.get("poll_interval_max"), 180, "poll_interval_max"),
+                           "POLL_INTERVAL_MAX")
     if interval_max < interval_min:
         interval_max = interval_min
 
@@ -123,8 +141,10 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
         headless=_as_bool(os.getenv("HEADLESS"), _as_bool(s.get("headless"), True)),
         proxy=(os.getenv("PROXY") or s.get("proxy") or None) or None,
         db_path=os.getenv("DB_PATH") or s.get("db_path") or "seen.sqlite3",
-        max_notifications_per_cycle=_as_int(s.get("max_notifications_per_cycle"), 15),
-        request_timeout_ms=_as_int(s.get("request_timeout_ms"), 45000),
+        max_notifications_per_cycle=_as_int(s.get("max_notifications_per_cycle"), 15,
+                                            "max_notifications_per_cycle"),
+        request_timeout_ms=_as_int(s.get("request_timeout_ms"), 45000, "request_timeout_ms"),
         user_agent=(s.get("user_agent") or DEFAULT_USER_AGENT),
         executable_path=(os.getenv("PLAYWRIGHT_EXECUTABLE_PATH") or s.get("executable_path") or None) or None,
+        telegram_api_base=(os.getenv("TELEGRAM_API_BASE") or "").strip() or None,
     )

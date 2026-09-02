@@ -4,7 +4,10 @@ FROM mcr.microsoft.com/playwright/python:v1.47.0-jammy
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Ставим браузер ПОСЛЕ установки playwright, чтобы сборка Chromium гарантированно
+# совпала с установленной версией пакета (иначе "Executable doesn't exist").
+RUN pip install --no-cache-dir -r requirements.txt \
+    && playwright install chromium
 
 COPY . .
 

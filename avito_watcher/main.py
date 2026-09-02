@@ -91,7 +91,10 @@ def run() -> int:
 
     store = SeenStore(settings.db_path)
     notifier = TelegramNotifier(
-        settings.telegram_token, settings.telegram_chat_id, proxy=settings.proxy
+        settings.telegram_token,
+        settings.telegram_chat_id,
+        proxy=settings.proxy,
+        api_base=settings.telegram_api_base,
     )
 
     labels = ", ".join(s.label for s in settings.searches)

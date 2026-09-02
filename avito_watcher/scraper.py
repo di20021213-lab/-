@@ -14,6 +14,9 @@ log = logging.getLogger(__name__)
 
 BASE_URL = "https://www.avito.ru"
 
+# Сколько ждать появления объявлений на уже загруженной странице.
+ITEMS_WAIT_MS = 15000
+
 # Признаки того, что нас встретил антибот/капча, а не выдача.
 ANTIBOT_MARKERS = (
     "подтвердите, что запросы отправляли вы",
@@ -169,8 +172,11 @@ class AvitoScraper:
             if any(marker in body_text for marker in ANTIBOT_MARKERS):
                 raise AntibotError("Похоже на антибот/капчу Авито (нужен другой IP/прокси).")
 
+            # Объявления у Авито есть уже в исходном HTML, поэтому ждём их недолго:
+            # иначе пустая выдача стопорила бы цикл на весь request_timeout_ms.
             try:
-                page.wait_for_selector('[data-marker="item"]', timeout=self.timeout_ms)
+                page.wait_for_selector('[data-marker="item"]',
+                                       timeout=min(self.timeout_ms, ITEMS_WAIT_MS))
             except PWTimeout:
                 # либо антибот, либо пустая выдача — различаем по тексту
                 body_text = (page.inner_text("body")[:4000]).lower()
