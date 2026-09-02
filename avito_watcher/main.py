@@ -37,14 +37,20 @@ def process_search(
     if not listings:
         return
 
-    # Первичный посев: помечаем всё как виденное без уведомлений,
-    # чтобы не завалить пользователя старыми объявлениями на старте.
-    if not store.has_any(search.label):
+    first_run = not store.has_any(search.label)
+
+    # Первичный посев БЕЗ фильтра свежести: молча запоминаем всё, чтобы не завалить
+    # пользователя старьём на старте. Если задан max_age — наоборот, сразу шлём то,
+    # что подходит по свежести (ради этого его и ставят), остальное просто запоминаем.
+    if first_run and search.max_age_minutes is None:
         for lst in listings:
             store.mark_seen(search.label, lst.id, notified=True, title=lst.title, price=lst.price)
         log.info("[%s] первичный посев: запомнил %d объявлений (без уведомлений)",
                  search.label, len(listings))
         return
+    if first_run:
+        log.info("[%s] первый запуск с max_age: пришлю то, что не старше %d мин",
+                 search.label, search.max_age_minutes)
 
     # Новые = те, которых ещё нет в базе. Выдача отсортирована «по дате» (новые сверху),
     # поэтому разворачиваем, чтобы уведомлять в хронологическом порядке.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -30,6 +31,8 @@ class SearchConfig:
     min_price: Optional[int] = None
     keywords: list[str] = field(default_factory=list)
     exclude_keywords: list[str] = field(default_factory=list)
+    # Максимальный возраст объявления в минутах (None — не фильтровать по свежести).
+    max_age_minutes: Optional[int] = None
 
 
 @dataclass
@@ -76,6 +79,41 @@ def _as_opt_int(value, name: str) -> Optional[int]:
         raise ConfigError(f"'{name}' должно быть целым числом, получено: {value!r}") from None
 
 
+_DURATION_RE = re.compile(r"^\s*(\d+)?\s*([a-zа-я]*)\s*$")
+_DUR_MINUTES = {"", "m", "min", "м", "мин", "минут", "минута", "минуты"}
+_DUR_HOURS = {"h", "hr", "ч", "час", "часа", "часов"}
+_DUR_DAYS = {"d", "д", "дн", "день", "дня", "дней"}
+
+
+def parse_duration_minutes(value, name: str) -> Optional[int]:
+    """Длительность -> минуты. Понимает: 30, "10m", "20 мин", "1h", "2 часа", "1d", "день".
+
+    Голое число — минуты. None/пусто -> None (фильтр по свежести выключен).
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        raise ConfigError(f"'{name}' должно быть длительностью, получено: {value!r}")
+    if isinstance(value, int):
+        return value
+    m = _DURATION_RE.match(str(value).lower().replace("ё", "е"))
+    if not m or (m.group(1) is None and not m.group(2)):
+        raise ConfigError(
+            f"'{name}': не понимаю длительность {value!r}. Примеры: 10m, 20 мин, 1h, 2 часа, 1d, день"
+        )
+    n = int(m.group(1)) if m.group(1) is not None else 1  # «час» = 1 час
+    unit = m.group(2)
+    if unit in _DUR_MINUTES:
+        return n
+    if unit in _DUR_HOURS:
+        return n * 60
+    if unit in _DUR_DAYS:
+        return n * 1440
+    raise ConfigError(
+        f"'{name}': неизвестная единица {unit!r} в {value!r}. Используй m/мин, h/ч, d/д"
+    )
+
+
 def load_settings(config_path: str = "config.yaml") -> Settings:
     """Читает config.yaml + переменные окружения и валидирует их."""
     path = Path(config_path)
@@ -104,6 +142,7 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
                 url=url,
                 max_price=_as_opt_int(item.get("max_price"), f"{label}.max_price"),
                 min_price=_as_opt_int(item.get("min_price"), f"{label}.min_price"),
+                max_age_minutes=parse_duration_minutes(item.get("max_age"), f"{label}.max_age"),
                 keywords=[str(k).lower() for k in (item.get("keywords") or [])],
                 exclude_keywords=[str(k).lower() for k in (item.get("exclude_keywords") or [])],
             )

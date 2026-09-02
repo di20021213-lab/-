@@ -2,23 +2,50 @@
 #
 # Самый надёжный способ задать фильтры: открой avito.ru, настрой всё вручную
 # (модель, цена, город, состояние), ОТСОРТИРУЙ «по дате» и вставь итоговый URL сюда.
-# Параметр сортировки по дате у Авито — s=104 (уже добавлен в примерах ниже).
 #
-# max_price / min_price / keywords / exclude_keywords — необязательные
-# дополнительные фильтры уже на нашей стороне (поверх того, что в URL).
+# Полезные параметры в URL Авито:
+#   s=104          — сортировка «по дате» (новые сверху). Оставляй всегда.
+#   pmin= / pmax=  — цена от/до. Продублируй сюда свой диапазон: Авито отдаст меньше лишнего.
+#
+# Наши доп. фильтры (поверх URL):
+#   min_price / max_price — ценовой диапазон. Объявления БЕЗ цены («договорная») при
+#                           заданном диапазоне отсеиваются — они вне диапазона.
+#   max_age               — свежесть: не старше N. Примеры: 10m, 20m, 1h, 2h, 1d
+#                           (также «20 мин», «2 часа», «день»; голое число = минуты).
+#                           ВАЖНО: max_age должен быть БОЛЬШЕ poll_interval_max, иначе
+#                           объявление может «состариться» между двумя проверками.
+#                           На первом запуске с max_age бот СРАЗУ пришлёт всё подходящее
+#                           по свежести. Без max_age — молча запомнит текущее и дальше
+#                           будет слать только новое.
+#   keywords / exclude_keywords — слова в заголовке (должно быть / не должно быть).
 
 searches:
-  - label: "RTX 3060"
-    url: "https://www.avito.ru/moskva/tovary_dlya_kompyutera/komplektuyuschie/videokarty?q=rtx+3060&s=104"
-    max_price: 25000
-    # min_price: 8000
-    # keywords: ["3060"]                 # заголовок должен содержать хотя бы одно из слов
-    exclude_keywords: ["ti", "обмен", "на запчасти", "не работает"]
+  - label: "Видеокарты 200–2000 ₽, свежие"
+    url: "https://www.avito.ru/moskva/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmin=200&pmax=2000&s=104"
+    min_price: 200
+    max_price: 2000
+    max_age: "1h"          # только опубликованные не позже часа назад
+    exclude_keywords: ["обмен", "на запчасти", "не работает", "нерабоч"]
 
-  - label: "RTX 3070"
-    url: "https://www.avito.ru/moskva/tovary_dlya_kompyutera/komplektuyuschie/videokarty?q=rtx+3070&s=104"
-    max_price: 35000
-    exclude_keywords: ["обмен", "не работает"]
+  # Другие варианты свежести — раскомментируй и подставь свой URL:
+  #
+  # - label: "Совсем свежие — 10 минут"
+  #   url: "https://www.avito.ru/moskva/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmin=200&pmax=2000&s=104"
+  #   min_price: 200
+  #   max_price: 2000
+  #   max_age: "10m"       # тогда poll_interval_max ниже поставь, например, 120
+  #
+  # - label: "За последние 20 минут"
+  #   url: "..."
+  #   max_age: "20m"
+  #
+  # - label: "За последние 2 часа"
+  #   url: "..."
+  #   max_age: "2h"
+  #
+  # - label: "За сутки"
+  #   url: "..."
+  #   max_age: "1d"
 
 settings:
   poll_interval_min: 90          # минимальная пауза между проверками, сек

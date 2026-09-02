@@ -10,6 +10,8 @@ from typing import Optional
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
 
+from .dates import parse_age_minutes
+
 log = logging.getLogger(__name__)
 
 BASE_URL = "https://www.avito.ru"
@@ -85,6 +87,8 @@ class Listing:
     location: Optional[str]
     date_text: Optional[str]
     image_url: Optional[str]
+    # Сколько минут прошло с публикации (None — не смогли разобрать дату).
+    age_minutes: Optional[int] = None
 
 
 def _parse_price(price_value, price_text) -> Optional[int]:
@@ -201,6 +205,7 @@ class AvitoScraper:
                     location=r.get("location"),
                     date_text=r.get("dateText"),
                     image_url=r.get("image"),
+                    age_minutes=parse_age_minutes(r.get("dateText")),
                 )
             )
         return listings
