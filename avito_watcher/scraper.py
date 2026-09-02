@@ -19,6 +19,13 @@ BASE_URL = "https://www.avito.ru"
 # Сколько ждать появления объявлений на уже загруженной странице.
 ITEMS_WAIT_MS = 15000
 
+# Страница объявления: описание + блок параметров («Состояние: …»).
+DETAILS_SELECTOR = (
+    '[data-marker="item-view/item-description"], [itemprop="description"], '
+    '[data-marker="item-view/item-params"]'
+)
+DETAILS_WAIT_MS = 8000
+
 # Признаки того, что нас встретил антибот/капча, а не выдача.
 ANTIBOT_MARKERS = (
     "подтвердите, что запросы отправляли вы",
@@ -209,3 +216,28 @@ class AvitoScraper:
                 )
             )
         return listings
+
+    def fetch_details(self, url: str) -> Optional[str]:
+        """Открывает страницу объявления, возвращает текст описания + параметров (или None)."""
+        page = self._context.new_page()
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
+
+            body_text = (page.inner_text("body")[:4000] if page.query_selector("body") else "").lower()
+            if any(marker in body_text for marker in ANTIBOT_MARKERS):
+                raise AntibotError("Антибот/капча Авито на странице объявления.")
+
+            try:
+                page.wait_for_selector(DETAILS_SELECTOR,
+                                       timeout=min(self.timeout_ms, DETAILS_WAIT_MS))
+            except PWTimeout:
+                return None
+
+            parts = []
+            for el in page.query_selector_all(DETAILS_SELECTOR):
+                txt = (el.inner_text() or "").strip()
+                if txt:
+                    parts.append(txt)
+            return "\n".join(parts) or None
+        finally:
+            page.close()

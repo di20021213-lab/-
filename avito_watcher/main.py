@@ -7,8 +7,9 @@ import random
 import signal
 import sys
 import time
+from typing import Optional
 
-from . import filters
+from . import filters, quality
 from .config import ConfigError, SearchConfig, Settings, load_settings
 from .notifier import TelegramNotifier
 from .scraper import AntibotError, AvitoScraper
@@ -23,6 +24,18 @@ def _handle_signal(signum, frame):  # noqa: ARG001
     global _stop
     _stop = True
     log.info("Получен сигнал остановки, завершаюсь после текущего цикла...")
+
+
+def _fetch_details_safe(scraper: AvitoScraper, url: str, label: str) -> Optional[str]:
+    """Описание объявления. При любом сбое — None: не теряем объявление из-за ошибки сети."""
+    time.sleep(random.uniform(1.0, 3.0))  # не долбим сайт: пауза перед второй страницей
+    try:
+        return scraper.fetch_details(url)
+    except AntibotError as e:
+        log.warning("[%s] описание не проверено (антибот): %s", label, e)
+    except Exception as e:  # noqa: BLE001
+        log.warning("[%s] описание не проверено: %s", label, e)
+    return None
 
 
 def process_search(
@@ -65,7 +78,22 @@ def process_search(
         # Запоминаем всё новое, чтобы не переоценивать в следующем цикле.
         matched = filters.passes(lst, search)
         if matched and sent < max_notifications:
-            ok = notifier.send_listing(lst, search.label)
+            # Признаки неисправности: сначала заголовок (бесплатно), потом — если чисто —
+            # само объявление: описание и параметры. Только для финалистов, их мало.
+            warning = None
+            if search.on_broken != "ignore":
+                reason = quality.broken_reason(lst.title, extra=search.extra_broken_markers)
+                if reason is None and search.check_description and lst.url:
+                    details = _fetch_details_safe(scraper, lst.url, search.label)
+                    reason = quality.broken_reason(details, extra=search.extra_broken_markers)
+                if reason and search.on_broken == "skip":
+                    log.info("[%s] пропуск, похоже нерабочая («%s»): %s | %s",
+                             search.label, reason, lst.title, lst.price)
+                    store.mark_seen(search.label, lst.id, notified=False,
+                                    title=lst.title, price=lst.price)
+                    continue
+                warning = reason  # режим flag: покажем с пометкой ⚠️
+            ok = notifier.send_listing(lst, search.label, warning=warning)
             store.mark_seen(search.label, lst.id, notified=ok, title=lst.title, price=lst.price)
             if ok:
                 sent += 1

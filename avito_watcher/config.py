@@ -33,6 +33,13 @@ class SearchConfig:
     exclude_keywords: list[str] = field(default_factory=list)
     # Максимальный возраст объявления в минутах (None — не фильтровать по свежести).
     max_age_minutes: Optional[int] = None
+    # Признаки неисправности: skip — не показывать, flag — показать с пометкой ⚠️,
+    # ignore — не проверять вовсе.
+    on_broken: str = "skip"
+    # Открывать само объявление и проверять описание/параметры (только для финалистов).
+    check_description: bool = True
+    # Свои дополнительные признаки неисправности (к встроенному словарю).
+    extra_broken_markers: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -114,6 +121,15 @@ def parse_duration_minutes(value, name: str) -> Optional[int]:
     )
 
 
+def _as_choice(value, default: str, choices: tuple[str, ...], name: str) -> str:
+    if value is None or value == "":
+        return default
+    v = str(value).strip().lower()
+    if v not in choices:
+        raise ConfigError(f"'{name}' должно быть одним из {', '.join(choices)}; получено: {value!r}")
+    return v
+
+
 def load_settings(config_path: str = "config.yaml") -> Settings:
     """Читает config.yaml + переменные окружения и валидирует их."""
     path = Path(config_path)
@@ -143,6 +159,10 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
                 max_price=_as_opt_int(item.get("max_price"), f"{label}.max_price"),
                 min_price=_as_opt_int(item.get("min_price"), f"{label}.min_price"),
                 max_age_minutes=parse_duration_minutes(item.get("max_age"), f"{label}.max_age"),
+                on_broken=_as_choice(item.get("on_broken"), "skip", ("skip", "flag", "ignore"),
+                                     f"{label}.on_broken"),
+                check_description=_as_bool(item.get("check_description"), True),
+                extra_broken_markers=[str(k) for k in (item.get("extra_broken_markers") or [])],
                 keywords=[str(k).lower() for k in (item.get("keywords") or [])],
                 exclude_keywords=[str(k).lower() for k in (item.get("exclude_keywords") or [])],
             )

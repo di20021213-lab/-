@@ -54,9 +54,12 @@ class TelegramNotifier:
             },
         )
 
-    def send_listing(self, listing, search_label: str) -> bool:
-        """Шлёт карточку объявления. Пытается с фото, при неудаче — обычным текстом."""
-        caption = self._format_caption(listing, search_label)
+    def send_listing(self, listing, search_label: str, warning: Optional[str] = None) -> bool:
+        """Шлёт карточку объявления. Пытается с фото, при неудаче — обычным текстом.
+
+        warning — найденный признак неисправности; добавляется в карточку как пометка ⚠️.
+        """
+        caption = self._format_caption(listing, search_label, warning)
 
         if listing.image_url:
             ok = self._call(
@@ -75,9 +78,11 @@ class TelegramNotifier:
         return self.send_message(caption)
 
     @staticmethod
-    def _format_caption(listing, search_label: str) -> str:
+    def _format_caption(listing, search_label: str, warning: Optional[str] = None) -> str:
         title = html.escape(listing.title or "Без названия")
         parts = [f"🎮 <b>{html.escape(search_label)}</b>", "", f"<b>{title}</b>"]
+        if warning:
+            parts.append(f"⚠️ <b>Возможно неисправна:</b> «{html.escape(warning)}»")
         if listing.price:
             parts.append(f"💰 {html.escape(str(listing.price))}")
         if listing.location:
