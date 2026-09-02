@@ -1,0 +1,29 @@
+# Список поисков, которые бот будет отслеживать.
+#
+# Самый надёжный способ задать фильтры: открой avito.ru, настрой всё вручную
+# (модель, цена, город, состояние), ОТСОРТИРУЙ «по дате» и вставь итоговый URL сюда.
+# Параметр сортировки по дате у Авито — s=104 (уже добавлен в примерах ниже).
+#
+# max_price / min_price / keywords / exclude_keywords — необязательные
+# дополнительные фильтры уже на нашей стороне (поверх того, что в URL).
+
+searches:
+  - label: "RTX 3060"
+    url: "https://www.avito.ru/moskva/tovary_dlya_kompyutera/komplektuyuschie/videokarty?q=rtx+3060&s=104"
+    max_price: 25000
+    # min_price: 8000
+    # keywords: ["3060"]                 # заголовок должен содержать хотя бы одно из слов
+    exclude_keywords: ["ti", "обмен", "на запчасти", "не работает"]
+
+  - label: "RTX 3070"
+    url: "https://www.avito.ru/moskva/tovary_dlya_kompyutera/komplektuyuschie/videokarty?q=rtx+3070&s=104"
+    max_price: 35000
+    exclude_keywords: ["обмен", "не работает"]
+
+settings:
+  poll_interval_min: 90          # минимальная пауза между проверками, сек
+  poll_interval_max: 180         # максимальная пауза, сек (берётся случайное значение из диапазона)
+  headless: true                 # false — показать окно браузера (для отладки)
+  max_notifications_per_cycle: 15  # предохранитель от спама при большом наплыве
+  request_timeout_ms: 45000
+  # user_agent: "Mozilla/5.0 ..."  # переопределить User-Agent при необходимости
