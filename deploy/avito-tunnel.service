@@ -2,6 +2,10 @@
 # Копировать в /etc/systemd/system/avito-tunnel.service
 #
 # Заменить: ВАШ_ЮЗЕР@ВАША_ЗАРУБЕЖНАЯ_VDS
+#
+# Если SSH на зарубежной VDS слушает не 22-й порт, добавь в ExecStart: -p ПОРТ
+# Флага -f здесь быть НЕ должно: systemd сочтёт сервис завершённым и будет
+# перезапускать его по кругу.
 
 [Unit]
 Description=SSH SOCKS5 tunnel for Telegram (foreign VDS)
