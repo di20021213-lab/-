@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import unquote, urlparse
@@ -26,6 +27,15 @@ DETAILS_SELECTOR = (
     '[data-marker="item-view/item-params"]'
 )
 DETAILS_WAIT_MS = 8000
+
+# Что не грузим: объявления есть в самом HTML, а картинки/шрифты/стили — это
+# десятки лишних запросов через прокси за секунду, из-за которых прилетает 429.
+BLOCKED_RESOURCES = {"image", "media", "font", "stylesheet"}
+
+# Сколько раз повторить при 429/блокировке. У ротируемых прокси следующая
+# попытка часто уходит уже с другого IP.
+FETCH_RETRIES = 3
+RETRY_DELAY_S = 6
 
 # Признаки того, что нас встретил антибот/капча, а не выдача.
 ANTIBOT_MARKERS = (
@@ -177,7 +187,19 @@ class AvitoScraper:
             viewport={"width": 1366, "height": 900},
         )
         self._context.set_default_timeout(self.timeout_ms)
+        self._context.route("**/*", self._route)
         return self
+
+    @staticmethod
+    def _route(route) -> None:
+        """Отсекает тяжёлые ресурсы: меньше запросов через прокси — меньше 429."""
+        try:
+            if route.request.resource_type in BLOCKED_RESOURCES:
+                route.abort()
+            else:
+                route.continue_()
+        except Exception:  # noqa: BLE001 - гонка при закрытии страницы
+            pass
 
     def __exit__(self, *exc) -> None:
         for closer in (self._context, self._browser):
@@ -193,7 +215,21 @@ class AvitoScraper:
             pass
 
     def fetch(self, url: str) -> list[Listing]:
-        """Загружает страницу поиска и возвращает список объявлений (первая страница)."""
+        """Загружает страницу поиска, повторяя попытку при блокировке."""
+        last: Optional[AntibotError] = None
+        for attempt in range(1, FETCH_RETRIES + 1):
+            try:
+                return self._fetch_once(url)
+            except AntibotError as e:
+                last = e
+                if attempt < FETCH_RETRIES:
+                    log.info("Блокировка (попытка %d из %d), повтор через %d с: %s",
+                             attempt, FETCH_RETRIES, RETRY_DELAY_S, e)
+                    time.sleep(RETRY_DELAY_S)
+        raise last
+
+    def _fetch_once(self, url: str) -> list[Listing]:
+        """Одна попытка: загрузить страницу и разобрать объявления."""
         page = self._context.new_page()
         try:
             resp = page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
