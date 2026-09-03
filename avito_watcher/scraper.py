@@ -6,6 +6,7 @@ import logging
 import re
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import unquote, urlparse
 
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
@@ -121,6 +122,25 @@ def _absolutize(url: Optional[str]) -> Optional[str]:
     return url
 
 
+def _proxy_config(proxy_url: str) -> dict:
+    """Разбирает URL прокси в формат Playwright.
+
+    Chromium НЕ понимает логин и пароль внутри --proxy-server: часть
+    user:pass@ он молча отбрасывает, подключается без авторизации и виснет.
+    Поэтому их нужно передавать отдельными полями username/password.
+    """
+    u = urlparse(proxy_url)
+    server = f"{u.scheme}://{u.hostname}"
+    if u.port:
+        server = f"{server}:{u.port}"
+    cfg = {"server": server}
+    if u.username:
+        cfg["username"] = unquote(u.username)
+    if u.password:
+        cfg["password"] = unquote(u.password)
+    return cfg
+
+
 class AvitoScraper:
     """Контекстный менеджер: держит один браузер на всё время работы."""
 
@@ -146,7 +166,7 @@ class AvitoScraper:
         self._pw = sync_playwright().start()
         launch_kwargs = {"headless": self.headless}
         if self.proxy:
-            launch_kwargs["proxy"] = {"server": self.proxy}
+            launch_kwargs["proxy"] = _proxy_config(self.proxy)
         if self.executable_path:
             launch_kwargs["executable_path"] = self.executable_path
         self._browser = self._pw.chromium.launch(**launch_kwargs)
