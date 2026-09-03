@@ -52,8 +52,21 @@ sudo -u avito -H ssh -i /home/avito/.ssh/id_ed25519 ВАШ_ЮЗЕР@ЗАРУБЕ
 
 ## 4. Код и зависимости
 
+Репозиторий приватный — нужен токен GitHub (fine-grained, Contents: Read-only,
+только на этот репозиторий). Вводим его скрыто, чтобы не осел в истории команд,
+и сразу убираем из `.git/config`:
+
 ```bash
-git clone -b claude/avito-gpu-parser-mmp6rr https://github.com/di20021213-lab/-.git /opt/avito-watcher
+read -rsp "GitHub token: " GH_TOKEN && echo
+
+git clone -b claude/avito-gpu-parser-mmp6rr \
+    "https://x-access-token:${GH_TOKEN}@github.com/di20021213-lab/-.git" \
+    /opt/avito-watcher
+
+# иначе токен останется в .git/config открытым текстом
+git -C /opt/avito-watcher remote set-url origin https://github.com/di20021213-lab/-.git
+unset GH_TOKEN
+
 chown -R avito:avito /opt/avito-watcher
 cd /opt/avito-watcher
 
