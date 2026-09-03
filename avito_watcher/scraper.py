@@ -176,12 +176,17 @@ class AvitoScraper:
         """Загружает страницу поиска и возвращает список объявлений (первая страница)."""
         page = self._context.new_page()
         try:
-            page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
+            resp = page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
+            # HTTP-статус сильно помогает при разборе: 429 — это лимит по IP
+            # (маскировка браузера не спасёт), 403 — блокировка, 200 — вёрстка.
+            status = resp.status if resp else None
 
             # Проверка на антибот до ожидания выдачи.
             body_text = (page.inner_text("body")[:4000] if page.query_selector("body") else "").lower()
-            if any(marker in body_text for marker in ANTIBOT_MARKERS):
-                raise AntibotError("Похоже на антибот/капчу Авито (нужен другой IP/прокси).")
+            if status in (403, 429) or any(marker in body_text for marker in ANTIBOT_MARKERS):
+                raise AntibotError(
+                    f"Похоже на антибот/капчу Авито (HTTP {status}). Нужен другой IP/прокси."
+                )
 
             # Объявления у Авито есть уже в исходном HTML, поэтому ждём их недолго:
             # иначе пустая выдача стопорила бы цикл на весь request_timeout_ms.
@@ -192,7 +197,7 @@ class AvitoScraper:
                 # либо антибот, либо пустая выдача — различаем по тексту
                 body_text = (page.inner_text("body")[:4000]).lower()
                 if any(marker in body_text for marker in ANTIBOT_MARKERS):
-                    raise AntibotError("Антибот/капча Авито (нужен другой IP/прокси).")
+                    raise AntibotError(f"Антибот/капча Авито (HTTP {status}). Нужен другой IP/прокси.")
                 log.info("Выдача пуста или изменилась вёрстка: %s", url)
                 return []
 
