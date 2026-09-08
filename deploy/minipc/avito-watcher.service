@@ -1,0 +1,28 @@
+# Бот на домашнем мини-ПК. Копировать в /etc/systemd/system/avito-watcher.service
+#
+# Отличия от варианта для VDS (deploy/avito-watcher.service):
+#   · код лежит в домашней папке пользователя, а не в /opt;
+#   · браузер стоит в ~/.cache/ms-playwright (место по умолчанию),
+#     поэтому PLAYWRIGHT_BROWSERS_PATH задавать не нужно.
+#
+# Если пользователь не danila — поправь User и оба пути:
+#   sudo sed -i 's/danila/ТВОЙ_ЮЗЕР/g' /etc/systemd/system/avito-watcher.service
+#
+# Wants (а не Requires) намеренно: если туннель лёг, бот продолжает мониторить
+# Авито. Неотправленные объявления НЕ теряются — они не помечаются виденными
+# и уйдут, когда туннель вернётся.
+
+[Unit]
+Description=Avito GPU Watcher
+After=network-online.target avito-tunnel.service
+Wants=network-online.target avito-tunnel.service
+
+[Service]
+User=danila
+WorkingDirectory=/home/danila/avito-watcher
+ExecStart=/home/danila/avito-watcher/.venv/bin/python -m avito_watcher.main
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

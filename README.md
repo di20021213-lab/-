@@ -228,7 +228,15 @@ docker run --rm \
 
 ### Как фоновый сервис (Linux, systemd)
 
-Пример юнита `/etc/systemd/system/avito-watcher.service`:
+Готовые комплекты под две типичные схемы:
+
+* **[deploy/minipc/](deploy/minipc/README.md)** — домашний мини-ПК. Авито
+  открывается прямо с домашнего IP (для антибота это лучший вариант), через
+  зарубежную VDS идёт только Telegram.
+* **[deploy/](deploy/README.md)** — бот на российской VDS, Telegram через
+  зарубежную.
+
+Либо собери юнит сам — `/etc/systemd/system/avito-watcher.service`:
 
 ```ini
 [Unit]
