@@ -67,4 +67,7 @@ settings:
   headless: true                 # false — показать окно браузера (для отладки)
   max_notifications_per_cycle: 15  # предохранитель от спама при большом наплыве
   request_timeout_ms: 45000
-  # user_agent: "Mozilla/5.0 ..."  # переопределить User-Agent при необходимости
+  # user_agent: "Mozilla/5.0 ..."
+  # Обычно НЕ нужен: по умолчанию UA собирается под реальную версию браузера,
+  # чтобы совпасть с client hints (Sec-CH-UA), которые Chromium шлёт сам.
+  # Свой выдуманный UA чаще вредит, чем помогает.

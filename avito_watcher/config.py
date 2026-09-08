@@ -13,10 +13,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-)
 
 
 class ConfigError(Exception):
@@ -57,7 +53,9 @@ class Settings:
     db_path: str = "seen.sqlite3"
     max_notifications_per_cycle: int = 15
     request_timeout_ms: int = 45000
-    user_agent: str = DEFAULT_USER_AGENT
+    # None — собрать UA под реальную версию браузера (так он совпадёт с client
+    # hints, которые Chromium шлёт сам). Строка — жёстко задать свой.
+    user_agent: Optional[str] = None
     executable_path: Optional[str] = None
     telegram_api_base: Optional[str] = None
 
@@ -211,7 +209,7 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
         max_notifications_per_cycle=_as_int(s.get("max_notifications_per_cycle"), 15,
                                             "max_notifications_per_cycle"),
         request_timeout_ms=_as_int(s.get("request_timeout_ms"), 45000, "request_timeout_ms"),
-        user_agent=(s.get("user_agent") or DEFAULT_USER_AGENT),
+        user_agent=(s.get("user_agent") or None),
         executable_path=(os.getenv("PLAYWRIGHT_EXECUTABLE_PATH") or s.get("executable_path") or None) or None,
         telegram_api_base=(os.getenv("TELEGRAM_API_BASE") or "").strip() or None,
     )

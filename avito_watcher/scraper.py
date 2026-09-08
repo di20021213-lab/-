@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+import random
 import re
 import time
 from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import unquote, urlparse
 
+from playwright.sync_api import Error as PWError
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
 
@@ -28,14 +30,34 @@ DETAILS_SELECTOR = (
 )
 DETAILS_WAIT_MS = 8000
 
-# Что не грузим: объявления есть в самом HTML, а картинки/шрифты/стили — это
-# десятки лишних запросов через прокси за секунду, из-за которых прилетает 429.
-BLOCKED_RESOURCES = {"image", "media", "font", "stylesheet"}
+# Что не грузим: объявления есть в самом HTML, а картинки/шрифты — это десятки
+# лишних запросов за секунду, из-за которых легко словить 429. Стили оставляем:
+# их мало, а браузер без единого CSS-запроса выглядит подозрительно.
+BLOCKED_RESOURCES = {"image", "media", "font"}
 
-# Сколько раз повторить при 429/блокировке. У ротируемых прокси следующая
-# попытка часто уходит уже с другого IP.
+# Сколько раз повторить при 429/блокировке и с какой паузой. 429 — это лимит по
+# IP, он снимается только временем, поэтому пауза растёт: 20 с, 40 с, 80 с…
 FETCH_RETRIES = 3
-RETRY_DELAY_S = 6
+RETRY_DELAY_S = 20
+
+# Аргументы запуска Chromium, которые убирают самые заметные следы автоматизации.
+LAUNCH_ARGS = (
+    "--disable-blink-features=AutomationControlled",
+    "--disable-dev-shm-usage",
+)
+# Этот флаг Playwright добавляет сам; из-за него браузер объявляет себя ботом.
+IGNORE_DEFAULT_ARGS = ("--enable-automation",)
+
+# Прячем navigator.webdriver: в обычном Chrome он undefined, у Playwright — true.
+_STEALTH_JS = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+"""
+
+# Заголовки, которые настоящий браузер шлёт, а Playwright по умолчанию — нет.
+EXTRA_HEADERS = {
+    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Upgrade-Insecure-Requests": "1",
+}
 
 # Признаки того, что нас встретил антибот/капча, а не выдача.
 ANTIBOT_MARKERS = (
@@ -89,6 +111,26 @@ _EXTRACT_JS = r"""
   }).filter(x => x.id);
 }
 """
+
+
+def _matching_user_agent(browser) -> Optional[str]:
+    """UA под реальную версию браузера и реальную платформу (Linux).
+
+    Подставлять выдуманный UA опасно: Chromium параллельно шлёт client hints
+    (Sec-CH-UA, Sec-CH-UA-Platform) со своей НАСТОЯЩЕЙ версией и платформой.
+    Если UA говорит «Chrome 124 на Windows», а подсказки — «Chrome 141 на Linux»,
+    расхождение видно антиботу в одну проверку. Поэтому собираем UA из версии
+    самого браузера; слово Headless в него не попадает.
+    """
+    try:
+        major = browser.version.split(".")[0]
+        int(major)
+    except (AttributeError, ValueError, IndexError):
+        return None
+    return (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        f"(KHTML, like Gecko) Chrome/{major}.0.0.0 Safari/537.36"
+    )
 
 
 class AntibotError(Exception):
@@ -174,18 +216,38 @@ class AvitoScraper:
 
     def __enter__(self) -> "AvitoScraper":
         self._pw = sync_playwright().start()
-        launch_kwargs = {"headless": self.headless}
+        launch_kwargs = {
+            "headless": self.headless,
+            "args": list(LAUNCH_ARGS),
+            "ignore_default_args": list(IGNORE_DEFAULT_ARGS),
+        }
         if self.proxy:
             launch_kwargs["proxy"] = _proxy_config(self.proxy)
         if self.executable_path:
             launch_kwargs["executable_path"] = self.executable_path
-        self._browser = self._pw.chromium.launch(**launch_kwargs)
+
+        # channel="chromium" — это НОВЫЙ headless-режим обычного Chromium.
+        # Без него Playwright запускает отдельный урезанный chrome-headless-shell,
+        # который антиботы отличают от браузера влёт. На старых версиях
+        # Playwright или без установленного полного Chromium — откат на дефолт.
+        try:
+            self._browser = self._pw.chromium.launch(channel="chromium", **launch_kwargs)
+        except PWError as e:
+            log.warning("Не удалось запустить полный Chromium (%s), беру headless-shell", e)
+            self._browser = self._pw.chromium.launch(**launch_kwargs)
+
+        # UA не задан в конфиге -> берём согласованный с версией браузера.
+        user_agent = self.user_agent or _matching_user_agent(self._browser)
+        log.debug("User-Agent: %s", user_agent)
+
         self._context = self._browser.new_context(
-            user_agent=self.user_agent,
+            user_agent=user_agent,
             locale="ru-RU",
             timezone_id="Europe/Moscow",
             viewport={"width": 1366, "height": 900},
+            extra_http_headers=dict(EXTRA_HEADERS),
         )
+        self._context.add_init_script(_STEALTH_JS)
         self._context.set_default_timeout(self.timeout_ms)
         self._context.route("**/*", self._route)
         return self
@@ -223,9 +285,14 @@ class AvitoScraper:
             except AntibotError as e:
                 last = e
                 if attempt < FETCH_RETRIES:
+                    # Пауза растёт вдвое: 429 снимается только временем, долбить
+                    # тем же интервалом бессмысленно. Джиттер — чтобы циклы
+                    # не били в сайт строго по расписанию.
+                    delay = RETRY_DELAY_S * (2 ** (attempt - 1))
+                    delay += random.uniform(0, delay * 0.25)
                     log.info("Блокировка (попытка %d из %d), повтор через %d с: %s",
-                             attempt, FETCH_RETRIES, RETRY_DELAY_S, e)
-                    time.sleep(RETRY_DELAY_S)
+                             attempt, FETCH_RETRIES, round(delay), e)
+                    time.sleep(delay)
         raise last
 
     def _fetch_once(self, url: str) -> list[Listing]:
