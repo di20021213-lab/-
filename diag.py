@@ -17,51 +17,15 @@
 from __future__ import annotations
 
 import os
-import re
 import sys
 
 import requests
-import yaml
 from dotenv import load_dotenv
 
-from avito_watcher.scraper import ANTIBOT_MARKERS, AntibotError, AvitoScraper
+from avito_watcher.probe import TIMEOUT_S, probe, url_from_config
+from avito_watcher.scraper import AntibotError, AvitoScraper
 
 load_dotenv()
-
-TIMEOUT_S = 30
-
-# Тот же набор заголовков, что шлёт обычный десктопный Chrome.
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Upgrade-Insecure-Requests": "1",
-}
-
-
-def _decode(resp: requests.Response) -> str:
-    """Текст ответа в правильной кодировке.
-
-    requests, не найдя charset в заголовке Content-Type, берёт ISO-8859-1 —
-    и русский текст превращается в мусор. Тогда проверка на «Доступ ограничен»
-    молча промахивается и диагностика врёт. Поэтому без charset — utf-8.
-    """
-    if "charset" not in (resp.headers.get("Content-Type") or "").lower():
-        resp.encoding = "utf-8"
-    return resp.text
-
-
-def url_from_config(path: str = "config.yaml") -> str | None:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            raw = yaml.safe_load(f) or {}
-    except OSError:
-        return None
-    searches = raw.get("searches") or []
-    return (searches[0].get("url") or "").strip() or None if searches else None
 
 
 def show_ip(proxy: str | None) -> None:
@@ -77,35 +41,11 @@ def show_ip(proxy: str | None) -> None:
 def check_http(url: str, proxy: str | None) -> bool:
     """Простой HTTP-запрос. Проверяет IP, отпечаток браузера тут ни при чём."""
     print("\n[1/2] Простой HTTP-запрос (проверяем IP)")
-    proxies = {"http": proxy, "https": proxy} if proxy else None
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT_S, proxies=proxies)
-    except requests.RequestException as e:
-        print(f"  ✗ Запрос не прошёл: {e}")
-        return False
-
-    body = _decode(resp)
-    items = len(re.findall(r'data-marker="item"', body))
-    lowered = body[:20000].lower()
-    hits = [m for m in ANTIBOT_MARKERS if m in lowered]
-
-    print(f"  HTTP {resp.status_code}, страница {len(body)} байт, объявлений в HTML: {items}")
-    if hits:
-        # Страницу «Доступ ограничен» Авито отдаёт с кодом 200, так что
-        # ориентироваться только на статус нельзя.
-        print(f"  ✗ Это страница блокировки (нашёл: {', '.join(hits)})")
-        return False
-    if resp.status_code == 429:
-        print("  ✗ HTTP 429: лимит запросов с этого IP. Снимается только паузой.")
-        return False
-    if resp.status_code >= 400:
-        print(f"  ✗ HTTP {resp.status_code}")
-        return False
-    if items == 0:
-        print("  ? Блокировки нет, но и объявлений нет: проверь сам URL в браузере.")
-        return False
-    print("  ✓ IP проходит, выдача отдаётся")
-    return True
+    result = probe(url, proxy)
+    print(f"  {'✓' if result.ok else '✗'} {result.describe()}")
+    if not result.ok and not result.markers and not result.error and result.status == 200:
+        print("    Блокировки нет, но и объявлений нет: проверь сам URL в браузере.")
+    return result.ok
 
 
 def check_browser(url: str, proxy: str | None) -> bool:

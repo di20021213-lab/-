@@ -1,0 +1,21 @@
+# Раз в час дёргает avito-ipwatch.service.
+# Копировать в /etc/systemd/system/avito-ipwatch.timer
+#
+# Включить:  sudo systemctl enable --now avito-ipwatch.timer
+# Выключить: sudo systemctl disable --now avito-ipwatch.timer
+#
+# Чаще раза в час ставить НЕЛЬЗЯ: 429 снимается временем без запросов,
+# и частая проверка сама продлевала бы лимит.
+
+[Unit]
+Description=Hourly check whether Avito lifted the rate limit
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+# Случайный сдвиг до 10 минут: запросы не должны идти строго по расписанию.
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -134,6 +134,37 @@ cd ~/avito-watcher
 .venv/bin/python diag.py
 ```
 
+## 4а. Если IP под лимитом: сторож
+
+Поймал `429` и ждёшь, когда отпустит? Не проверяй руками — каждая проверка
+продлевает лимит. Поставь сторож: он делает **один** HTTP-запрос раз в час
+(без браузера, без повторов), пишет результат в `ip_watch.log` и присылает в
+Telegram сообщение в тот момент, когда Авито снова начнёт пускать. Повторно об
+одном и том же не пишет.
+
+```bash
+cd ~/avito-watcher
+sudo cp deploy/minipc/avito-ipwatch.service /etc/systemd/system/
+sudo cp deploy/minipc/avito-ipwatch.timer   /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now avito-ipwatch.timer
+```
+
+Посмотреть накопленное и когда следующая проверка:
+
+```bash
+cat ip_watch.log
+systemctl list-timers avito-ipwatch --no-pager
+```
+
+Когда IP отпустит и бот заработает — сторож больше не нужен:
+
+```bash
+sudo systemctl disable --now avito-ipwatch.timer
+```
+
+Чаще раза в час ставить нельзя: `429` снимается только временем без запросов.
+
 ## 5. Сервис бота
 
 ```bash

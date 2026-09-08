@@ -21,3 +21,5 @@ logs/
 .DS_Store
 .idea/
 .vscode/
+ip_watch.log
+.ip_watch_state

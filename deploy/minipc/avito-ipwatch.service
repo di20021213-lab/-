@@ -1,0 +1,20 @@
+# Сторож IP: один HTTP-запрос к Авито, чтобы понять, снят ли лимит.
+# Запускается таймером avito-ipwatch.timer, сам по себе не крутится.
+# Копировать в /etc/systemd/system/avito-ipwatch.service
+#
+# Если пользователь не danila:
+#   sudo sed -i 's/danila/ТВОЙ_ЮЗЕР/g' /etc/systemd/system/avito-ipwatch.service
+
+[Unit]
+Description=Check whether Avito lifted the rate limit on our IP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=danila
+WorkingDirectory=/home/danila/avito-watcher
+ExecStart=/home/danila/avito-watcher/.venv/bin/python watch_ip.py
+# Заблокированный IP — это код возврата 1, а не поломка сервиса:
+# иначе systemd красил бы юнит в failed каждый час.
+SuccessExitStatus=0 1
