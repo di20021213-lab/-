@@ -1,5 +1,12 @@
-# SSH-туннель: домашний мини-ПК -> зарубежная VDS.
-# Даёт локальный SOCKS5 на 127.0.0.1:1080 для Telegram.
+# SSH-туннель: домашний мини-ПК -> зарубежная VDS. Делает две вещи одним
+# соединением:
+#
+#   -D 1080            SOCKS5 на мини-ПК, через который бот ходит в Telegram
+#   -R 2222:...:22     обратный проброс: SSH мини-ПК становится доступен
+#                      на самой VDS как localhost:2222 — так к домашней
+#                      машине можно подключиться с телефона, не пробрасывая
+#                      порты на роутере и не имея белого IP
+#
 # Копировать в /etc/systemd/system/avito-tunnel.service
 #
 # Заменить root@87.58.205.159 на свою зарубежную VDS, если она другая.
@@ -11,7 +18,7 @@
 # перезапускать его по кругу.
 
 [Unit]
-Description=SSH SOCKS5 tunnel for Telegram (foreign VDS)
+Description=SSH tunnel to foreign VDS (SOCKS5 for Telegram + remote access)
 After=network-online.target
 Wants=network-online.target
 
@@ -20,7 +27,12 @@ User=danila
 # AUTOSSH_GATETIME=0 — перезапускаться даже если самое первое соединение упало сразу.
 Environment=AUTOSSH_GATETIME=0
 # -D 127.0.0.1:1080 — слушать ТОЛЬКО localhost. Наружу порт не выставляем.
-ExecStart=/usr/bin/autossh -M 0 -N -C -D 127.0.0.1:1080 \
+# -R 127.0.0.1:2222 — на VDS порт тоже виден ТОЛЬКО изнутри неё. С телефона
+#   заходим через саму VDS как через промежуточный хост (jump host), а не по
+#   голому порту в интернет: иначе SSH домашней машины начнут перебирать боты.
+ExecStart=/usr/bin/autossh -M 0 -N -C \
+    -D 127.0.0.1:1080 \
+    -R 127.0.0.1:2222:localhost:22 \
     -o ServerAliveInterval=30 \
     -o ServerAliveCountMax=3 \
     -o ExitOnForwardFailure=yes \

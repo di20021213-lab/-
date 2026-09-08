@@ -19,6 +19,17 @@ from .storage import SeenStore
 
 log = logging.getLogger("avito_watcher")
 
+# Пока Авито нас блокирует, обычная пауза делает только хуже: 429 — это лимит по
+# IP, он снимается временем БЕЗ запросов. Продолжать долбить каждые 2 минуты —
+# значит держать бан бесконечно. Поэтому уходим в долгую паузу, которая
+# удваивается с каждым подряд заблокированным циклом.
+BLOCKED_COOLDOWN_S = 900        # 15 минут после первого заблокированного цикла
+BLOCKED_COOLDOWN_MAX_S = 3600   # дольше часа не ждём
+
+# После скольких заблокированных циклов подряд написать об этом в Telegram:
+# молча простаивать полчаса — хуже, чем одно сообщение.
+BLOCKED_ALERT_AFTER = 3
+
 _stop = False
 
 
@@ -204,6 +215,79 @@ def run_check(settings: Settings) -> int:
     return 0
 
 
+def _sleep_interruptibly(delay: float) -> None:
+    """Спит короткими кусками, чтобы быстро реагировать на сигнал остановки."""
+    slept = 0.0
+    while slept < delay and not _stop:
+        time.sleep(min(1.0, delay - slept))
+        slept += 1.0
+
+
+def _loop(scraper, settings: Settings, store: SeenStore,
+          notifier: TelegramNotifier, once: bool = False) -> None:
+    """Основной цикл: проверить все поиски, поспать, повторить.
+
+    Отдельно от run(), чтобы цикл можно было прогнать в тестах с подменённым
+    скрапером — иначе логика пауз при блокировке ничем не проверяется.
+    """
+    blocked_streak = 0   # сколько циклов подряд Авито нас не пустил
+    alerted = False      # уже писали в Telegram про блокировку?
+
+    while not _stop:
+        ok_count = 0
+        blocked_count = 0
+        for search in settings.searches:
+            if _stop:
+                break
+            try:
+                process_search(
+                    search, scraper, store, notifier,
+                    settings.max_notifications_per_cycle,
+                )
+                ok_count += 1
+            except AntibotError as e:
+                blocked_count += 1
+                log.warning("[%s] %s", search.label, e)
+            except Exception as e:  # noqa: BLE001 - один сбойный поиск не должен ронять цикл
+                log.exception("[%s] ошибка при обработке: %s", search.label, e)
+            time.sleep(random.uniform(2, 5))  # пауза между разными поисками
+
+        if _stop or once:
+            break
+
+        # Считаем цикл заблокированным, только если не прошёл НИ ОДИН поиск:
+        # иначе IP живой, а конкретный поиск сломался по своей причине.
+        if blocked_count and not ok_count:
+            blocked_streak += 1
+        else:
+            if alerted:
+                notifier.send_message("✅ Авито снова открывается, продолжаю следить.")
+                alerted = False
+            blocked_streak = 0
+
+        if blocked_streak:
+            delay = BLOCKED_COOLDOWN_S * 2 ** (blocked_streak - 1)
+            # Джиттер добавляем ДО ограничения, иначе потолок в час превращается
+            # в час двенадцать: сначала разброс, потом жёсткий предел.
+            delay = min(delay + random.uniform(0, delay * 0.2), BLOCKED_COOLDOWN_MAX_S)
+            log.warning(
+                "Авито блокирует наш IP (циклов подряд: %d). Пауза %.0f мин: "
+                "лимит снимается только временем без запросов.",
+                blocked_streak, delay / 60,
+            )
+            if blocked_streak == BLOCKED_ALERT_AFTER and not alerted:
+                alerted = True
+                notifier.send_message(
+                    "⚠️ Авито блокирует запросы с этого IP. Жду, пока лимит спадёт — "
+                    "объявления пока не приходят. Напишу, когда восстановится."
+                )
+        else:
+            delay = random.uniform(settings.poll_interval_min, settings.poll_interval_max)
+            log.info("Пауза %.0f сек до следующей проверки...", delay)
+
+        _sleep_interruptibly(delay)
+
+
 def run(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="avito_watcher",
@@ -263,31 +347,7 @@ def run(argv: Optional[list[str]] = None) -> int:
             timeout_ms=settings.request_timeout_ms,
             executable_path=settings.executable_path,
         ) as scraper:
-            while not _stop:
-                for search in settings.searches:
-                    if _stop:
-                        break
-                    try:
-                        process_search(
-                            search, scraper, store, notifier,
-                            settings.max_notifications_per_cycle,
-                        )
-                    except AntibotError as e:
-                        log.warning("[%s] %s", search.label, e)
-                    except Exception as e:  # noqa: BLE001 - один сбойный поиск не должен ронять цикл
-                        log.exception("[%s] ошибка при обработке: %s", search.label, e)
-                    time.sleep(random.uniform(2, 5))  # пауза между разными поисками
-
-                if _stop or args.once:
-                    break
-
-                delay = random.uniform(settings.poll_interval_min, settings.poll_interval_max)
-                log.info("Пауза %.0f сек до следующей проверки...", delay)
-                # Спим короткими интервалами, чтобы быстро реагировать на сигнал остановки.
-                slept = 0.0
-                while slept < delay and not _stop:
-                    time.sleep(min(1.0, delay - slept))
-                    slept += 1.0
+            _loop(scraper, settings, store, notifier, once=args.once)
     finally:
         store.close()
         log.info("Остановлен.")

@@ -43,8 +43,8 @@ class Settings:
     telegram_token: str
     telegram_chat_id: str
     searches: list[SearchConfig]
-    poll_interval_min: int = 90
-    poll_interval_max: int = 180
+    poll_interval_min: int = 180
+    poll_interval_max: int = 300
     headless: bool = True
     proxy: Optional[str] = None
     # Отдельный прокси для Telegram. Нужен, когда Авито открывается напрямую
@@ -188,10 +188,10 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
     telegram_proxy = (os.getenv("TELEGRAM_PROXY") or "").strip() or proxy
 
     interval_min = _as_int(os.getenv("POLL_INTERVAL_MIN"),
-                           _as_int(s.get("poll_interval_min"), 90, "poll_interval_min"),
+                           _as_int(s.get("poll_interval_min"), 180, "poll_interval_min"),
                            "POLL_INTERVAL_MIN")
     interval_max = _as_int(os.getenv("POLL_INTERVAL_MAX"),
-                           _as_int(s.get("poll_interval_max"), 180, "poll_interval_max"),
+                           _as_int(s.get("poll_interval_max"), 300, "poll_interval_max"),
                            "POLL_INTERVAL_MAX")
     if interval_max < interval_min:
         interval_max = interval_min
