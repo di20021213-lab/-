@@ -179,7 +179,22 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
 
     if len(listings) > 25:
         print(f"  … и ещё {len(listings) - 25} (показаны первые 25)")
+
+    # Считаем по ВСЕЙ выдаче, а не только по прошедшим фильтр: иначе при строгом
+    # max_age проверить, извлекаются ли фото, было бы попросту не на чем.
+    with_photo = sum(1 for lst in listings if lst.image_url)
     print(f"  ИТОГО подходящих: {good}")
+    print(f"  📷 картинка найдена у {with_photo} из {len(listings)}")
+    if not with_photo:
+        print("     Фото не извлекаются — уведомления придут текстом. Пришли этот вывод.")
+
+    # Самое свежее в выдаче: сразу видно, дело в фильтрах или объявлений просто нет.
+    ages = [lst.age_minutes for lst in listings if lst.age_minutes is not None]
+    if ages:
+        print(f"  🕒 самое свежее объявление: {format_age(min(ages))}")
+        if search.max_age_minutes is not None and min(ages) > search.max_age_minutes:
+            print(f"     Это старше твоего max_age ({format_age(search.max_age_minutes)}) — "
+                  "поэтому присылать сейчас нечего. Бот исправен, объявлений нет.")
     return good
 
 
