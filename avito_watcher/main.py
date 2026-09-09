@@ -39,16 +39,20 @@ def _handle_signal(signum, frame):  # noqa: ARG001
     log.info("Получен сигнал остановки, завершаюсь после текущего цикла...")
 
 
-def _fetch_details_safe(scraper: AvitoScraper, url: str, label: str) -> Optional[str]:
-    """Описание объявления. При любом сбое — None: не теряем объявление из-за ошибки сети."""
+def _fetch_details_safe(scraper: AvitoScraper, url: str, label: str) -> tuple[Optional[str], bool]:
+    """Описание объявления и флаг «проверка состоялась».
+
+    Флаг важен: без него сбой сети выглядел бы так же, как чистое описание, и
+    объявление уходило бы без пометки, будто его проверили и всё в порядке.
+    """
     time.sleep(random.uniform(1.0, 3.0))  # не долбим сайт: пауза перед второй страницей
     try:
-        return scraper.fetch_details(url)
+        return scraper.fetch_details(url), True
     except AntibotError as e:
         log.warning("[%s] описание не проверено (антибот): %s", label, e)
     except Exception as e:  # noqa: BLE001
         log.warning("[%s] описание не проверено: %s", label, e)
-    return None
+    return None, False
 
 
 def process_search(
@@ -94,11 +98,13 @@ def process_search(
             # Признаки неисправности: сначала заголовок (бесплатно), потом — если чисто —
             # само объявление: описание и параметры. Только для финалистов, их мало.
             warning = None
+            unchecked = False
             if search.on_broken != "ignore":
                 reason = quality.broken_reason(lst.title, extra=search.extra_broken_markers)
                 if reason is None and search.check_description and lst.url:
-                    details = _fetch_details_safe(scraper, lst.url, search.label)
+                    details, ok = _fetch_details_safe(scraper, lst.url, search.label)
                     reason = quality.broken_reason(details, extra=search.extra_broken_markers)
+                    unchecked = not ok
                 if reason and search.on_broken == "skip":
                     log.info("[%s] пропуск, похоже нерабочая («%s»): %s | %s",
                              search.label, reason, lst.title, lst.price)
@@ -106,7 +112,7 @@ def process_search(
                                     title=lst.title, price=lst.price)
                     continue
                 warning = reason  # режим flag: покажем с пометкой ⚠️
-            ok = notifier.send_listing(lst, search.label, warning=warning)
+            ok = notifier.send_listing(lst, search.label, warning=warning, unchecked=unchecked)
             if ok:
                 store.mark_seen(search.label, lst.id, notified=True,
                                 title=lst.title, price=lst.price)
@@ -152,21 +158,24 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
             continue
 
         broken = None
+        checked = True
         if search.on_broken != "ignore":
             broken = quality.broken_reason(lst.title, extra=search.extra_broken_markers)
             if broken is None and search.check_description and lst.url:
-                broken = quality.broken_reason(
-                    _fetch_details_safe(scraper, lst.url, search.label),
-                    extra=search.extra_broken_markers,
-                )
+                details, checked = _fetch_details_safe(scraper, lst.url, search.label)
+                broken = quality.broken_reason(details, extra=search.extra_broken_markers)
         if broken and search.on_broken == "skip":
             print(f"  ✗ {head}\n      — похоже нерабочая («{broken}»)")
             continue
 
         good += 1
-        mark = f"  ⚠ {head}\n      — прошло, но похоже нерабочая («{broken}»)" if broken else f"  ✓ {head}"
-        print(mark)
-        print(f"      {lst.url}")
+        if broken:
+            print(f"  ⚠ {head}\n      — прошло, но похоже нерабочая («{broken}»)")
+        elif not checked:
+            print(f"  ⚠ {head}\n      — прошло, но описание прочитать не удалось")
+        else:
+            print(f"  ✓ {head}")
+        print(f"      {'📷 ' if lst.image_url else ''}{lst.url}")
 
     if len(listings) > 25:
         print(f"  … и ещё {len(listings) - 25} (показаны первые 25)")

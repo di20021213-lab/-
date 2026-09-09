@@ -30,10 +30,11 @@ DETAILS_SELECTOR = (
 )
 DETAILS_WAIT_MS = 8000
 
-# Что не грузим: объявления есть в самом HTML, а картинки/шрифты — это десятки
-# лишних запросов за секунду, из-за которых легко словить 429. Стили оставляем:
-# их мало, а браузер без единого CSS-запроса выглядит подозрительно.
-BLOCKED_RESOURCES = {"image", "media", "font"}
+# Что не грузим: видео и шрифты — тяжёлые и на содержимое не влияют.
+# Картинки грузим намеренно, хотя это и десятки запросов: без них Авито не
+# подставляет в <img> настоящие ссылки, и в уведомление нечего вложить.
+# Заодно браузер, который не тянет ни одной картинки, выглядит неестественно.
+BLOCKED_RESOURCES = {"media", "font"}
 
 # Сколько раз повторить при 429/блокировке и с какой паузой. 429 — это лимит по
 # IP, он снимается только временем, поэтому пауза растёт: 20 с, 40 с, 80 с…
@@ -97,14 +98,31 @@ _EXTRACT_JS = r"""
     let location = addrEl ? (addrEl.innerText || '').trim() : null;
     if (location) location = location.replace(/\s+/g, ' ');
 
-    const imgEl = el.querySelector('img');
-    let image = null;
-    if (imgEl) {
-      image = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || null;
-      if (!image) {
-        const ss = imgEl.getAttribute('srcset');
-        if (ss) image = ss.split(',')[0].trim().split(' ')[0];
+    // Картинка объявления. Из srcset берём САМУЮ КРУПНУЮ (первая — это мелкая
+    // превьюшка), заглушки (data:, 1x1, placeholder) не считаем за картинку.
+    const usable = (u) => u && !u.startsWith('data:') && !/placeholder|stub|blank/i.test(u);
+    const biggest = (ss) => {
+      if (!ss) return null;
+      let best = null, bestW = -1;
+      for (const part of ss.split(',')) {
+        const bits = part.trim().split(/\s+/);
+        if (!bits[0]) continue;
+        const w = parseInt((bits[1] || '').replace(/\D/g, ''), 10) || 0;
+        if (w >= bestW) { bestW = w; best = bits[0]; }
       }
+      return best;
+    };
+
+    let image = null;
+    for (const imgEl of el.querySelectorAll('img')) {
+      const candidates = [
+        biggest(imgEl.getAttribute('srcset')),
+        biggest(imgEl.getAttribute('data-srcset')),
+        imgEl.getAttribute('src'),
+        imgEl.getAttribute('data-src'),
+      ];
+      image = candidates.find(usable) || null;
+      if (image) break;
     }
 
     return { id, url, title, price, priceValue, dateText, location, image };
@@ -355,17 +373,31 @@ class AvitoScraper:
             if any(marker in body_text for marker in ANTIBOT_MARKERS):
                 raise AntibotError("Антибот/капча Авито на странице объявления.")
 
+            parts = []
+
+            # Мета-описание: лежит в <head>, доступно сразу и не зависит от вёрстки.
+            # Именно его показывает Telegram в превью ссылки, и в нём есть начало
+            # описания продавца — то самое «не рабочая», ради которого мы и пришли.
+            for sel in ('meta[property="og:description"]', 'meta[name="description"]'):
+                meta = page.query_selector(sel)
+                if meta:
+                    content = (meta.get_attribute("content") or "").strip()
+                    if content:
+                        parts.append(content)
+                        break
+
+            # Полное описание и блок параметров. Может не успеть отрисоваться —
+            # тогда обходимся мета-описанием, а не теряем проверку целиком.
             try:
                 page.wait_for_selector(DETAILS_SELECTOR,
                                        timeout=min(self.timeout_ms, DETAILS_WAIT_MS))
+                for el in page.query_selector_all(DETAILS_SELECTOR):
+                    txt = (el.inner_text() or "").strip()
+                    if txt:
+                        parts.append(txt)
             except PWTimeout:
-                return None
+                log.info("Описание не отрисовалось, беру мета-описание: %s", url)
 
-            parts = []
-            for el in page.query_selector_all(DETAILS_SELECTOR):
-                txt = (el.inner_text() or "").strip()
-                if txt:
-                    parts.append(txt)
             return "\n".join(parts) or None
         finally:
             page.close()

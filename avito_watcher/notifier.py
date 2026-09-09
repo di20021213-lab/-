@@ -67,12 +67,14 @@ class TelegramNotifier:
             },
         )
 
-    def send_listing(self, listing, search_label: str, warning: Optional[str] = None) -> bool:
+    def send_listing(self, listing, search_label: str, warning: Optional[str] = None,
+                     unchecked: bool = False) -> bool:
         """Шлёт карточку объявления. Пытается с фото, при неудаче — обычным текстом.
 
         warning — найденный признак неисправности; добавляется в карточку как пометка ⚠️.
+        unchecked — описание прочитать не удалось, проверка на неисправность неполная.
         """
-        caption = self._format_caption(listing, search_label, warning)
+        caption = self._format_caption(listing, search_label, warning, unchecked)
 
         if listing.image_url:
             ok = self._call(
@@ -91,11 +93,15 @@ class TelegramNotifier:
         return self.send_message(caption)
 
     @staticmethod
-    def _format_caption(listing, search_label: str, warning: Optional[str] = None) -> str:
+    def _format_caption(listing, search_label: str, warning: Optional[str] = None,
+                        unchecked: bool = False) -> str:
         title = html.escape(listing.title or "Без названия")
         parts = [f"🎮 <b>{html.escape(search_label)}</b>", "", f"<b>{title}</b>"]
         if warning:
             parts.append(f"⚠️ <b>Возможно неисправна:</b> «{html.escape(warning)}»")
+        elif unchecked:
+            # Молчать тут нельзя: иначе непрочитанное описание выглядит как чистое.
+            parts.append("⚠️ <i>Описание прочитать не удалось — проверь сам</i>")
         if listing.price:
             parts.append(f"💰 {html.escape(str(listing.price))}")
         if listing.location:
