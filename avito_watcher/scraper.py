@@ -264,6 +264,7 @@ class AvitoScraper:
         user_agent: Optional[str] = None,
         timeout_ms: int = 45000,
         executable_path: Optional[str] = None,
+        user_data_dir: Optional[str] = None,
     ) -> None:
         self.headless = headless
         self.proxy = proxy
@@ -271,43 +272,70 @@ class AvitoScraper:
         self.timeout_ms = timeout_ms
         # Путь к готовому браузеру (если Playwright не должен качать свой).
         self.executable_path = executable_path
+        # Папка профиля браузера. С ней куки живут между запусками, и бот
+        # выглядит как вернувшийся посетитель, а не как новый каждые десять
+        # минут — для антибота разница существенная.
+        self.user_data_dir = user_data_dir
         self._pw = None
         self._browser = None
         self._context = None
 
-    def __enter__(self) -> "AvitoScraper":
-        self._pw = sync_playwright().start()
-        launch_kwargs = {
+    def _launch_kwargs(self) -> dict:
+        kw = {
             "headless": self.headless,
             "args": list(LAUNCH_ARGS),
             "ignore_default_args": list(IGNORE_DEFAULT_ARGS),
         }
         if self.proxy:
-            launch_kwargs["proxy"] = _proxy_config(self.proxy)
+            kw["proxy"] = _proxy_config(self.proxy)
         if self.executable_path:
-            launch_kwargs["executable_path"] = self.executable_path
+            kw["executable_path"] = self.executable_path
+        return kw
 
-        # channel="chromium" — это НОВЫЙ headless-режим обычного Chromium.
-        # Без него Playwright запускает отдельный урезанный chrome-headless-shell,
-        # который антиботы отличают от браузера влёт. На старых версиях
-        # Playwright или без установленного полного Chromium — откат на дефолт.
+    def _launch_browser(self):
+        """Обычный запуск. channel=chromium — новый headless настоящего браузера,
+        без него Playwright поднимает урезанный chrome-headless-shell."""
+        kw = self._launch_kwargs()
         try:
-            self._browser = self._pw.chromium.launch(channel="chromium", **launch_kwargs)
+            return self._pw.chromium.launch(channel="chromium", **kw)
         except PWError as e:
             log.warning("Не удалось запустить полный Chromium (%s), беру headless-shell", e)
-            self._browser = self._pw.chromium.launch(**launch_kwargs)
+            return self._pw.chromium.launch(**kw)
 
-        # UA не задан в конфиге -> берём согласованный с версией браузера.
-        user_agent = self.user_agent or _matching_user_agent(self._browser)
-        log.debug("User-Agent: %s", user_agent)
+    def _resolve_user_agent(self) -> Optional[str]:
+        """UA под версию браузера. Для профиля его нужно знать ДО запуска,
+        поэтому версию считываем отдельным коротким запуском — один раз за
+        всё время работы бота."""
+        if self.user_agent:
+            return self.user_agent
+        try:
+            browser = self._launch_browser()
+        except Exception as e:  # noqa: BLE001
+            log.warning("Не смог определить версию браузера: %s", e)
+            return None
+        try:
+            return _matching_user_agent(browser)
+        finally:
+            browser.close()
 
-        self._context = self._browser.new_context(
-            user_agent=user_agent,
-            locale="ru-RU",
-            timezone_id="Europe/Moscow",
-            viewport={"width": 1366, "height": 900},
-            extra_http_headers=dict(EXTRA_HEADERS),
-        )
+    def __enter__(self) -> "AvitoScraper":
+        self._pw = sync_playwright().start()
+        context_kwargs = {
+            "locale": "ru-RU",
+            "timezone_id": "Europe/Moscow",
+            "viewport": {"width": 1366, "height": 900},
+            "extra_http_headers": dict(EXTRA_HEADERS),
+        }
+
+        if self.user_data_dir:
+            self._context = self._open_persistent(context_kwargs)
+
+        if self._context is None:
+            self._browser = self._launch_browser()
+            context_kwargs["user_agent"] = (self.user_agent
+                                            or _matching_user_agent(self._browser))
+            self._context = self._browser.new_context(**context_kwargs)
+
         self._context.add_init_script(_STEALTH_JS)
         self._context.set_default_timeout(self.timeout_ms)
         self._context.route("**/*", self._route)
@@ -375,6 +403,26 @@ class AvitoScraper:
                              attempt, FETCH_RETRIES, round(delay), e)
                     time.sleep(delay)
         raise last
+
+    def _open_persistent(self, context_kwargs: dict):
+        """Браузер с постоянным профилем: куки переживают перезапуск.
+
+        При любой беде с профилем (побился, нет прав) возвращаем None — бот
+        продолжит на обычном одноразовом контексте, это лучше, чем не запуститься.
+        """
+        kwargs = {**self._launch_kwargs(), **context_kwargs,
+                  "user_agent": self._resolve_user_agent()}
+        for channel in ("chromium", None):
+            try:
+                if channel:
+                    return self._pw.chromium.launch_persistent_context(
+                        self.user_data_dir, channel=channel, **kwargs)
+                return self._pw.chromium.launch_persistent_context(
+                    self.user_data_dir, **kwargs)
+            except Exception as e:  # noqa: BLE001
+                last = e
+        log.warning("Профиль браузера не открылся (%s), работаю без него", last)
+        return None
 
     @staticmethod
     def _merge(into: dict, rows: list[dict]) -> None:

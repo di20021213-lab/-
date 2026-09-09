@@ -266,7 +266,8 @@ def run_check(settings: Settings) -> int:
     try:
         with AvitoScraper(headless=settings.headless, proxy=settings.proxy,
                           user_agent=settings.user_agent, timeout_ms=settings.request_timeout_ms,
-                          executable_path=settings.executable_path) as scraper:
+                          executable_path=settings.executable_path,
+                          user_data_dir=settings.user_data_dir) as scraper:
             for search in settings.searches:
                 try:
                     total += check_search(search, scraper, settings)
@@ -422,6 +423,7 @@ def run(argv: Optional[list[str]] = None) -> int:
             user_agent=settings.user_agent,
             timeout_ms=settings.request_timeout_ms,
             executable_path=settings.executable_path,
+            user_data_dir=settings.user_data_dir,
         ) as scraper:
             _loop(scraper, settings, store, notifier, once=args.once)
     finally:

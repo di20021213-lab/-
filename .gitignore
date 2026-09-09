@@ -24,3 +24,4 @@ logs/
 ip_watch.log
 .ip_watch_state
 page_dump.html
+browser-profile/
