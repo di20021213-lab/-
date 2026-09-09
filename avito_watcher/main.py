@@ -65,7 +65,7 @@ def process_search(
     notifier: TelegramNotifier,
     max_notifications: int,
 ) -> None:
-    listings = scraper.fetch(search.url)
+    listings = scraper.fetch(search.url, search.max_age_minutes)
     log.info("[%s] получено объявлений: %d", search.label, len(listings))
     if not listings:
         return
@@ -142,7 +142,7 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
     Ничего не шлёт и не пишет в базу — безопасно гонять сколько угодно.
     Возвращает число подходящих объявлений.
     """
-    listings = scraper.fetch(search.url)
+    listings = scraper.fetch(search.url, search.max_age_minutes)
     print(f"\n=== [{search.label}] найдено на странице: {len(listings)} ===")
     if not listings:
         print("  Ничего не найдено. Проверь URL (открой его в браузере) — "

@@ -40,11 +40,11 @@ DETAILS_SELECTOR = (
 )
 DETAILS_WAIT_MS = 8000
 
-# Что не грузим: видео и шрифты — тяжёлые и на содержимое не влияют.
-# Картинки грузим намеренно, хотя это и десятки запросов: без них Авито не
-# подставляет в <img> настоящие ссылки, и в уведомление нечего вложить.
-# Заодно браузер, который не тянет ни одной картинки, выглядит неестественно.
-BLOCKED_RESOURCES = {"media", "font"}
+# Картинки НЕ качаем, хотя ссылки на них нам нужны. Ссылка появляется в <img>
+# при отрисовке карточки (её вызывает прокрутка), а не при загрузке файла —
+# так что адрес мы прочитаем, а полсотни лишних запросов на страницу не сделаем.
+# Именно они и приводили к 429, когда областей стало четыре.
+BLOCKED_RESOURCES = {"image", "media", "font"}
 
 # Сколько раз повторить при 429/блокировке и с какой паузой. 429 — это лимит по
 # IP, он снимается только временем, поэтому пауза растёт: 20 с, 40 с, 80 с…
@@ -346,12 +346,16 @@ class AvitoScraper:
         except Exception:  # noqa: BLE001
             pass
 
-    def fetch(self, url: str) -> list[Listing]:
-        """Загружает страницу поиска, повторяя попытку при блокировке."""
+    def fetch(self, url: str, max_age_minutes: Optional[int] = None) -> list[Listing]:
+        """Загружает страницу поиска, повторяя попытку при блокировке.
+
+        max_age_minutes — до какого возраста читать выдачу. Дальше не идём:
+        она отсортирована по дате, и всё нижнее заведомо старше.
+        """
         last: Optional[AntibotError] = None
         for attempt in range(1, FETCH_RETRIES + 1):
             try:
-                return self._fetch_once(url)
+                return self._fetch_once(url, max_age_minutes)
             except AntibotError as e:
                 last = e
                 if attempt < FETCH_RETRIES:
@@ -374,7 +378,7 @@ class AvitoScraper:
                 if value not in (None, "") and not item.get(key):
                     item[key] = value
 
-    def _collect_while_scrolling(self, page) -> list[dict]:
+    def _collect_while_scrolling(self, page, max_age_minutes: Optional[int] = None) -> list[dict]:
         """Читает карточки НА КАЖДОМ шаге прокрутки и склеивает результат.
 
         Одного чтения в конце мало. Авито ведёт себя с полями по-разному:
@@ -386,9 +390,28 @@ class AvitoScraper:
         Собираем по кусочкам: что увидели на любом шаге — то и запомнили.
         """
         merged: dict[str, dict] = {}
+
+        def past_cutoff() -> bool:
+            """Дошли ли мы до объявлений старше max_age.
+
+            Выдача идёт по дате, поэтому ниже первого такого объявления всё
+            остальное ещё старше — читать и прокручивать дальше незачем. При
+            max_age в час это экономит почти всю страницу, а вместе с ней и
+            запросы, из-за которых прилетает 429.
+            """
+            if max_age_minutes is None:
+                return False
+            return any(
+                (age := parse_age_minutes(row.get("dateText"))) is not None
+                and age > max_age_minutes
+                for row in merged.values()
+            )
+
         try:
             self._merge(merged, page.evaluate(_EXTRACT_JS))
             for _ in range(MAX_SCROLLS):
+                if past_cutoff():
+                    break
                 before = page.evaluate("() => window.scrollY")
                 page.evaluate(
                     f"() => window.scrollBy(0, window.innerHeight * {SCROLL_STEP_RATIO})"
@@ -402,7 +425,7 @@ class AvitoScraper:
             log.info("Прокрутка прервалась (%s), беру собранное", e)
         return list(merged.values())
 
-    def _fetch_once(self, url: str) -> list[Listing]:
+    def _fetch_once(self, url: str, max_age_minutes: Optional[int] = None) -> list[Listing]:
         """Одна попытка: загрузить страницу и разобрать объявления."""
         page = self._context.new_page()
         try:
@@ -431,7 +454,7 @@ class AvitoScraper:
                 log.info("Выдача пуста или изменилась вёрстка: %s", url)
                 return []
 
-            raw = self._collect_while_scrolling(page)
+            raw = self._collect_while_scrolling(page, max_age_minutes)
         finally:
             page.close()
 
