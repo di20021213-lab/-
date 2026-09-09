@@ -41,8 +41,13 @@ class TelegramNotifier:
         # через туннель для Telegram нельзя — туда ходит только Bot API.
         self.image_proxies = ({"http": image_proxy, "https": image_proxy}
                               if image_proxy else None)
+        # Telegram умеет скачать фото по ссылке сам, но CDN Авито ему не отдаёт.
+        # Убедившись в этом один раз, больше не пробуем: лишний запрос на каждое
+        # объявление и тревожное WARNING в логе на ровном месте.
+        self._photo_by_url = True
 
-    def _call(self, method: str, payload: dict, files: Optional[dict] = None) -> bool:
+    def _call(self, method: str, payload: dict, files: Optional[dict] = None,
+              quiet: bool = False) -> bool:
         url = f"{self.api_base}/bot{self.token}/{method}"
         try:
             # Загрузка файла идёт дольше обычного вызова, поэтому таймаут больше.
@@ -50,7 +55,9 @@ class TelegramNotifier:
                                      timeout=90 if files else 30)
             data = resp.json()
             if not data.get("ok"):
-                log.warning("Telegram %s error: %s", method, data.get("description"))
+                # quiet — для ожидаемых отказов, у которых есть запасной путь.
+                (log.info if quiet else log.warning)(
+                    "Telegram %s error: %s", method, data.get("description"))
                 return False
             return True
         except (requests.RequestException, ValueError) as e:
@@ -94,12 +101,16 @@ class TelegramNotifier:
         if listing.image_url:
             payload = {"chat_id": self.chat_id, "caption": caption, "parse_mode": "HTML"}
 
-            # Сначала просто передаём ссылку: Telegram скачает картинку сам.
-            if self._call("sendPhoto", {**payload, "photo": listing.image_url}):
-                return True
+            # Пока не доказано обратное — просто передаём ссылку: так дешевле,
+            # картинку качает сам Telegram.
+            if self._photo_by_url:
+                if self._call("sendPhoto", {**payload, "photo": listing.image_url},
+                              quiet=True):
+                    return True
+                self._photo_by_url = False
+                log.info("Telegram не берёт фото по ссылке, дальше отправляю файлом")
 
-            # Не вышло. Скорее всего CDN Авито не отдал картинку серверам
-            # Telegram. Качаем сами — у нас-то доступ есть — и шлём файлом.
+            # Качаем сами — у нас-то доступ к Авито есть — и шлём файлом.
             content = self._download_image(listing.image_url)
             if content and self._call("sendPhoto", payload,
                                       files={"photo": ("photo.jpg", content)}):
