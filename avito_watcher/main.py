@@ -321,10 +321,14 @@ def _loop(scraper, settings: Settings, store: SeenStore,
         if _stop or once:
             break
 
-        # Считаем цикл заблокированным, только если не прошёл НИ ОДИН поиск:
-        # иначе IP живой, а конкретный поиск сломался по своей причине.
-        if blocked_count and not ok_count:
+        # Цикл считаем заблокированным, если блокировок не меньше, чем удачных
+        # поисков. Условие «не прошёл ни один» было слишком мягким: при трёх
+        # блокировках из четырёх счётчик сбрасывался, бот молчал о проблеме и
+        # не сбавлял темп — то есть продолжал долбить уже лимитированный IP.
+        if blocked_count and blocked_count >= ok_count:
             blocked_streak += 1
+            log.warning("Заблокировано поисков: %d из %d", blocked_count,
+                        blocked_count + ok_count)
         else:
             if alerted:
                 notifier.send_message("✅ Авито снова открывается, продолжаю следить.")
