@@ -75,7 +75,16 @@ def process_search(
     max_notifications: int,
 ) -> None:
     listings = scraper.fetch(search.url, search.max_age_minutes)
-    log.info("[%s] получено объявлений: %d", search.label, len(listings))
+    # Сколько карточек с фото — отдельным числом. Без него «фото не пришло»
+    # неотличимо: то ли разбор не нашёл ссылку, то ли Telegram не взял файл.
+    # Считается по уже полученным данным, лишних запросов к Авито не делает.
+    with_photo = sum(1 for x in listings if x.image_url)
+    log.info("[%s] получено объявлений: %d (с фото: %d)",
+             search.label, len(listings), with_photo)
+    if listings and not with_photo:
+        log.warning("[%s] ни у одной карточки нет ссылки на фото — уведомления "
+                    "уйдут текстом. Смотреть надо разбор выдачи, а не Telegram.",
+                    search.label)
     if not listings:
         return
 
