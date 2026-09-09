@@ -27,6 +27,33 @@ class SeenStore:
             )
             """
         )
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS meta (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """
+        )
+        self._conn.commit()
+
+    def get_float(self, key: str) -> float | None:
+        """Число из таблицы meta (None — ключа нет или он испорчен)."""
+        cur = self._conn.execute("SELECT value FROM meta WHERE key = ?", (key,))
+        row = cur.fetchone()
+        if not row:
+            return None
+        try:
+            return float(row[0])
+        except (TypeError, ValueError):
+            return None
+
+    def set_float(self, key: str, value: float) -> None:
+        self._conn.execute(
+            "INSERT INTO meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, repr(float(value))),
+        )
         self._conn.commit()
 
     def has_any(self, search_label: str) -> bool:

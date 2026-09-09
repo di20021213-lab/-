@@ -6,8 +6,10 @@ import argparse
 import logging
 import random
 import signal
+import sqlite3
 import sys
 import time
+from pathlib import Path
 from typing import Optional
 
 from . import filters, quality
@@ -29,6 +31,10 @@ BLOCKED_COOLDOWN_MAX_S = 3600   # дольше часа не ждём в люб�
 # После скольких заблокированных циклов подряд написать об этом в Telegram:
 # молча простаивать полчаса — хуже, чем одно сообщение.
 BLOCKED_ALERT_AFTER = 3
+
+# Когда закончился прошлый цикл. Живёт в базе, а не в памяти процесса, — иначе
+# перезапуск службы стирает саму память о том, что запрос был только что.
+LAST_CYCLE_KEY = "last_cycle_at"
 
 _stop = False
 
@@ -290,6 +296,11 @@ def run_check(settings: Settings) -> int:
               "  Скорее всего не установлен Chromium: выполни `playwright install chromium`.")
         return 1
 
+    # --check ходит на Авито тем же браузером, и адрес не различает, кто именно
+    # запросил. Отмечаемся (если база уже есть), чтобы запуск бота следом не
+    # ушёл сразу в 429. Самих объявлений это не касается.
+    _record_cycle(settings)
+
     print(f"\nГотово. Подходящих объявлений сейчас: {total}.")
     print("Если всё выглядит правильно — запускай без флагов: python -m avito_watcher.main\n")
     return 0
@@ -307,6 +318,45 @@ def _cooldown_ceiling(settings: Settings) -> int:
     if not windows:
         return BLOCKED_COOLDOWN_MAX_S
     return max(60, min(BLOCKED_COOLDOWN_MAX_S, min(windows) * 60 // 2))
+
+
+def _record_cycle(settings: Settings) -> None:
+    """Отмечает в базе, что запрос к Авито только что был.
+
+    Базы ещё нет — значит бота тут не запускали, и защищать нечего. Создавать
+    её ради одной отметки нельзя: --check обещает не оставлять следов, и на
+    этом обещании держится право гонять его сколько угодно.
+    """
+    if not Path(settings.db_path).exists():
+        return
+    try:
+        store = SeenStore(settings.db_path)
+        store.set_float(LAST_CYCLE_KEY, time.time())
+        store.close()
+    except sqlite3.Error as e:
+        # База занята работающим ботом — не повод падать: отметка нужна лишь
+        # для вежливой паузы, без неё всё работает как раньше.
+        log.info("Не смог отметить время захода: %s", e)
+
+
+def _wait_out_previous_run(settings: Settings, store: SeenStore) -> None:
+    """Не начинать сразу после перезапуска, если прошлый заход был только что.
+
+    Лимит Авито считается по адресу, а не по процессу: для него перезапуск
+    службы — просто ещё один запрос подряд. Обычный `systemctl restart` через
+    минуту после проверки съедал бюджет и сразу ловил 429, а перезапускают
+    как раз тогда, когда что-то чинят, — то есть чаще обычного.
+    """
+    last = store.get_float(LAST_CYCLE_KEY)
+    if last is None:
+        return
+    left = settings.poll_interval_min - (time.time() - last)
+    if left <= 0:
+        return
+    log.info("Прошлый заход был %.0f мин назад. Жду ещё %.0f мин, иначе запрос "
+             "уйдёт в лимит адреса и вернётся 429.",
+             (time.time() - last) / 60, left / 60)
+    _sleep_interruptibly(left)
 
 
 def _sleep_interruptibly(delay: float) -> None:
@@ -327,6 +377,8 @@ def _loop(scraper, settings: Settings, store: SeenStore,
     blocked_streak = 0   # сколько циклов подряд Авито нас не пустил
     alerted = False      # уже писали в Telegram про блокировку?
     cooldown_max = _cooldown_ceiling(settings)
+
+    _wait_out_previous_run(settings, store)
 
     cycle = 0
     while not _stop:
@@ -362,6 +414,8 @@ def _loop(scraper, settings: Settings, store: SeenStore,
             except Exception as e:  # noqa: BLE001 - один сбойный поиск не должен ронять цикл
                 log.exception("[%s] ошибка при обработке: %s", search.label, e)
             time.sleep(random.uniform(2, 5))  # пауза между разными поисками
+
+        store.set_float(LAST_CYCLE_KEY, time.time())
 
         if _stop or once:
             break
