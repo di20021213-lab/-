@@ -1,0 +1,53 @@
+# Несколько соседних областей одним ботом.
+#
+# Каждая область — отдельный поиск: у Авито нет URL «искать сразу по нескольким
+# регионам», поэтому их приходится перечислять. База виденных объявлений ведётся
+# по label, так что одно и то же объявление из разных поисков не задвоится —
+# у них разные ID и разные регионы.
+#
+# Скопировать себе:  cp config.multiregion.example.yaml config.yaml
+#
+# Что настроено ниже:
+#   · потолок 3000 ₽, нижней границы нет (иногда интересное отдают совсем дёшево);
+#   · только опубликованные за последний час;
+#   · нерабочие приходят с пометкой ⚠️, а не скрываются (on_broken: flag).
+#
+# ВАЖНО про «договорная»: объявления без цены отсеиваются, пока задан max_price —
+# понять, влезают ли они в потолок, невозможно. Хочешь видеть и их — убери
+# max_price и оставь только pmax в URL.
+
+searches:
+  - label: "Видеокарты Орловская обл."
+    url: "https://www.avito.ru/orlovskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104"
+    max_price: 3000
+    max_age: "1h"
+    on_broken: flag
+
+  - label: "Видеокарты Тульская обл."
+    url: "https://www.avito.ru/tulskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104"
+    max_price: 3000
+    max_age: "1h"
+    on_broken: flag
+
+  - label: "Видеокарты Курская обл."
+    url: "https://www.avito.ru/kurskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104"
+    max_price: 3000
+    max_age: "1h"
+    on_broken: flag
+
+  - label: "Видеокарты Липецкая обл."
+    url: "https://www.avito.ru/lipetskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104"
+    max_price: 3000
+    max_age: "1h"
+    on_broken: flag
+
+settings:
+  # Интервал поднят по сравнению с одним поиском: за цикл бот открывает четыре
+  # страницы выдачи вместо одной, плюс страницы объявлений-финалистов. Оставь
+  # 180-300 — и запросов к Авито станет втрое больше, а с ними и шанс поймать 429.
+  # Каждая область при этом всё равно проверяется раз в 4-7 минут.
+  poll_interval_min: 240
+  poll_interval_max: 420
+  headless: true
+  max_notifications_per_cycle: 15
+  request_timeout_ms: 45000
