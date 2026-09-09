@@ -1,11 +1,15 @@
-"""Сторож: ждёт, когда Авито снимет лимит с нашего IP.
+"""Сторож: ждёт, когда Авито снова начнёт пускать.
 
-Делает РОВНО ОДИН простой HTTP-запрос за вызов — без браузера и без повторов.
-Смысл в этом: 429 снимается только временем без запросов, поэтому частая
-проверка сама держала бы бан. Запускать раз в час (systemd-таймер).
+Делает РОВНО ОДНУ загрузку страницы за вызов — тем же браузером, которым ходит
+бот, и без повторов. Браузер здесь принципиален: простой HTTP-запрос Авито
+отклоняет по признакам самого клиента (TLS-отпечаток, отсутствие куков и JS),
+поэтому он показывал бы блокировку даже тогда, когда бот прекрасно работает.
 
-Пишет строку в лог и, когда Авито впервые открывается после блокировки,
-шлёт сообщение в Telegram. Повторно об одном и том же не пишет.
+Запускать раз в час (systemd-таймер): если нас действительно лимитируют по IP,
+лимит снимается временем без запросов, и частая проверка сама его продлевала бы.
+
+Пишет строку в лог и, когда Авито впервые открывается после блокировки, шлёт
+сообщение в Telegram. Повторно об одном и том же не пишет.
 
 Запуск вручную:  python watch_ip.py
 """
@@ -20,7 +24,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from avito_watcher.notifier import TelegramNotifier
-from avito_watcher.probe import probe, url_from_config
+from avito_watcher.probe import probe_browser, url_from_config
 
 load_dotenv()
 
@@ -61,7 +65,12 @@ def main() -> int:
         return 2
 
     proxy = (os.getenv("PROXY") or "").strip() or None
-    result = probe(url, proxy)
+    headless = (os.getenv("HEADLESS") or "true").strip().lower() not in {"0", "false", "no"}
+    result = probe_browser(
+        url, proxy,
+        headless=headless,
+        executable_path=os.getenv("PLAYWRIGHT_EXECUTABLE_PATH") or None,
+    )
     _log(("ОТКРЫТО  " if result.ok else "блокировка  ") + result.describe())
 
     was = _read_state()

@@ -1,8 +1,11 @@
-"""Одиночная проверка доступности Авито простым HTTP-запросом.
+"""Проверка доступности Авито: простым HTTP-запросом и через браузер.
 
-Без браузера: нужен ровно один запрос, чтобы понять, пускает нас IP или нет.
-Используется и в diag.py (разовая диагностика), и в watch_ip.py (сторож,
-который ждёт снятия лимита).
+ВАЖНО про простой запрос. Он НЕ измеряет «чистоту IP». Голый requests палится
+сам по себе: другой TLS-отпечаток, нет куков, нет JS — Авито режет его почти
+всегда, независимо от адреса. Поэтому его результат говорит только о нём самом.
+
+Единственная проверка, которая отвечает на вопрос «сможет ли работать бот», —
+через тот же браузер, которым ходит бот. Она и считается решающей.
 """
 
 from __future__ import annotations
@@ -77,8 +80,37 @@ def url_from_config(path: str = "config.yaml") -> Optional[str]:
     return (searches[0].get("url") or "").strip() or None
 
 
+def probe_browser(
+    url: str,
+    proxy: Optional[str] = None,
+    headless: bool = True,
+    executable_path: Optional[str] = None,
+) -> ProbeResult:
+    """Одна загрузка страницы тем же браузером, которым ходит бот.
+
+    Это и есть настоящий ответ на вопрос «заработает ли бот»: простой HTTP-запрос
+    Авито отклоняет по признакам самого клиента, а не по адресу.
+    """
+    # Импорт внутри функции: probe() должен работать и там, где нет Playwright.
+    from .scraper import AntibotError, AvitoScraper
+
+    try:
+        with AvitoScraper(headless=headless, proxy=proxy,
+                          executable_path=executable_path) as scraper:
+            listings = scraper._fetch_once(url)  # без повторов: нужен честный первый ответ
+    except AntibotError as e:
+        return ProbeResult(ok=False, error=str(e), markers=("антибот",))
+    except Exception as e:  # noqa: BLE001 - браузер мог не запуститься
+        return ProbeResult(ok=False, error=str(e))
+    return ProbeResult(ok=bool(listings), status=200, items=len(listings))
+
+
 def probe(url: str, proxy: Optional[str] = None) -> ProbeResult:
-    """Один запрос к выдаче. Ничего не повторяет: повторы — это и есть лимит."""
+    """Один простой HTTP-запрос. Ничего не повторяет.
+
+    Помни: отрицательный результат тут НЕ означает проблемы с IP — см. заголовок
+    модуля. Для вывода о работоспособности используй probe_browser().
+    """
     proxies = {"http": proxy, "https": proxy} if proxy else None
     try:
         resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT_S, proxies=proxies)
