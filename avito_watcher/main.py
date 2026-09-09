@@ -24,7 +24,7 @@ log = logging.getLogger("avito_watcher")
 # значит держать бан бесконечно. Поэтому уходим в долгую паузу, которая
 # удваивается с каждым подряд заблокированным циклом.
 BLOCKED_COOLDOWN_S = 900        # 15 минут после первого заблокированного цикла
-BLOCKED_COOLDOWN_MAX_S = 3600   # дольше часа не ждём
+BLOCKED_COOLDOWN_MAX_S = 3600   # дольше часа не ждём в любом случае
 
 # После скольких заблокированных циклов подряд написать об этом в Telegram:
 # молча простаивать полчаса — хуже, чем одно сообщение.
@@ -286,6 +286,20 @@ def run_check(settings: Settings) -> int:
     return 0
 
 
+def _cooldown_ceiling(settings: Settings) -> int:
+    """Предел паузы при блокировках.
+
+    Пауза нужна, чтобы лимит по IP успел спасть. Но она не должна съедать окно
+    свежести: если ждать час при max_age в час, объявление состарится, пока мы
+    отсиживаемся, и мы его не увидим вовсе. Поэтому берём половину самого
+    короткого окна — так у объявления остаётся хотя бы одна попытка попасться.
+    """
+    windows = [s.max_age_minutes for s in settings.searches if s.max_age_minutes]
+    if not windows:
+        return BLOCKED_COOLDOWN_MAX_S
+    return max(60, min(BLOCKED_COOLDOWN_MAX_S, min(windows) * 60 // 2))
+
+
 def _sleep_interruptibly(delay: float) -> None:
     """Спит короткими кусками, чтобы быстро реагировать на сигнал остановки."""
     slept = 0.0
@@ -303,6 +317,7 @@ def _loop(scraper, settings: Settings, store: SeenStore,
     """
     blocked_streak = 0   # сколько циклов подряд Авито нас не пустил
     alerted = False      # уже писали в Telegram про блокировку?
+    cooldown_max = _cooldown_ceiling(settings)
 
     while not _stop:
         ok_count = 0
@@ -342,9 +357,9 @@ def _loop(scraper, settings: Settings, store: SeenStore,
 
         if blocked_streak:
             delay = BLOCKED_COOLDOWN_S * 2 ** (blocked_streak - 1)
-            # Джиттер добавляем ДО ограничения, иначе потолок в час превращается
-            # в час двенадцать: сначала разброс, потом жёсткий предел.
-            delay = min(delay + random.uniform(0, delay * 0.2), BLOCKED_COOLDOWN_MAX_S)
+            # Джиттер добавляем ДО ограничения, иначе потолок превращается
+            # в потолок с довеском: сначала разброс, потом жёсткий предел.
+            delay = min(delay + random.uniform(0, delay * 0.2), cooldown_max)
             log.warning(
                 "Авито блокирует наш IP (циклов подряд: %d). Пауза %.0f мин: "
                 "лимит снимается только временем без запросов.",
