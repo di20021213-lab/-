@@ -319,11 +319,24 @@ def _loop(scraper, settings: Settings, store: SeenStore,
     alerted = False      # уже писали в Telegram про блокировку?
     cooldown_max = _cooldown_ceiling(settings)
 
+    cycle = 0
     while not _stop:
         ok_count = 0
         blocked_count = 0
         block_shot = None   # снимок последней страницы блокировки за цикл
-        for search in settings.searches:
+
+        # В режиме очереди за цикл проверяется один поиск. Число запросов к
+        # Авито тогда не растёт с числом категорий — а именно оно упирается
+        # в лимит адреса, а не количество поисков само по себе.
+        if settings.rotate_searches and settings.searches:
+            due = [settings.searches[cycle % len(settings.searches)]]
+            log.info("Очередь: проверяю [%s] (%d из %d)", due[0].label,
+                     cycle % len(settings.searches) + 1, len(settings.searches))
+        else:
+            due = settings.searches
+        cycle += 1
+
+        for search in due:
             if _stop:
                 break
             try:
