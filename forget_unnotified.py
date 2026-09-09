@@ -33,10 +33,44 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _load_searches(config_path: str) -> dict | None:
+    """label -> настройки поиска. None, если конфиг не прочитался."""
+    try:
+        from avito_watcher.config import load_settings
+        return {s.label: s for s in load_settings(config_path).searches}
+    except Exception:  # noqa: BLE001 - без конфига просто не уточняем последствия
+        return None
+
+
+def _consequence(label: str, left: int, searches: dict | None) -> list[str]:
+    """Чем обернётся удаление по этому поиску — словами, а не догадками."""
+    if left:
+        return []
+    if searches is None:
+        return ["ВНИМАНИЕ: по этому поиску не остаётся ни одной присланной записи, "
+                "а конфиг прочитать не удалось — последствия не проверить."]
+    search = searches.get(label)
+    if search is None:
+        return [f"Поиска «{label}» в конфиге нет (отключён или переименован) — "
+                "записи просто освободятся, слать по нему сейчас нечего."]
+    if search.max_age_minutes is None:
+        # Пустой ярлык бот считает первым запуском. Без max_age он тогда молча
+        # запоминает всю выдачу и не шлёт НИЧЕГО — ровно наоборот тому, зачем
+        # скрипт запускают.
+        return ["ВНИМАНИЕ: не остаётся ни одной присланной записи, а у поиска нет "
+                "max_age. Бот сочтёт это первым запуском, молча запомнит всю "
+                "выдачу и не пришлёт ничего. Оставь хотя бы одну запись или "
+                "запускай с --label по другому поиску."]
+    return ["Присланных не остаётся — бот сочтёт это первым запуском, но у поиска "
+            f"задан max_age, так что пришлёт всё не старше {search.max_age_minutes} мин."]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--db", default=os.getenv("DB_PATH") or "seen.sqlite3")
+    ap.add_argument("--config", default="config.yaml",
+                    help="откуда узнать настройки поисков (для точных предупреждений)")
     ap.add_argument("--label", help="только этот поиск (по умолчанию — все)")
     ap.add_argument("--yes", action="store_true", help="выполнить, а не показать")
     args = ap.parse_args()
@@ -45,6 +79,10 @@ def main() -> int:
     if not db.exists():
         print(f"Нет файла базы: {db}", file=sys.stderr)
         return 1
+
+    # Настройки нужны только ради честных предупреждений: последствия удаления
+    # зависят от того, задан ли у поиска max_age, и жив ли он вообще в конфиге.
+    searches = _load_searches(args.config)
 
     conn = sqlite3.connect(db)
     where = "notified = 0"
@@ -73,12 +111,8 @@ def main() -> int:
             print(f"    {(price or '—'):>10}  {(title or '')[:60]}")
         if len(items) > 10:
             print(f"    … и ещё {len(items) - 10}")
-        if left == 0:
-            # Пустой ярлык бот считает первым запуском: он тогда молча запомнит
-            # всю выдачу и не пришлёт НИЧЕГО. Это ровно противоположно тому,
-            # зачем скрипт запускают.
-            print("    ВНИМАНИЕ: по этому поиску не остаётся ни одной присланной "
-                  "записи. Бот сочтёт это первым запуском и промолчит целый цикл.")
+        for line in _consequence(label, left, searches):
+            print(f"    {line}")
 
     if not args.yes:
         print("\nЭто предпросмотр. Чтобы выполнить, добавь --yes")
