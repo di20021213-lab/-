@@ -208,10 +208,18 @@ def _parse_price(price_value, price_text) -> Optional[int]:
 
 
 def _absolutize(url: Optional[str]) -> Optional[str]:
+    """Приводит ссылку к абсолютной.
+
+    Важно и для картинок: Авито часто отдаёт их протокол-независимыми
+    (//img.avito.st/...), а Telegram такой адрес не принимает — sendPhoto
+    молча проваливается, и уведомление уходит голым текстом.
+    """
     if not url:
         return None
     if url.startswith("http"):
         return url
+    if url.startswith("//"):
+        return "https:" + url
     if url.startswith("/"):
         return BASE_URL + url
     return url
@@ -420,7 +428,7 @@ class AvitoScraper:
                     url=_absolutize(r.get("url")),
                     location=r.get("location"),
                     date_text=r.get("dateText"),
-                    image_url=r.get("image"),
+                    image_url=_absolutize(r.get("image")),
                     age_minutes=parse_age_minutes(r.get("dateText")),
                 )
             )

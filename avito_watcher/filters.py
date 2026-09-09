@@ -21,11 +21,15 @@ def explain(listing: Listing, search: SearchConfig) -> Optional[str]:
         if hit:
             return f"в заголовке стоп-слово «{hit}»"
 
-    # Свежесть: старше max_age — пропускаем. Неизвестный возраст (не разобрали дату)
-    # НЕ отсеиваем: объявление всё равно новое для нас (его ID не было в базе),
-    # и лучше лишний раз показать, чем молча потерять выгодное из-за смены вёрстки.
-    if search.max_age_minutes is not None and listing.age_minutes is not None:
-        if listing.age_minutes > search.max_age_minutes:
+    # Свежесть: старше max_age — пропускаем. Неизвестный возраст (Авито не показал
+    # дату — так бывает у магазинов) по умолчанию НЕ отсеиваем: объявление всё
+    # равно новое для нас, и лучше лишний раз показать, чем молча потерять
+    # выгодное. Но если такого мусора много, помогает require_age: true.
+    if search.max_age_minutes is not None:
+        if listing.age_minutes is None:
+            if search.require_age:
+                return "возраст неизвестен, а включён require_age"
+        elif listing.age_minutes > search.max_age_minutes:
             return (f"старше max_age ({format_age(listing.age_minutes)} > "
                     f"{format_age(search.max_age_minutes)})")
 

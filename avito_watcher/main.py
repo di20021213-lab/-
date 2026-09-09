@@ -186,10 +186,14 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
 
     # Считаем по ВСЕЙ выдаче, а не только по прошедшим фильтр: иначе при строгом
     # max_age проверить, извлекаются ли фото, было бы попросту не на чем.
-    with_photo = sum(1 for lst in listings if lst.image_url)
+    with_photo = [lst.image_url for lst in listings if lst.image_url]
     print(f"  ИТОГО подходящих: {good}")
-    print(f"  📷 картинка найдена у {with_photo} из {len(listings)}")
-    if not with_photo:
+    print(f"  📷 картинка найдена у {len(with_photo)} из {len(listings)}")
+    if with_photo:
+        # Показываем саму ссылку: именно её мы отдаём Telegram, и если фото не
+        # уходит, по ней сразу видно почему (например, адрес без протокола).
+        print(f"     пример ссылки: {with_photo[0]}")
+    else:
         print("     Фото не извлекаются — уведомления придут текстом. Пришли этот вывод.")
 
     # Неразобранная дата не отсеивается по max_age — значит фильтр свежести

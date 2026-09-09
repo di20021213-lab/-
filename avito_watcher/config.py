@@ -29,6 +29,10 @@ class SearchConfig:
     exclude_keywords: list[str] = field(default_factory=list)
     # Максимальный возраст объявления в минутах (None — не фильтровать по свежести).
     max_age_minutes: Optional[int] = None
+    # Что делать с объявлением, у которого возраст неизвестен (Авито не показал
+    # дату — так бывает у магазинов). False — пропускать вперёд, чтобы не
+    # потерять выгодное; True — отсеивать, если задан max_age.
+    require_age: bool = False
     # Признаки неисправности: skip — не показывать, flag — показать с пометкой ⚠️,
     # ignore — не проверять вовсе.
     on_broken: str = "skip"
@@ -160,6 +164,7 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
                 max_price=_as_opt_int(item.get("max_price"), f"{label}.max_price"),
                 min_price=_as_opt_int(item.get("min_price"), f"{label}.min_price"),
                 max_age_minutes=parse_duration_minutes(item.get("max_age"), f"{label}.max_age"),
+                require_age=_as_bool(item.get("require_age"), False),
                 on_broken=_as_choice(item.get("on_broken"), "skip", ("skip", "flag", "ignore"),
                                      f"{label}.on_broken"),
                 check_description=_as_bool(item.get("check_description"), True),

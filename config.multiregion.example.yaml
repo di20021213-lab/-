@@ -10,7 +10,17 @@
 # Что настроено ниже:
 #   · потолок 3000 ₽, нижней границы нет (иногда интересное отдают совсем дёшево);
 #   · только опубликованные за последний час;
-#   · нерабочие приходят с пометкой ⚠️, а не скрываются (on_broken: flag).
+#   · нерабочие приходят с пометкой ⚠️, а не скрываются (on_broken: flag);
+#   · user=1 в URL — только частные объявления, без магазинов.
+#
+# Про user=1. Магазины Авито показывает БЕЗ даты публикации: вместо неё в
+# карточке «Рассрочка» и «Доставка». Возраст такого объявления определить
+# нельзя, фильтр свежести к нему не применяется, и оно проходит вперёд —
+# а висят такие месяцами. Плюс это розница, а не то, что ищут по объявлениям.
+# Поэтому магазины отсекаем прямо в URL.
+#
+# require_age: true — подстраховка на случай, если объявление без даты всё же
+# просочится: тогда оно отсеивается, раз проверить свежесть невозможно.
 #
 # ВАЖНО про «договорная»: объявления без цены отсеиваются, пока задан max_price —
 # понять, влезают ли они в потолок, невозможно. Хочешь видеть и их — убери
@@ -18,27 +28,31 @@
 
 searches:
   - label: "Видеокарты Орловская обл."
-    url: "https://www.avito.ru/orlovskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104"
+    url: "https://www.avito.ru/orlovskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104&user=1"
     max_price: 3000
     max_age: "1h"
+    require_age: true
     on_broken: flag
 
   - label: "Видеокарты Тульская обл."
-    url: "https://www.avito.ru/tulskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104"
+    url: "https://www.avito.ru/tulskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104&user=1"
     max_price: 3000
     max_age: "1h"
+    require_age: true
     on_broken: flag
 
   - label: "Видеокарты Курская обл."
-    url: "https://www.avito.ru/kurskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104"
+    url: "https://www.avito.ru/kurskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104&user=1"
     max_price: 3000
     max_age: "1h"
+    require_age: true
     on_broken: flag
 
   - label: "Видеокарты Липецкая обл."
-    url: "https://www.avito.ru/lipetskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104"
+    url: "https://www.avito.ru/lipetskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104&user=1"
     max_price: 3000
     max_age: "1h"
+    require_age: true
     on_broken: flag
 
 settings:
