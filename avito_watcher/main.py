@@ -103,7 +103,10 @@ def process_search(
             warning = None
             unchecked = False
             if search.on_broken != "ignore":
-                reason = quality.broken_reason(lst.title, extra=search.extra_broken_markers)
+                # Сначала бесплатное: заголовок и текст самой карточки. Открывать
+                # страницу объявления — дорого, каждый такой заход приближает 429.
+                reason = quality.broken_reason(lst.title, lst.card_text,
+                                               extra=search.extra_broken_markers)
                 if reason is None and search.check_description and lst.url:
                     details, ok = _fetch_details_safe(scraper, lst.url, search.label)
                     reason = quality.broken_reason(details, extra=search.extra_broken_markers)
@@ -171,7 +174,8 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
         broken = None
         checked = True
         if search.on_broken != "ignore":
-            broken = quality.broken_reason(lst.title, extra=search.extra_broken_markers)
+            broken = quality.broken_reason(lst.title, lst.card_text,
+                                           extra=search.extra_broken_markers)
             if broken is None and search.check_description and lst.url:
                 details, checked = _fetch_details_safe(scraper, lst.url, search.label)
                 broken = quality.broken_reason(details, extra=search.extra_broken_markers)

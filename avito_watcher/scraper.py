@@ -150,7 +150,12 @@ _EXTRACT_JS = r"""
       if (image) break;
     }
 
-    return { id, url, title, price, priceValue, dateText, location, image };
+    // Весь текст карточки: там же лежит кусок описания продавца. По нему можно
+    // отсеять нерабочую карту, НЕ открывая страницу объявления — а это половина
+    // всех наших запросов к Авито.
+    let cardText = (el.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 600);
+
+    return { id, url, title, price, priceValue, dateText, location, image, cardText };
   }).filter(x => x.id);
 }
 """
@@ -195,6 +200,8 @@ class Listing:
     # Нижняя оценка возраста по позиции в выдаче: объявление без даты, стоящее
     # ниже датированного, не моложе него (выдача отсортирована по дате).
     min_age_minutes: Optional[int] = None
+    # Текст карточки целиком — в нём часто виден кусок описания продавца.
+    card_text: Optional[str] = None
 
 
 def _parse_price(price_value, price_text) -> Optional[int]:
@@ -471,6 +478,7 @@ class AvitoScraper:
                     date_text=r.get("dateText"),
                     image_url=_absolutize(r.get("image")),
                     age_minutes=parse_age_minutes(r.get("dateText")),
+                    card_text=r.get("cardText"),
                 )
             )
 
