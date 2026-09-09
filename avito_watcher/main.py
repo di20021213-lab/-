@@ -199,9 +199,17 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
     # Неразобранная дата не отсеивается по max_age — значит фильтр свежести
     # для таких объявлений просто не работает, и молчать об этом нельзя.
     no_age = sum(1 for lst in listings if lst.age_minutes is None)
-    if no_age:
-        print(f"  ⚠ дата не разобрана у {no_age} из {len(listings)} — "
-              "фильтр свежести к ним не применяется. Пришли этот вывод.")
+    if no_age and search.max_age_minutes is not None:
+        if search.require_age:
+            print(f"  ⚠ дата не разобрана у {no_age} из {len(listings)} — "
+                  "они отсеяны из-за require_age: true.")
+            if no_age == len(listings):
+                print("     Дат нет НИ У ОДНОГО объявления, поэтому подходящих ноль. "
+                      "Поставь require_age: false, чтобы получать хоть что-то, "
+                      "и пришли этот вывод.")
+        else:
+            print(f"  ⚠ дата не разобрана у {no_age} из {len(listings)} — "
+                  "фильтр свежести к ним не применяется. Пришли этот вывод.")
 
     # Самое свежее в выдаче: сразу видно, дело в фильтрах или объявлений просто нет.
     ages = [lst.age_minutes for lst in listings if lst.age_minutes is not None]

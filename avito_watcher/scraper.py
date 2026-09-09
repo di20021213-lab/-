@@ -363,25 +363,41 @@ class AvitoScraper:
         raise last
 
     @staticmethod
-    def _scroll_through(page) -> None:
-        """Прокручивает выдачу до конца, чтобы дорисовались все карточки.
+    def _merge(into: dict, rows: list[dict]) -> None:
+        """Добавляет прочитанное, не затирая уже найденные значения."""
+        for row in rows:
+            item = into.setdefault(row["id"], {})
+            for key, value in row.items():
+                if value not in (None, "") and not item.get(key):
+                    item[key] = value
 
-        Без этого у объявлений ниже первого экрана нет ни даты, ни ссылки на
-        фото: Авито подставляет их только когда карточка попадает в поле зрения.
+    def _collect_while_scrolling(self, page) -> list[dict]:
+        """Читает карточки НА КАЖДОМ шаге прокрутки и склеивает результат.
+
+        Одного чтения в конце мало. Авито ведёт себя с полями по-разному:
+        ссылка на фото, однажды подставленная, остаётся в разметке, а дата
+        публикации живёт только пока карточка в поле зрения — уехала вниз, и
+        дата из неё исчезла. Поэтому к моменту «прокрутили всё и прочитали»
+        даты есть опять только у первого экрана.
+
+        Собираем по кусочкам: что увидели на любом шаге — то и запомнили.
         """
+        merged: dict[str, dict] = {}
         try:
+            self._merge(merged, page.evaluate(_EXTRACT_JS))
             for _ in range(MAX_SCROLLS):
                 before = page.evaluate("() => window.scrollY")
                 page.evaluate(
                     f"() => window.scrollBy(0, window.innerHeight * {SCROLL_STEP_RATIO})"
                 )
                 page.wait_for_timeout(SCROLL_PAUSE_MS)
+                self._merge(merged, page.evaluate(_EXTRACT_JS))
                 # Доскроллили до низа — позиция перестала меняться.
                 if page.evaluate("() => window.scrollY") <= before:
                     break
-            page.evaluate("() => window.scrollTo(0, 0)")
-        except Exception as e:  # noqa: BLE001 - прокрутка не критична, читаем что есть
-            log.info("Прокрутка не удалась (%s), читаю видимую часть", e)
+        except Exception as e:  # noqa: BLE001 - читаем то, что успели собрать
+            log.info("Прокрутка прервалась (%s), беру собранное", e)
+        return list(merged.values())
 
     def _fetch_once(self, url: str) -> list[Listing]:
         """Одна попытка: загрузить страницу и разобрать объявления."""
@@ -412,8 +428,7 @@ class AvitoScraper:
                 log.info("Выдача пуста или изменилась вёрстка: %s", url)
                 return []
 
-            self._scroll_through(page)
-            raw = page.evaluate(_EXTRACT_JS)
+            raw = self._collect_while_scrolling(page)
         finally:
             page.close()
 
