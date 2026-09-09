@@ -96,7 +96,7 @@ def main() -> int:
             page.wait_for_selector('[data-marker="item"]', timeout=15000)
 
             before = page.evaluate(_STATS_JS)
-            s._scroll_through(page)
+            s._collect_while_scrolling(page)
             after = page.evaluate(_STATS_JS)
 
             print("                     до прокрутки   после")
@@ -111,10 +111,12 @@ def main() -> int:
 
             print(f"\n  высота окна: {after['innerHeight']}, "
                   f"высота страницы: {after['scrollHeight']}")
-            # Если после прокрутки страница не выросла и не сдвинулась — значит
-            # window.scrollBy её не двигает (сайт скроллит внутренний контейнер).
-            print(f"  прокрутка сдвинула страницу: "
-                  f"{'да' if after['scrollHeight'] >= before['scrollHeight'] else 'нет'}")
+            # Смотрим ИМЕННО на позицию прокрутки. Высота страницы от прокрутки
+            # не меняется, поэтому сравнивать её было бессмысленно.
+            print(f"  позиция прокрутки: было {before['scrollY']}, стало {after['scrollY']}")
+            if after["scrollY"] == before["scrollY"] == 0:
+                print("     Страница не сдвинулась: window.scrollBy её не двигает "
+                      "(вероятно, скроллится внутренний контейнер).")
 
             print(f"\n  встроенные данные: {page.evaluate(_JSON_JS)}")
 

@@ -12,6 +12,14 @@ log = logging.getLogger(__name__)
 
 DEFAULT_API_BASE = "https://api.telegram.org"
 
+# Ограничение Telegram на фото по URL/файлом.
+MAX_PHOTO_BYTES = 10 * 1024 * 1024
+# CDN Авито охотнее отдаёт картинку браузеру, чем безымянному клиенту.
+IMAGE_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
 
 class TelegramNotifier:
     def __init__(
@@ -20,6 +28,7 @@ class TelegramNotifier:
         chat_id: str,
         proxy: Optional[str] = None,
         api_base: Optional[str] = None,
+        image_proxy: Optional[str] = None,
     ) -> None:
         self.token = token
         self.chat_id = chat_id
@@ -28,11 +37,17 @@ class TelegramNotifier:
         self.session = requests.Session()
         if proxy:
             self.session.proxies = {"http": proxy, "https": proxy}
+        # Отдельный маршрут для картинок: они лежат на CDN Авито, и тянуть их
+        # через туннель для Telegram нельзя — туда ходит только Bot API.
+        self.image_proxies = ({"http": image_proxy, "https": image_proxy}
+                              if image_proxy else None)
 
-    def _call(self, method: str, payload: dict) -> bool:
+    def _call(self, method: str, payload: dict, files: Optional[dict] = None) -> bool:
         url = f"{self.api_base}/bot{self.token}/{method}"
         try:
-            resp = self.session.post(url, data=payload, timeout=30)
+            # Загрузка файла идёт дольше обычного вызова, поэтому таймаут больше.
+            resp = self.session.post(url, data=payload, files=files,
+                                     timeout=90 if files else 30)
             data = resp.json()
             if not data.get("ok"):
                 log.warning("Telegram %s error: %s", method, data.get("description"))
@@ -77,20 +92,39 @@ class TelegramNotifier:
         caption = self._format_caption(listing, search_label, warning, unchecked)
 
         if listing.image_url:
-            ok = self._call(
-                "sendPhoto",
-                {
-                    "chat_id": self.chat_id,
-                    "photo": listing.image_url,
-                    "caption": caption,
-                    "parse_mode": "HTML",
-                },
-            )
-            if ok:
+            payload = {"chat_id": self.chat_id, "caption": caption, "parse_mode": "HTML"}
+
+            # Сначала просто передаём ссылку: Telegram скачает картинку сам.
+            if self._call("sendPhoto", {**payload, "photo": listing.image_url}):
                 return True
-            # фото не ушло (битая ссылка/лимиты) — падаем в текст
+
+            # Не вышло. Скорее всего CDN Авито не отдал картинку серверам
+            # Telegram. Качаем сами — у нас-то доступ есть — и шлём файлом.
+            content = self._download_image(listing.image_url)
+            if content and self._call("sendPhoto", payload,
+                                      files={"photo": ("photo.jpg", content)}):
+                return True
+            log.info("Фото не ушло, отправляю текстом: %s", listing.image_url)
 
         return self.send_message(caption)
+
+    def _download_image(self, url: str) -> Optional[bytes]:
+        """Скачивает картинку объявления. None — если не вышло."""
+        try:
+            resp = requests.get(url, timeout=30, proxies=self.image_proxies,
+                                headers={"User-Agent": IMAGE_USER_AGENT})
+        except requests.RequestException as e:
+            log.info("Не смог скачать картинку (%s): %s", e, url)
+            return None
+        if not resp.ok:
+            log.info("Картинка отдалась с HTTP %s: %s", resp.status_code, url)
+            return None
+        # Telegram принимает фото до 10 МБ; превью из выдачи заметно меньше,
+        # так что превышение размера означает, что скачалось что-то не то.
+        if not resp.content or len(resp.content) > MAX_PHOTO_BYTES:
+            log.info("Картинка неподходящего размера (%d байт): %s", len(resp.content), url)
+            return None
+        return resp.content
 
     @staticmethod
     def _format_caption(listing, search_label: str, warning: Optional[str] = None,

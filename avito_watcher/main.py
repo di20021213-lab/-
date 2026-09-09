@@ -45,7 +45,10 @@ def _fetch_details_safe(scraper: AvitoScraper, url: str, label: str) -> tuple[Op
     Флаг важен: без него сбой сети выглядел бы так же, как чистое описание, и
     объявление уходило бы без пометки, будто его проверили и всё в порядке.
     """
-    time.sleep(random.uniform(1.0, 3.0))  # не долбим сайт: пауза перед второй страницей
+    # Пауза перед второй страницей. На четырёх поисках объявлений-финалистов
+    # больше, и короткая пауза приводила к антиботу на странице объявления —
+    # тогда описание не читается и карта уходит без проверки на неисправность.
+    time.sleep(random.uniform(3.0, 7.0))
     try:
         return scraper.fetch_details(url), True
     except AntibotError as e:
@@ -146,14 +149,29 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
               "или Авито отдал антибот-страницу.")
         return 0
 
+    # Выдача отсортирована по дате, поэтому объявление без даты, стоящее НИЖЕ
+    # датированного, заведомо не моложе него. Авито перестаёт показывать
+    # относительную дату примерно через неделю — и без этой оценки такие
+    # объявления выглядят загадкой, хотя они просто старые.
+    lower_bound: list[Optional[int]] = []
+    seen_age: Optional[int] = None
+    for lst in listings:
+        if lst.age_minutes is not None:
+            seen_age = lst.age_minutes if seen_age is None else max(seen_age, lst.age_minutes)
+        lower_bound.append(seen_age)
+
     good = 0
-    for lst in listings[:25]:
+    for i, lst in enumerate(listings[:25]):
         price = f"{lst.price_value} ₽" if lst.price_value is not None else "цена не указана"
         age = format_age(lst.age_minutes)
         if lst.age_minutes is None:
-            # Без этого непонятно, что чинить: то ли Авито сменил формат даты,
-            # то ли мы вообще не нашли её в карточке.
-            age += f" (дата: {lst.date_text!r})" if lst.date_text else " (даты в карточке нет)"
+            if lower_bound[i] is not None:
+                age = f"старше {format_age(lower_bound[i])}"
+            elif lst.date_text:
+                # Дата есть, но мы её не разобрали — вот это уже наша проблема.
+                age += f" (дата: {lst.date_text!r})"
+            else:
+                age += " (даты в карточке нет)"
         head = f"{lst.title} | {price} | {age}"
 
         reason = filters.explain(lst, search)
@@ -198,18 +216,29 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
 
     # Неразобранная дата не отсеивается по max_age — значит фильтр свежести
     # для таких объявлений просто не работает, и молчать об этом нельзя.
-    no_age = sum(1 for lst in listings if lst.age_minutes is None)
+    no_age = [lst for lst in listings if lst.age_minutes is None]
+    dated = [lst for lst in listings if lst.age_minutes is not None]
     if no_age and search.max_age_minutes is not None:
-        if search.require_age:
-            print(f"  ⚠ дата не разобрана у {no_age} из {len(listings)} — "
-                  "они отсеяны из-за require_age: true.")
-            if no_age == len(listings):
-                print("     Дат нет НИ У ОДНОГО объявления, поэтому подходящих ноль. "
-                      "Поставь require_age: false, чтобы получать хоть что-то, "
-                      "и пришли этот вывод.")
+        oldest = max((lst.age_minutes for lst in dated), default=None)
+        if oldest is not None:
+            # Норма, а не поломка: Авито показывает относительную дату примерно
+            # неделю, дальше её в карточке просто нет. Раз выдача по дате,
+            # всё недатированное лежит ниже датированного — значит оно старше.
+            print(f"  · без даты: {len(no_age)} из {len(listings)} — все они идут ниже "
+                  f"датированных, то есть старше {format_age(oldest)}")
+            if search.require_age:
+                print("    и отсеяны как заведомо не подходящие по свежести")
+        elif search.require_age:
+            print(f"  ⚠ даты нет НИ У ОДНОГО из {len(listings)} — все отсеяны "
+                  "из-за require_age: true. Поставь require_age: false "
+                  "и пришли этот вывод.")
         else:
-            print(f"  ⚠ дата не разобрана у {no_age} из {len(listings)} — "
-                  "фильтр свежести к ним не применяется. Пришли этот вывод.")
+            print(f"  ⚠ даты нет ни у одного из {len(listings)} — "
+                  "фильтр свежести не работает. Пришли этот вывод.")
+    # Дата в карточке есть, но мы её не поняли — вот это уже наша поломка.
+    unparsed = sum(1 for lst in no_age if lst.date_text)
+    if unparsed:
+        print(f"  ⚠ дата есть, но не разобрана у {unparsed} — пришли этот вывод")
 
     # Самое свежее в выдаче: сразу видно, дело в фильтрах или объявлений просто нет.
     ages = [lst.age_minutes for lst in listings if lst.age_minutes is not None]
@@ -226,7 +255,8 @@ def run_check(settings: Settings) -> int:
     print("\n### Проверка настройки ###")
 
     notifier = TelegramNotifier(settings.telegram_token, settings.telegram_chat_id,
-                                proxy=settings.telegram_proxy, api_base=settings.telegram_api_base)
+                                proxy=settings.telegram_proxy, api_base=settings.telegram_api_base,
+                                image_proxy=settings.proxy)
     bot = notifier.check()
     if bot:
         print(f"  ✓ Telegram: токен рабочий, бот @{bot}")
@@ -373,6 +403,8 @@ def run(argv: Optional[list[str]] = None) -> int:
         settings.telegram_chat_id,
         proxy=settings.telegram_proxy,
         api_base=settings.telegram_api_base,
+        # Картинки лежат на CDN Авито — качаем их тем же маршрутом, что и выдачу.
+        image_proxy=settings.proxy,
     )
 
     labels = ", ".join(s.label for s in settings.searches)
