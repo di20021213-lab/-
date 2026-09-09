@@ -99,6 +99,25 @@ echo -e "ClientAliveInterval 30\nClientAliveCountMax 3" >> /etc/ssh/sshd_config
 systemctl restart ssh
 ```
 
+## 2б. Запретить мини-ПК засыпать
+
+Машина, которая работает круглосуточно, засыпать не должна — иначе ночью бот
+не крутится, а таймеры systemd во сне не тикают (они монотонные, время сна для
+них не идёт), и пропущенные проверки просто не догоняются.
+
+```bash
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+```
+
+Проверить, что машина действительно не спала:
+
+```bash
+uptime -p
+journalctl --since today | grep -iE "suspend|sleep|resume"
+```
+
+Вернуть как было, если понадобится: `sudo systemctl unmask sleep.target …`
+
 ## 3. `.env`
 
 ```
