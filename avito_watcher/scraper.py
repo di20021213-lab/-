@@ -46,10 +46,22 @@ DETAILS_WAIT_MS = 8000
 # Именно они и приводили к 429, когда областей стало четыре.
 BLOCKED_RESOURCES = {"image", "media", "font"}
 
-# Сколько раз повторить при 429/блокировке и с какой паузой. 429 — это лимит по
-# IP, он снимается только временем, поэтому пауза растёт: 20 с, 40 с, 80 с…
-FETCH_RETRIES = 3
+# Повторов внутри одной проверки НЕТ. По логам: после блокировки три быстрых
+# повтора (через 25 и 50 секунд) глухие все три — они не помогают, а только
+# дожигают маленький бюджет адреса и загоняют бота в долгую паузу. Что реально
+# работает — тишина на 20-30 минут, и её обеспечивает пауза между циклами.
+FETCH_RETRIES = 1
 RETRY_DELAY_S = 20
+
+# Хосты счётчиков и рекламы: тратят тот же лимит запросов с адреса, а на
+# содержимое выдачи не влияют. Режем по суффиксу домена.
+TRACKER_HOSTS = (
+    "mc.yandex.ru", "an.yandex.ru", "yandex.ru/metrika", "ads.adfox.ru",
+    "google-analytics.com", "googletagmanager.com", "doubleclick.net",
+    "googlesyndication.com", "top-fwz1.mail.ru", "top-mail.ru", "vk.com",
+    "criteo.com", "criteo.net", "adriver.ru", "rutarget.ru", "tns-counter.ru",
+    "facebook.com", "facebook.net", "hotjar.com", "sentry.io",
+)
 
 # Аргументы запуска Chromium, которые убирают самые заметные следы автоматизации.
 LAUNCH_ARGS = (
@@ -342,18 +354,24 @@ class AvitoScraper:
         return self
 
     @staticmethod
-    def _route(route) -> None:
-        """Отсекает тяжёлые ресурсы: меньше запросов — меньше шансов на 429."""
+    def _is_tracker(url: str) -> bool:
+        host = urlparse(url).hostname or ""
+        return any(host == t or host.endswith("." + t) or t in url for t in TRACKER_HOSTS)
+
+    @classmethod
+    def _route(cls, route) -> None:
+        """Отсекает тяжёлые ресурсы и счётчики: меньше запросов — меньше 429."""
         try:
-            if route.request.resource_type in BLOCKED_RESOURCES:
+            req = route.request
+            if req.resource_type in BLOCKED_RESOURCES or cls._is_tracker(req.url):
                 route.abort()
             else:
                 route.continue_()
         except Exception:  # noqa: BLE001 - гонка при закрытии страницы
             pass
 
-    @staticmethod
-    def _route_text_only(route) -> None:
+    @classmethod
+    def _route_text_only(cls, route) -> None:
         """То же, но ещё и без картинок — для страниц, где нужен только текст.
 
         На странице объявления галерея не нужна: мы пришли за описанием. А это
@@ -361,7 +379,8 @@ class AvitoScraper:
         антибот. Ссылки на фото мы всё равно берём со страницы выдачи.
         """
         try:
-            if route.request.resource_type in BLOCKED_RESOURCES | {"image"}:
+            req = route.request
+            if req.resource_type in BLOCKED_RESOURCES | {"image"} or cls._is_tracker(req.url):
                 route.abort()
             else:
                 route.continue_()
