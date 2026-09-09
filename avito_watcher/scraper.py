@@ -23,6 +23,16 @@ BASE_URL = "https://www.avito.ru"
 # Сколько ждать появления объявлений на уже загруженной странице.
 ITEMS_WAIT_MS = 15000
 
+# Авито дорисовывает карточки лениво: ниже первого экрана в разметке ещё нет ни
+# даты публикации, ни ссылки на фото. Без прокрутки мы читаем только первые
+# 8-10 объявлений полноценно, а у остальных возраст неизвестен — и фильтр
+# свежести к ним просто не применяется. Поэтому прокручиваем до конца выдачи.
+# Шаг прокрутки — доля высоты окна. Больше единицы брать НЕЛЬЗЯ: часть страницы
+# пролетит мимо, ни разу не побывав в поле зрения, и её карточки не отрисуются.
+MAX_SCROLLS = 40
+SCROLL_STEP_RATIO = 0.8
+SCROLL_PAUSE_MS = 350
+
 # Страница объявления: описание + блок параметров («Состояние: …»).
 DETAILS_SELECTOR = (
     '[data-marker="item-view/item-description"], [itemprop="description"], '
@@ -344,6 +354,27 @@ class AvitoScraper:
                     time.sleep(delay)
         raise last
 
+    @staticmethod
+    def _scroll_through(page) -> None:
+        """Прокручивает выдачу до конца, чтобы дорисовались все карточки.
+
+        Без этого у объявлений ниже первого экрана нет ни даты, ни ссылки на
+        фото: Авито подставляет их только когда карточка попадает в поле зрения.
+        """
+        try:
+            for _ in range(MAX_SCROLLS):
+                before = page.evaluate("() => window.scrollY")
+                page.evaluate(
+                    f"() => window.scrollBy(0, window.innerHeight * {SCROLL_STEP_RATIO})"
+                )
+                page.wait_for_timeout(SCROLL_PAUSE_MS)
+                # Доскроллили до низа — позиция перестала меняться.
+                if page.evaluate("() => window.scrollY") <= before:
+                    break
+            page.evaluate("() => window.scrollTo(0, 0)")
+        except Exception as e:  # noqa: BLE001 - прокрутка не критична, читаем что есть
+            log.info("Прокрутка не удалась (%s), читаю видимую часть", e)
+
     def _fetch_once(self, url: str) -> list[Listing]:
         """Одна попытка: загрузить страницу и разобрать объявления."""
         page = self._context.new_page()
@@ -373,6 +404,7 @@ class AvitoScraper:
                 log.info("Выдача пуста или изменилась вёрстка: %s", url)
                 return []
 
+            self._scroll_through(page)
             raw = page.evaluate(_EXTRACT_JS)
         finally:
             page.close()
