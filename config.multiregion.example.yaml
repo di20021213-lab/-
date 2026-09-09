@@ -59,7 +59,10 @@ searches:
   # не появиться месяцами. Окно — сутки: тут задача не успеть первым, а не
   # пропустить вовсе; база всё равно не пришлёт одно объявление дважды.
   - label: "Pragmata PS5 (диск)"
-    url: "https://www.avito.ru/all/igry_pristavki_i_programmy/igry_dlya_pristavok?q=pragmata&pmax=3000&s=104&user=1"
+    # Поиск по всему сайту, а не по разделу игр: продавец мог положить диск
+    # в «Игры и программы», в «Прочее» или ещё куда — по названию найдём везде.
+    # От постороннего страхуют keywords ниже.
+    url: "https://www.avito.ru/all?q=pragmata&pmax=3000&s=104&user=1"
     max_price: 3000
     max_age: "1d"
     on_broken: flag
