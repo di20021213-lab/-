@@ -94,49 +94,58 @@ def process_search(
         return
 
     sent = 0
+    deferred = 0
     for lst in new_listings:
-        # Запоминаем всё новое, чтобы не переоценивать в следующем цикле.
-        matched = filters.passes(lst, search)
-        if matched and sent < max_notifications:
-            # Признаки неисправности: сначала заголовок (бесплатно), потом — если чисто —
-            # само объявление: описание и параметры. Только для финалистов, их мало.
-            warning = None
-            unchecked = False
-            if search.on_broken != "ignore":
-                # Сначала бесплатное: заголовок и текст самой карточки. Открывать
-                # страницу объявления — дорого, каждый такой заход приближает 429.
-                reason = quality.broken_reason(lst.title, lst.card_text,
-                                               extra=search.extra_broken_markers)
-                if reason is None and search.check_description and lst.url:
-                    details, ok = _fetch_details_safe(scraper, lst.url, search.label)
-                    reason = quality.broken_reason(details, extra=search.extra_broken_markers)
-                    unchecked = not ok
-                if reason and search.on_broken == "skip":
-                    log.info("[%s] пропуск, похоже нерабочая («%s»): %s | %s",
-                             search.label, reason, lst.title, lst.price)
-                    store.mark_seen(search.label, lst.id, notified=False,
-                                    title=lst.title, price=lst.price)
-                    continue
-                warning = reason  # режим flag: покажем с пометкой ⚠️
-            ok = notifier.send_listing(lst, search.label, warning=warning, unchecked=unchecked)
-            if ok:
-                store.mark_seen(search.label, lst.id, notified=True,
-                                title=lst.title, price=lst.price)
-                sent += 1
-                log.info("[%s] уведомление: %s | %s", search.label, lst.title, lst.price)
-            else:
-                # НЕ помечаем виденным: Telegram мог быть временно недоступен
-                # (моргнул туннель/сеть). Иначе объявление потеряется навсегда.
-                # Останется «новым» и уйдёт в следующем цикле.
-                log.warning("[%s] не отправилось, повторю в следующем цикле: %s | %s",
-                            search.label, lst.title, lst.price)
-            time.sleep(0.5)  # мягкий троттлинг Telegram
-        else:
-            store.mark_seen(search.label, lst.id, notified=False, title=lst.title, price=lst.price)
+        if not filters.passes(lst, search):
+            # Не подошло — запоминаем, чтобы не переоценивать каждый цикл.
+            store.mark_seen(search.label, lst.id, notified=False,
+                            title=lst.title, price=lst.price)
+            continue
 
-    if sent >= max_notifications and len(new_listings) > max_notifications:
-        log.warning("[%s] достигнут лимит %d уведомлений за цикл, остальное помечено без отправки",
-                    search.label, max_notifications)
+        if sent >= max_notifications:
+            # Лимит за цикл исчерпан. Виденным НЕ помечаем: объявление подходит,
+            # и пометка сейчас означала бы, что оно не придёт уже никогда.
+            # Останется новым и уйдёт следующим циклом.
+            deferred += 1
+            continue
+
+        # Признаки неисправности: сначала заголовок (бесплатно), потом — если чисто —
+        # само объявление: описание и параметры. Только для финалистов, их мало.
+        warning = None
+        unchecked = False
+        if search.on_broken != "ignore":
+            # Сначала бесплатное: заголовок и текст самой карточки. Открывать
+            # страницу объявления — дорого, каждый такой заход приближает 429.
+            reason = quality.broken_reason(lst.title, lst.card_text,
+                                           extra=search.extra_broken_markers)
+            if reason is None and search.check_description and lst.url:
+                details, ok = _fetch_details_safe(scraper, lst.url, search.label)
+                reason = quality.broken_reason(details, extra=search.extra_broken_markers)
+                unchecked = not ok
+            if reason and search.on_broken == "skip":
+                log.info("[%s] пропуск, похоже нерабочая («%s»): %s | %s",
+                         search.label, reason, lst.title, lst.price)
+                store.mark_seen(search.label, lst.id, notified=False,
+                                title=lst.title, price=lst.price)
+                continue
+            warning = reason  # режим flag: покажем с пометкой ⚠️
+        ok = notifier.send_listing(lst, search.label, warning=warning, unchecked=unchecked)
+        if ok:
+            store.mark_seen(search.label, lst.id, notified=True,
+                            title=lst.title, price=lst.price)
+            sent += 1
+            log.info("[%s] уведомление: %s | %s", search.label, lst.title, lst.price)
+        else:
+            # НЕ помечаем виденным: Telegram мог быть временно недоступен
+            # (моргнул туннель/сеть). Иначе объявление потеряется навсегда.
+            # Останется «новым» и уйдёт в следующем цикле.
+            log.warning("[%s] не отправилось, повторю в следующем цикле: %s | %s",
+                        search.label, lst.title, lst.price)
+        time.sleep(0.5)  # мягкий троттлинг Telegram
+
+    if deferred:
+        log.info("[%s] лимит %d уведомлений за цикл исчерпан; ещё %d подходящих "
+                 "отложены до следующего цикла", search.label, max_notifications, deferred)
 
 
 def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings) -> int:
