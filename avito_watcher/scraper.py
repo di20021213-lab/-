@@ -194,7 +194,15 @@ def _matching_user_agent(browser) -> Optional[str]:
 
 
 class AntibotError(Exception):
-    """Страница вернула антибот/капчу вместо выдачи."""
+    """Страница вернула антибот/капчу вместо выдачи.
+
+    screenshot — снимок этой страницы (PNG), чтобы посмотреть, что именно
+    показывает Авито: заглушку про лимит или капчу, которую можно решить.
+    """
+
+    def __init__(self, message: str, screenshot: Optional[bytes] = None) -> None:
+        super().__init__(message)
+        self.screenshot = screenshot
 
 
 @dataclass
@@ -430,6 +438,14 @@ class AvitoScraper:
                     time.sleep(delay)
         raise last
 
+    @staticmethod
+    def _snapshot(page) -> Optional[bytes]:
+        """Снимок страницы блокировки. Не критично: не вышло — и ладно."""
+        try:
+            return page.screenshot(full_page=False, type="png")
+        except Exception:  # noqa: BLE001
+            return None
+
     def forget_session(self) -> None:
         """Сбрасывает куки текущего контекста, чтобы начать как новый посетитель."""
         try:
@@ -527,7 +543,8 @@ class AvitoScraper:
             body_text = (page.inner_text("body")[:4000] if page.query_selector("body") else "").lower()
             if status in (403, 429) or any(marker in body_text for marker in ANTIBOT_MARKERS):
                 raise AntibotError(
-                    f"Похоже на антибот/капчу Авито (HTTP {status}). Нужен другой IP/прокси."
+                    f"Похоже на антибот/капчу Авито (HTTP {status}). Нужен другой IP/прокси.",
+                    screenshot=self._snapshot(page),
                 )
 
             # Объявления у Авито есть уже в исходном HTML, поэтому ждём их недолго:
@@ -539,7 +556,8 @@ class AvitoScraper:
                 # либо антибот, либо пустая выдача — различаем по тексту
                 body_text = (page.inner_text("body")[:4000]).lower()
                 if any(marker in body_text for marker in ANTIBOT_MARKERS):
-                    raise AntibotError(f"Антибот/капча Авито (HTTP {status}). Нужен другой IP/прокси.")
+                    raise AntibotError(f"Антибот/капча Авито (HTTP {status}). Нужен другой IP/прокси.",
+                                       screenshot=self._snapshot(page))
                 log.info("Выдача пуста или изменилась вёрстка: %s", url)
                 return []
 

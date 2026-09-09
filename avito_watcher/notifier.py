@@ -89,6 +89,14 @@ class TelegramNotifier:
             },
         )
 
+    def send_photo(self, content: bytes, caption: str) -> bool:
+        """Шлёт картинку файлом (например, снимок страницы блокировки)."""
+        return self._call(
+            "sendPhoto",
+            {"chat_id": self.chat_id, "caption": caption, "parse_mode": "HTML"},
+            files={"photo": ("screen.png", content)},
+        )
+
     def send_listing(self, listing, search_label: str, warning: Optional[str] = None,
                      unchecked: bool = False) -> bool:
         """Шлёт карточку объявления. Пытается с фото, при неудаче — обычным текстом.

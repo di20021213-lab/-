@@ -322,6 +322,7 @@ def _loop(scraper, settings: Settings, store: SeenStore,
     while not _stop:
         ok_count = 0
         blocked_count = 0
+        block_shot = None   # снимок последней страницы блокировки за цикл
         for search in settings.searches:
             if _stop:
                 break
@@ -334,6 +335,8 @@ def _loop(scraper, settings: Settings, store: SeenStore,
             except AntibotError as e:
                 blocked_count += 1
                 log.warning("[%s] %s", search.label, e)
+                if e.screenshot:
+                    block_shot = e.screenshot
             except Exception as e:  # noqa: BLE001 - один сбойный поиск не должен ронять цикл
                 log.exception("[%s] ошибка при обработке: %s", search.label, e)
             time.sleep(random.uniform(2, 5))  # пауза между разными поисками
@@ -367,10 +370,12 @@ def _loop(scraper, settings: Settings, store: SeenStore,
             )
             if blocked_streak == BLOCKED_ALERT_AFTER and not alerted:
                 alerted = True
-                notifier.send_message(
-                    "⚠️ Авито блокирует запросы с этого IP. Жду, пока лимит спадёт — "
-                    "объявления пока не приходят. Напишу, когда восстановится."
-                )
+                text = ("⚠️ Авито блокирует запросы с этого IP. Жду, пока лимит спадёт — "
+                        "объявления пока не приходят. Напишу, когда восстановится.")
+                # Со снимком страницы: видно, заглушка это про лимит или капча,
+                # которую в принципе можно решить.
+                if not (block_shot and notifier.send_photo(block_shot, text)):
+                    notifier.send_message(text)
         else:
             delay = random.uniform(settings.poll_interval_min, settings.poll_interval_max)
             log.info("Пауза %.0f сек до следующей проверки...", delay)
