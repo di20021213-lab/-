@@ -90,8 +90,23 @@ _EXTRACT_JS = r"""
     if (priceEl) price = (priceEl.innerText || '').trim();
     let priceValue = metaPrice ? metaPrice.getAttribute('content') : null;
 
-    const dateEl = el.querySelector('[data-marker="item-date"]');
-    const dateText = dateEl ? (dateEl.innerText || '').trim() : null;
+    // Дата публикации. Авито меняет разметку, а без даты ломается фильтр
+    // свежести (неразобранная дата не отсеивается — объявление проходит как
+    // «возраст неизвестен»). Поэтому пробуем несколько селекторов, а если ни
+    // один не сработал — ищем в карточке текст, похожий на дату.
+    let dateText = null;
+    for (const sel of ['[data-marker="item-date"]', '[data-marker="item/date"]', 'time']) {
+      const dEl = el.querySelector(sel);
+      const txt = dEl ? (dEl.innerText || dEl.textContent || '').trim() : '';
+      if (txt) { dateText = txt; break; }
+    }
+    if (!dateText) {
+      const dateLike = /(только что|сегодня|вчера|назад|\d{1,2}\s+(январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр))/i;
+      for (const node of el.querySelectorAll('p, span, div')) {
+        const txt = (node.textContent || '').trim();
+        if (txt && txt.length <= 40 && dateLike.test(txt)) { dateText = txt; break; }
+      }
+    }
 
     const addrEl = el.querySelector('[data-marker="item-address"]')
       || el.querySelector('[class*="geo-"]');
@@ -272,13 +287,29 @@ class AvitoScraper:
 
     @staticmethod
     def _route(route) -> None:
-        """Отсекает тяжёлые ресурсы: меньше запросов через прокси — меньше 429."""
+        """Отсекает тяжёлые ресурсы: меньше запросов — меньше шансов на 429."""
         try:
             if route.request.resource_type in BLOCKED_RESOURCES:
                 route.abort()
             else:
                 route.continue_()
         except Exception:  # noqa: BLE001 - гонка при закрытии страницы
+            pass
+
+    @staticmethod
+    def _route_text_only(route) -> None:
+        """То же, но ещё и без картинок — для страниц, где нужен только текст.
+
+        На странице объявления галерея не нужна: мы пришли за описанием. А это
+        десятки лишних запросов за пару секунд, на которых Авито и показывает
+        антибот. Ссылки на фото мы всё равно берём со страницы выдачи.
+        """
+        try:
+            if route.request.resource_type in BLOCKED_RESOURCES | {"image"}:
+                route.abort()
+            else:
+                route.continue_()
+        except Exception:  # noqa: BLE001
             pass
 
     def __exit__(self, *exc) -> None:
@@ -366,6 +397,9 @@ class AvitoScraper:
     def fetch_details(self, url: str) -> Optional[str]:
         """Открывает страницу объявления, возвращает текст описания + параметров (или None)."""
         page = self._context.new_page()
+        # Правило страницы имеет приоритет над правилом контекста: здесь режем
+        # ещё и картинки, хотя на выдаче они грузятся.
+        page.route("**/*", self._route_text_only)
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=self.timeout_ms)
 

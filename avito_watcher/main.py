@@ -150,6 +150,10 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
     for lst in listings[:25]:
         price = f"{lst.price_value} ₽" if lst.price_value is not None else "цена не указана"
         age = format_age(lst.age_minutes)
+        if lst.age_minutes is None:
+            # Без этого непонятно, что чинить: то ли Авито сменил формат даты,
+            # то ли мы вообще не нашли её в карточке.
+            age += f" (дата: {lst.date_text!r})" if lst.date_text else " (даты в карточке нет)"
         head = f"{lst.title} | {price} | {age}"
 
         reason = filters.explain(lst, search)
@@ -187,6 +191,13 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
     print(f"  📷 картинка найдена у {with_photo} из {len(listings)}")
     if not with_photo:
         print("     Фото не извлекаются — уведомления придут текстом. Пришли этот вывод.")
+
+    # Неразобранная дата не отсеивается по max_age — значит фильтр свежести
+    # для таких объявлений просто не работает, и молчать об этом нельзя.
+    no_age = sum(1 for lst in listings if lst.age_minutes is None)
+    if no_age:
+        print(f"  ⚠ дата не разобрана у {no_age} из {len(listings)} — "
+              "фильтр свежести к ним не применяется. Пришли этот вывод.")
 
     # Самое свежее в выдаче: сразу видно, дело в фильтрах или объявлений просто нет.
     ages = [lst.age_minutes for lst in listings if lst.age_minutes is not None]
