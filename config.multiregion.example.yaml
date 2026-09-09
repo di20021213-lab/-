@@ -19,8 +19,11 @@
 # а висят такие месяцами. Плюс это розница, а не то, что ищут по объявлениям.
 # Поэтому магазины отсекаем прямо в URL.
 #
-# require_age: true — подстраховка на случай, если объявление без даты всё же
-# просочится: тогда оно отсеивается, раз проверить свежесть невозможно.
+# Про объявления без даты. Авито показывает относительную дату примерно неделю,
+# дальше её в карточке нет. Но выдача отсортирована по дате, поэтому объявление
+# без даты, стоящее ниже датированного, заведомо не моложе него — по этому и
+# отсеиваем. require_age (отбрасывать всё без даты) при такой оценке не нужен:
+# он заодно выбрасывал бы и свежее объявление, если дату разок не прочитали.
 #
 # ВАЖНО про «договорная»: объявления без цены отсеиваются, пока задан max_price —
 # понять, влезают ли они в потолок, невозможно. Хочешь видеть и их — убери
@@ -31,28 +34,24 @@ searches:
     url: "https://www.avito.ru/orlovskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104&user=1"
     max_price: 3000
     max_age: "1h"
-    require_age: true
     on_broken: flag
 
   - label: "Видеокарты Тульская обл."
     url: "https://www.avito.ru/tulskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104&user=1"
     max_price: 3000
     max_age: "1h"
-    require_age: true
     on_broken: flag
 
   - label: "Видеокарты Курская обл."
     url: "https://www.avito.ru/kurskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104&user=1"
     max_price: 3000
     max_age: "1h"
-    require_age: true
     on_broken: flag
 
   - label: "Видеокарты Липецкая обл."
     url: "https://www.avito.ru/lipetskaya_oblast/tovary_dlya_kompyutera/komplektuyuschie/videokarty?pmax=3000&s=104&user=1"
     max_price: 3000
     max_age: "1h"
-    require_age: true
     on_broken: flag
 
 settings:

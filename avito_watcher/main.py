@@ -149,24 +149,13 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
               "или Авито отдал антибот-страницу.")
         return 0
 
-    # Выдача отсортирована по дате, поэтому объявление без даты, стоящее НИЖЕ
-    # датированного, заведомо не моложе него. Авито перестаёт показывать
-    # относительную дату примерно через неделю — и без этой оценки такие
-    # объявления выглядят загадкой, хотя они просто старые.
-    lower_bound: list[Optional[int]] = []
-    seen_age: Optional[int] = None
-    for lst in listings:
-        if lst.age_minutes is not None:
-            seen_age = lst.age_minutes if seen_age is None else max(seen_age, lst.age_minutes)
-        lower_bound.append(seen_age)
-
     good = 0
-    for i, lst in enumerate(listings[:25]):
+    for lst in listings[:25]:
         price = f"{lst.price_value} ₽" if lst.price_value is not None else "цена не указана"
         age = format_age(lst.age_minutes)
         if lst.age_minutes is None:
-            if lower_bound[i] is not None:
-                age = f"старше {format_age(lower_bound[i])}"
+            if lst.min_age_minutes is not None:
+                age = f"старше {format_age(lst.min_age_minutes)}"
             elif lst.date_text:
                 # Дата есть, но мы её не разобрали — вот это уже наша проблема.
                 age += f" (дата: {lst.date_text!r})"

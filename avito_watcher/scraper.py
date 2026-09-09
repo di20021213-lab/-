@@ -192,6 +192,9 @@ class Listing:
     image_url: Optional[str]
     # Сколько минут прошло с публикации (None — не смогли разобрать дату).
     age_minutes: Optional[int] = None
+    # Нижняя оценка возраста по позиции в выдаче: объявление без даты, стоящее
+    # ниже датированного, не моложе него (выдача отсортирована по дате).
+    min_age_minutes: Optional[int] = None
 
 
 def _parse_price(price_value, price_text) -> Optional[int]:
@@ -447,6 +450,18 @@ class AvitoScraper:
                     age_minutes=parse_age_minutes(r.get("dateText")),
                 )
             )
+
+        # Оценка возраста для объявлений без даты. Авито показывает дату
+        # примерно неделю, дальше её в карточке нет — но раз выдача идёт по
+        # дате, всё, что ниже датированного, старше него. Это позволяет
+        # отсеять старьё, не отбрасывая заодно свежее объявление, у которого
+        # дату не удалось прочитать.
+        seen: Optional[int] = None
+        for lst in listings:
+            if lst.age_minutes is not None:
+                seen = lst.age_minutes if seen is None else max(seen, lst.age_minutes)
+            else:
+                lst.min_age_minutes = seen
         return listings
 
     def fetch_details(self, url: str) -> Optional[str]:

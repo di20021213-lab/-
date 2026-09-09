@@ -26,12 +26,19 @@ def explain(listing: Listing, search: SearchConfig) -> Optional[str]:
     # равно новое для нас, и лучше лишний раз показать, чем молча потерять
     # выгодное. Но если такого мусора много, помогает require_age: true.
     if search.max_age_minutes is not None:
-        if listing.age_minutes is None:
-            if search.require_age:
-                return "возраст неизвестен, а включён require_age"
-        elif listing.age_minutes > search.max_age_minutes:
-            return (f"старше max_age ({format_age(listing.age_minutes)} > "
-                    f"{format_age(search.max_age_minutes)})")
+        if listing.age_minutes is not None:
+            if listing.age_minutes > search.max_age_minutes:
+                return (f"старше max_age ({format_age(listing.age_minutes)} > "
+                        f"{format_age(search.max_age_minutes)})")
+        elif listing.min_age_minutes is not None:
+            # Даты нет, но объявление стоит НИЖЕ датированного — значит оно не
+            # моложе того. Этого достаточно, чтобы отсеять старьё, не рискуя
+            # выбросить свежее объявление с непрочитанной датой.
+            if listing.min_age_minutes > search.max_age_minutes:
+                return (f"старше max_age (не моложе {format_age(listing.min_age_minutes)} "
+                        f"по позиции в выдаче)")
+        elif search.require_age:
+            return "возраст неизвестен, а включён require_age"
 
     price = listing.price_value
     has_bounds = search.max_price is not None or search.min_price is not None
