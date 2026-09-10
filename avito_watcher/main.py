@@ -67,6 +67,21 @@ def _fetch_details_safe(scraper: AvitoScraper, url: str, label: str) -> tuple[Op
     return None, False
 
 
+def _freshness_rank(listing) -> tuple[int, int]:
+    """Ключ сортировки «сначала свежее».
+
+    Возраст известен — по нему. Известна только нижняя оценка по позиции в
+    выдаче — по ней, но ПОЗЖЕ любого объявления с точной датой того же
+    возраста: оценка говорит «не моложе», значит на деле может быть сильно
+    старше. Совсем без возраста — в конец: такие висят месяцами.
+    """
+    if listing.age_minutes is not None:
+        return (0, listing.age_minutes)
+    if listing.min_age_minutes is not None:
+        return (1, listing.min_age_minutes)
+    return (2, 0)
+
+
 def process_search(
     search: SearchConfig,
     scraper: AvitoScraper,
@@ -103,10 +118,15 @@ def process_search(
         log.info("[%s] первый запуск с max_age: пришлю то, что не старше %d мин",
                  search.label, search.max_age_minutes)
 
-    # Новые = те, которых ещё нет в базе. Выдача отсортирована «по дате» (новые сверху),
-    # поэтому разворачиваем, чтобы уведомлять в хронологическом порядке.
+    # Новые = те, которых ещё нет в базе. Шлём СВЕЖИЕ ПЕРВЫМИ.
+    #
+    # Раньше порядок был хронологический — при окне в час это ничего не меняло,
+    # все объявления были примерно одного возраста. Без окна в выдаче лежит
+    # старьё за неделю, и хронология ставила его впереди только что вышедшего:
+    # свежее уезжало в хвост очереди, а за лимитом в 15 — вообще в следующий
+    # цикл, то есть на полчаса. Именно эти полчаса и решают, успеть или нет.
     new_listings = [lst for lst in listings if not store.is_seen(search.label, lst.id)]
-    new_listings.reverse()
+    new_listings.sort(key=_freshness_rank)
 
     if not new_listings:
         return
