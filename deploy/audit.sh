@@ -50,12 +50,17 @@ awk -F: '$3>=1000 && $7 !~ /(nologin|false)$/ {print "  "$1"  (uid "$3", "$7")"}
 note "Появившийся тут незнакомый пользователь — прямой признак чужого вмешательства."
 
 section "Что слушает сеть"
-ss -tulnp 2>/dev/null | grep LISTEN | sed 's/^/  /' | head -20
-note "0.0.0.0 или * — доступно снаружи; 127.0.0.1 — только с самой машины."
+listen=$(ss -tulnp 2>/dev/null | grep LISTEN | head -20)
+if [ -n "$listen" ]; then
+    printf '%s\n' "$listen" | sed 's/^/  /'
+    note "0.0.0.0 или * — доступно снаружи; 127.0.0.1 — только с самой машины."
+else
+    note "(ничего не слушает — снаружи подключиться не к чему)"
+fi
 
 section "Установленные соединения наружу"
-ss -tnp state established 2>/dev/null \
-  | grep -vE '127\.0\.0\.1|\[::1\]' | head -15 | sed 's/^/  /'
+conn=$(ss -tnp state established 2>/dev/null | grep -vE '127\.0\.0\.1|\[::1\]' | head -15)
+[ -n "$conn" ] && printf '%s\n' "$conn" | sed 's/^/  /' || note "(нет)"
 
 section "Автозапуск"
 crontab -l 2>/dev/null | grep -v '^#' | sed 's/^/  crontab: /' || note "crontab пуст"
