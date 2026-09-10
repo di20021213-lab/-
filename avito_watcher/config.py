@@ -69,6 +69,10 @@ class Settings:
     # не зависит от числа поисков — а лимит у домашнего адреса маленький, и
     # каждый лишний поиск за цикл возвращает 429.
     rotate_searches: bool = False
+    # Как часто присылать сводку «я жив», в минутах. 0 — не присылать.
+    # Без неё «ничего не приходит» снаружи выглядит одинаково и когда объявлений
+    # правда нет, и когда бот упал или Авито его не пускает.
+    heartbeat_minutes: int = 360
 
 
 def _as_bool(value, default: bool) -> bool:
@@ -223,6 +227,9 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
         request_timeout_ms=_as_int(s.get("request_timeout_ms"), 45000, "request_timeout_ms"),
         user_agent=(s.get("user_agent") or None),
         rotate_searches=_as_bool(s.get("rotate_searches"), False),
+        heartbeat_minutes=(parse_duration_minutes(s.get("heartbeat_every"),
+                                                  "heartbeat_every") or 0)
+        if s.get("heartbeat_every") is not None else 360,
         user_data_dir=(os.getenv("BROWSER_PROFILE_DIR")
                        if os.getenv("BROWSER_PROFILE_DIR") is not None
                        else s.get("user_data_dir", "browser-profile")) or None,

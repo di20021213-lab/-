@@ -39,6 +39,10 @@ BLOCKED_ALERT_AFTER = 3
 # перезапуск службы стирает саму память о том, что запрос был только что.
 LAST_CYCLE_KEY = "last_cycle_at"
 
+# Когда последний раз слали сводку. Тоже в базе: перезапуск не должен
+# оборачиваться внеочередным сообщением.
+HEARTBEAT_KEY = "last_heartbeat_at"
+
 _stop = False
 
 
@@ -88,7 +92,8 @@ def process_search(
     store: SeenStore,
     notifier: TelegramNotifier,
     max_notifications: int,
-) -> None:
+) -> int:
+    """Проверяет один поиск. Возвращает число отправленных уведомлений."""
     listings = scraper.fetch(search.url, search.max_age_minutes)
     # Сколько карточек с фото — отдельным числом. Без него «фото не пришло»
     # неотличимо: то ли разбор не нашёл ссылку, то ли Telegram не взял файл.
@@ -101,7 +106,7 @@ def process_search(
                     "уйдут текстом. Смотреть надо разбор выдачи, а не Telegram.",
                     search.label)
     if not listings:
-        return
+        return 0
 
     first_run = not store.has_any(search.label)
 
@@ -113,7 +118,7 @@ def process_search(
             store.mark_seen(search.label, lst.id, notified=True, title=lst.title, price=lst.price)
         log.info("[%s] первичный посев: запомнил %d объявлений (без уведомлений)",
                  search.label, len(listings))
-        return
+        return 0
     if first_run:
         log.info("[%s] первый запуск с max_age: пришлю то, что не старше %d мин",
                  search.label, search.max_age_minutes)
@@ -129,7 +134,7 @@ def process_search(
     new_listings.sort(key=_freshness_rank)
 
     if not new_listings:
-        return
+        return 0
 
     sent = 0
     deferred = 0
@@ -184,6 +189,7 @@ def process_search(
     if deferred:
         log.info("[%s] лимит %d уведомлений за цикл исчерпан; ещё %d подходящих "
                  "отложены до следующего цикла", search.label, max_notifications, deferred)
+    return sent
 
 
 def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings) -> int:
@@ -399,6 +405,62 @@ def _sleep_interruptibly(delay: float) -> None:
         slept += 1.0
 
 
+class _Stats:
+    """Счётчики между сводками."""
+
+    def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
+        self.cycles = 0
+        self.blocked = 0
+        self.notified = 0
+
+
+def _heartbeat_text(stats: "_Stats", store: SeenStore, minutes: int) -> str:
+    """Короткий отчёт: жив ли бот и почему молчит.
+
+    Нужен потому, что «ничего не приходит» неотличимо снаружи от «бот упал».
+    Без такой сводки единственный способ это выяснить — лезть в журнал по SSH,
+    а под рукой не всегда даже компьютер.
+    """
+    lines = [f"🤖 Бот жив. За последние {format_age(minutes)}:",
+             f"· проверок: {stats.cycles}, из них заблокировано: {stats.blocked}",
+             f"· новых подходящих: {stats.notified}"]
+
+    last = store.get_float(LAST_CYCLE_KEY)
+    if last:
+        lines.append(f"· последняя проверка: {format_age(int((time.time() - last) / 60))} назад")
+
+    if stats.cycles and stats.blocked >= stats.cycles:
+        lines.append("")
+        lines.append("⚠️ Авито не пускает совсем — объявления не приходят поэтому, "
+                     "а не потому, что их нет.")
+    elif not stats.notified:
+        lines.append("")
+        lines.append("Тишина здесь означает «новых объявлений не было». "
+                     "Проверки идут, бот работает.")
+    return "\n".join(lines)
+
+
+def _maybe_heartbeat(settings: Settings, store: SeenStore,
+                     notifier: TelegramNotifier, stats: "_Stats") -> None:
+    minutes = settings.heartbeat_minutes
+    if not minutes:
+        return
+    now = time.time()
+    last = store.get_float(HEARTBEAT_KEY)
+    if last is None:
+        # Первый запуск: отсчитываем от текущего момента, а не шлём сразу.
+        store.set_float(HEARTBEAT_KEY, now)
+        return
+    if now - last < minutes * 60:
+        return
+    if notifier.send_message(_heartbeat_text(stats, store, minutes)):
+        store.set_float(HEARTBEAT_KEY, now)
+        stats.reset()
+
+
 def _loop(scraper, settings: Settings, store: SeenStore,
           notifier: TelegramNotifier, once: bool = False) -> None:
     """Основной цикл: проверить все поиски, поспать, повторить.
@@ -412,6 +474,7 @@ def _loop(scraper, settings: Settings, store: SeenStore,
 
     _wait_out_previous_run(settings, store)
 
+    stats = _Stats()
     cycle = 0
     while not _stop:
         ok_count = 0
@@ -433,7 +496,7 @@ def _loop(scraper, settings: Settings, store: SeenStore,
             if _stop:
                 break
             try:
-                process_search(
+                stats.notified += process_search(
                     search, scraper, store, notifier,
                     settings.max_notifications_per_cycle,
                 )
@@ -448,6 +511,10 @@ def _loop(scraper, settings: Settings, store: SeenStore,
             time.sleep(random.uniform(2, 5))  # пауза между разными поисками
 
         store.set_float(LAST_CYCLE_KEY, time.time())
+        stats.cycles += 1
+        if blocked_count and blocked_count >= ok_count:
+            stats.blocked += 1
+        _maybe_heartbeat(settings, store, notifier, stats)
 
         if _stop or once:
             break
