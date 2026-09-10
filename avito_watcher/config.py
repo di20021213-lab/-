@@ -11,7 +11,9 @@ from typing import Optional
 import yaml
 from dotenv import load_dotenv
 
-load_dotenv()
+from .paths import app_dir, resolve
+
+load_dotenv(app_dir() / ".env")
 
 
 
@@ -146,9 +148,14 @@ def _as_choice(value, default: str, choices: tuple[str, ...], name: str) -> str:
     return v
 
 
+def _opt_path(value) -> Optional[str]:
+    """Путь к папке профиля: пусто -> None (работать без профиля)."""
+    return resolve(value) if value else None
+
+
 def load_settings(config_path: str = "config.yaml") -> Settings:
     """Читает config.yaml + переменные окружения и валидирует их."""
-    path = Path(config_path)
+    path = Path(resolve(config_path))
     if not path.exists():
         raise ConfigError(
             f"Не найден файл конфигурации '{config_path}'. "
@@ -221,7 +228,7 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
         headless=_as_bool(os.getenv("HEADLESS"), _as_bool(s.get("headless"), True)),
         proxy=proxy,
         telegram_proxy=telegram_proxy,
-        db_path=os.getenv("DB_PATH") or s.get("db_path") or "seen.sqlite3",
+        db_path=resolve(os.getenv("DB_PATH") or s.get("db_path") or "seen.sqlite3"),
         max_notifications_per_cycle=_as_int(s.get("max_notifications_per_cycle"), 15,
                                             "max_notifications_per_cycle"),
         request_timeout_ms=_as_int(s.get("request_timeout_ms"), 45000, "request_timeout_ms"),
@@ -230,9 +237,9 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
         heartbeat_minutes=(parse_duration_minutes(s.get("heartbeat_every"),
                                                   "heartbeat_every") or 0)
         if s.get("heartbeat_every") is not None else 360,
-        user_data_dir=(os.getenv("BROWSER_PROFILE_DIR")
-                       if os.getenv("BROWSER_PROFILE_DIR") is not None
-                       else s.get("user_data_dir", "browser-profile")) or None,
+        user_data_dir=_opt_path(os.getenv("BROWSER_PROFILE_DIR")
+                                if os.getenv("BROWSER_PROFILE_DIR") is not None
+                                else s.get("user_data_dir", "browser-profile")),
         executable_path=(os.getenv("PLAYWRIGHT_EXECUTABLE_PATH") or s.get("executable_path") or None) or None,
         telegram_api_base=(os.getenv("TELEGRAM_API_BASE") or "").strip() or None,
     )

@@ -16,6 +16,7 @@ from . import filters, quality
 from .config import ConfigError, SearchConfig, Settings, load_settings
 from .dates import format_age
 from .notifier import TelegramNotifier
+from .paths import setup_bundled_browsers
 from .scraper import AntibotError, AvitoScraper
 from .storage import SeenStore
 
@@ -577,6 +578,12 @@ def run(argv: Optional[list[str]] = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
+
+    # Если рядом лежит папка browsers (так собирается сборка под Windows) —
+    # берём браузер оттуда, чтобы её можно было просто скопировать на другую
+    # машину и запустить.
+    if (bundled := setup_bundled_browsers()):
+        log.info("Использую браузер из %s", bundled)
 
     try:
         settings: Settings = load_settings(args.config)
