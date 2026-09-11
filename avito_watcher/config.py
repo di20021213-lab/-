@@ -17,6 +17,11 @@ load_dotenv(app_dir() / ".env")
 
 
 
+# Короткое, человеческое и без лишних слов: длинные заготовки читаются как
+# рассылка, а продавцу важно понять за секунду, что вещь у него берут.
+DEFAULT_MESSAGE_TEMPLATE = "Здравствуйте! Ещё продаётся? Готов забрать сегодня."
+
+
 class ConfigError(Exception):
     """Ошибка конфигурации, понятная пользователю."""
 
@@ -42,6 +47,11 @@ class SearchConfig:
     check_description: bool = True
     # Свои дополнительные признаки неисправности (к встроенному словарю).
     extra_broken_markers: list[str] = field(default_factory=list)
+    # Готовый текст сообщения продавцу — приходит в карточке отдельным блоком,
+    # Telegram копирует такой блок одним касанием. Бот НИЧЕГО не отправляет сам:
+    # пишешь ты, просто не тратя время на обдумывание. Пустая строка — не показывать.
+    # Можно подставить {title}, {price}, {location}.
+    message_template: Optional[str] = DEFAULT_MESSAGE_TEMPLATE
 
 
 @dataclass
@@ -187,6 +197,9 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
                                      f"{label}.on_broken"),
                 check_description=_as_bool(item.get("check_description"), True),
                 extra_broken_markers=[str(k) for k in (item.get("extra_broken_markers") or [])],
+                message_template=(DEFAULT_MESSAGE_TEMPLATE
+                                  if item.get("message_template") is None
+                                  else (str(item["message_template"]).strip() or None)),
                 keywords=[str(k).lower() for k in (item.get("keywords") or [])],
                 exclude_keywords=[str(k).lower() for k in (item.get("exclude_keywords") or [])],
             )

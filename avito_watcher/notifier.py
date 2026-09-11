@@ -10,10 +10,24 @@ import requests
 
 log = logging.getLogger(__name__)
 
+
+class _Default(dict):
+    """Словарь, который на неизвестный ключ возвращает саму подстановку.
+
+    Нужен, чтобы опечатка в шаблоне («{цена}») не превращалась в KeyError
+    и не блокировала уведомление.
+    """
+
+    def __missing__(self, key):  # noqa: D105
+        return "{" + key + "}"
+
 DEFAULT_API_BASE = "https://api.telegram.org"
 
 # Ограничение Telegram на фото по URL/файлом.
 MAX_PHOTO_BYTES = 10 * 1024 * 1024
+# Подпись под фото у Telegram не длиннее 1024 символов. Если заготовка не влезает,
+# лучше отправить карточку без неё, чем потерять всё сообщение целиком.
+MAX_CAPTION = 1024
 # CDN Авито охотнее отдаёт картинку браузеру, чем безымянному клиенту.
 IMAGE_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -98,13 +112,14 @@ class TelegramNotifier:
         )
 
     def send_listing(self, listing, search_label: str, warning: Optional[str] = None,
-                     unchecked: bool = False) -> bool:
+                     unchecked: bool = False, message_template: Optional[str] = None) -> bool:
         """Шлёт карточку объявления. Пытается с фото, при неудаче — обычным текстом.
 
         warning — найденный признак неисправности; добавляется в карточку как пометка ⚠️.
         unchecked — описание прочитать не удалось, проверка на неисправность неполная.
         """
-        caption = self._format_caption(listing, search_label, warning, unchecked)
+        caption = self._format_caption(listing, search_label, warning, unchecked,
+                                       message_template)
 
         if listing.image_url:
             payload = {"chat_id": self.chat_id, "caption": caption, "parse_mode": "HTML"}
@@ -146,8 +161,26 @@ class TelegramNotifier:
         return resp.content
 
     @staticmethod
+    def _render_template(template: str, listing) -> str:
+        """Подставляет данные объявления в заготовку сообщения.
+
+        Незнакомую подстановку не роняем в ошибку, а оставляем как есть: лучше
+        прислать текст с лишней фигурной скобкой, чем не прислать карточку.
+        """
+        values = {
+            "title": listing.title or "",
+            "price": listing.price or "",
+            "location": listing.location or "",
+        }
+        try:
+            return template.format_map(_Default(values))
+        except (ValueError, IndexError):
+            return template
+
+    @staticmethod
     def _format_caption(listing, search_label: str, warning: Optional[str] = None,
-                        unchecked: bool = False) -> str:
+                        unchecked: bool = False,
+                        message_template: Optional[str] = None) -> str:
         title = html.escape(listing.title or "Без названия")
         parts = [f"🎮 <b>{html.escape(search_label)}</b>", "", f"<b>{title}</b>"]
         if warning:
@@ -164,4 +197,15 @@ class TelegramNotifier:
         if listing.url:
             parts.append("")
             parts.append(f'🔗 <a href="{html.escape(listing.url)}">Открыть на Авито</a>')
+
+        if message_template:
+            text = TelegramNotifier._render_template(message_template, listing)
+            # <code> Telegram копирует одним касанием — в этом весь смысл:
+            # скопировал, открыл ссылку, вставил, отправил.
+            extra = ["", "✍️ <i>Нажми, чтобы скопировать:</i>",
+                     f"<code>{html.escape(text)}</code>"]
+            if len("\n".join(parts + extra)) <= MAX_CAPTION:
+                parts += extra
+            else:
+                log.info("Заготовка сообщения не влезла в подпись, пропускаю")
         return "\n".join(parts)

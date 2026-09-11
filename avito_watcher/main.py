@@ -177,7 +177,8 @@ def process_search(
                                 title=lst.title, price=lst.price)
                 continue
             warning = reason  # режим flag: покажем с пометкой ⚠️
-        ok = notifier.send_listing(lst, search.label, warning=warning, unchecked=unchecked)
+        ok = notifier.send_listing(lst, search.label, warning=warning, unchecked=unchecked,
+                                   message_template=search.message_template)
         if ok:
             store.mark_seen(search.label, lst.id, notified=True,
                             title=lst.title, price=lst.price)
