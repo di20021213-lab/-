@@ -109,6 +109,10 @@ def process_search(
     if not listings:
         return 0
 
+    # Всё, что сейчас в выдаче, ещё продаётся — продлеваем отметку. Делается
+    # до любых фильтров: время жизни интересно и у тех, что нам не подошли.
+    store.touch(search.label, (x.id for x in listings))
+
     first_run = not store.has_any(search.label)
 
     # Первичный посев БЕЗ фильтра свежести: молча запоминаем всё, чтобы не завалить
