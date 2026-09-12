@@ -1,0 +1,8 @@
+# Ссылки на товары Озона для ozon_check.py и слежения.
+# Пустые строки и строки с # пропускаются.
+# Короткие ссылки вида ozon.ru/t/XXXX годятся — браузер сам перейдёт куда надо.
+
+https://ozon.ru/t/l1ZC6Ti
+https://ozon.ru/t/hibk3Nu
+https://ozon.ru/t/MniTuDV
+https://ozon.ru/t/sXLiN3r
