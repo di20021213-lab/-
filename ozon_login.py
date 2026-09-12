@@ -33,7 +33,9 @@ POLL_S = 3
 
 def main() -> int:
     url = sys.argv[1] if len(sys.argv) > 1 else "https://www.ozon.ru/"
-    if not os.getenv("DISPLAY"):
+    # На Windows экран есть всегда, проверять нечего. На Linux без DISPLAY
+    # видимый браузер показать негде — там нужен виртуальный экран.
+    if os.name != "nt" and not os.getenv("DISPLAY"):
         print("Нет DISPLAY — браузер показать негде.\n"
               "Запускай через deploy/ozon_captcha.sh, он поднимет виртуальный экран.",
               file=sys.stderr)
