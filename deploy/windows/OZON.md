@@ -69,9 +69,15 @@ Expand-Archive C:\avito.zip -DestinationPath C:\ -Force
 После этого проверки гоняй **тем же видимым браузером**:
 
 ```powershell
-set OZON_HEADLESS=0
+$env:OZON_HEADLESS = "0"
+```
+
+```powershell
 .venv\Scripts\python ozon_check.py --file ozon-links.example.txt
 ```
+
+(`set VAR=...` — это синтаксис cmd; в PowerShell переменные задаются через
+`$env:`.)
 
 Сессия привязана не только к кукам, но и к отпечатку браузера: в скрытом режиме
 он другой, и Озон переспросит.
