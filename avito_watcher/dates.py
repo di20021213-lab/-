@@ -10,11 +10,26 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-MSK = ZoneInfo("Europe/Moscow")
+
+def _moscow():
+    """Часовой пояс Москвы.
+
+    zoneinfo берёт базу поясов из системы, а в Windows её нет вовсе — нужен
+    пакет tzdata (он в requirements). Если его почему-то не оказалось, берём
+    фиксированный +03:00. Это не приближение: Москва не переводит часы с 2014
+    года, так что смещение постоянное и совпадает с базой.
+    """
+    try:
+        return ZoneInfo("Europe/Moscow")
+    except (ZoneInfoNotFoundError, ImportError, KeyError):
+        return timezone(timedelta(hours=3), "MSK")
+
+
+MSK = _moscow()
 
 # (основы слов единицы, множитель в минутах). Порядок важен: проверяем по очереди.
 _UNITS = (
