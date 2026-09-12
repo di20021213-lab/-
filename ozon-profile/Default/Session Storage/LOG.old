@@ -1,2 +1,3 @@
-2026/09/12-11:24:24.731 764 Creating DB /home/user/-/ozon-profile/Default/Session Storage since it was missing.
-2026/09/12-11:24:24.757 764 Reusing MANIFEST /home/user/-/ozon-profile/Default/Session Storage/MANIFEST-000001
+2026/09/12-21:37:09.786 5b6 Reusing MANIFEST /home/user/-/ozon-profile/Default/Session Storage/MANIFEST-000001
+2026/09/12-21:37:09.787 5b6 Recovering log #3
+2026/09/12-21:37:09.788 5b6 Reusing old log /home/user/-/ozon-profile/Default/Session Storage/000003.log 

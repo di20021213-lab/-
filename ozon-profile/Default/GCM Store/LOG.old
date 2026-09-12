@@ -1,2 +1,3 @@
-2026/09/12-11:24:26.846 73e Creating DB /home/user/-/ozon-profile/Default/GCM Store since it was missing.
-2026/09/12-11:24:26.847 73e Reusing MANIFEST /home/user/-/ozon-profile/Default/GCM Store/MANIFEST-000001
+2026/09/12-21:37:11.855 591 Reusing MANIFEST /home/user/-/ozon-profile/Default/GCM Store/MANIFEST-000001
+2026/09/12-21:37:11.855 591 Recovering log #3
+2026/09/12-21:37:11.855 591 Reusing old log /home/user/-/ozon-profile/Default/GCM Store/000003.log 

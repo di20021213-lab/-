@@ -152,6 +152,8 @@ def check(scraper: AvitoScraper, url: str, full_resources: bool = True) -> dict:
 
 def main() -> int:
     args = sys.argv[1:]
+    from ozon_login import normalize_url  # общая проверка адреса
+
     if args and args[0] == "--file":
         urls = [l.strip() for l in open(args[1], encoding="utf-8")
                 if l.strip() and not l.lstrip().startswith("#")]
@@ -159,6 +161,18 @@ def main() -> int:
         urls = args
     if not urls:
         print(__doc__)
+        return 2
+
+    checked = []
+    for u in urls:
+        good = normalize_url(u)
+        if good:
+            checked.append(good)
+        else:
+            print(f"Пропускаю, это не адрес: {u!r}")
+    urls = checked
+    if not urls:
+        print("Не осталось ни одной корректной ссылки.")
         return 2
 
     proxy = (os.getenv("PROXY") or "").strip() or None

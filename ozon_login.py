@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 import time
 
@@ -31,8 +32,35 @@ WAIT_LIMIT_S = int(os.getenv("OZON_SOLVE_TIMEOUT", "900"))
 POLL_S = 3
 
 
+def normalize_url(url: str) -> str | None:
+    """Приводит адрес к рабочему виду. None — если это вообще не адрес.
+
+    Ловим самую частую опечатку — потерянное двоеточие («https//ozon.ru»).
+    Без проверки Playwright вываливает сорок строк traceback вместо одной
+    внятной фразы, и причина тонет.
+    """
+    url = (url or "").strip().strip('"').strip("'")
+    if not url:
+        return None
+    if url.startswith(("https//", "http//")):
+        url = url.replace("//", "://", 1)
+    if not url.startswith(("http://", "https://")):
+        if re.match(r"^[\w.-]+\.[a-z]{2,}(/|$)", url, re.I):
+            url = "https://" + url
+        else:
+            return None
+    return url
+
+
 def main() -> int:
-    url = sys.argv[1] if len(sys.argv) > 1 else "https://www.ozon.ru/"
+    raw = sys.argv[1] if len(sys.argv) > 1 else "https://www.ozon.ru/"
+    url = normalize_url(raw)
+    if not url:
+        print(f"Это не похоже на адрес: {raw!r}\n"
+              "Пример: ozon_captcha.bat \"https://ozon.ru/t/l1ZC6Ti\"", file=sys.stderr)
+        return 2
+    if url != raw.strip():
+        print(f"Поправил адрес: {raw}  ->  {url}")
     # На Windows экран есть всегда, проверять нечего. На Linux без DISPLAY
     # видимый браузер показать негде — там нужен виртуальный экран.
     if os.name != "nt" and not os.getenv("DISPLAY"):
@@ -52,7 +80,13 @@ def main() -> int:
         page = scraper._context.new_page()
         # Ничего не режем: капча грузит собственные скрипты и картинки.
         page.route("**/*", lambda route: route.continue_())
-        page.goto(url, wait_until="domcontentloaded", timeout=scraper.timeout_ms)
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=scraper.timeout_ms)
+        except Exception as e:  # noqa: BLE001 - показываем суть, а не стек
+            print(f"Не смог открыть страницу: {type(e).__name__}", file=sys.stderr)
+            print(f"  {str(e).splitlines()[0]}", file=sys.stderr)
+            print("  Проверь адрес и что интернет на месте.", file=sys.stderr)
+            return 1
 
         deadline = time.time() + WAIT_LIMIT_S
         while time.time() < deadline:
@@ -61,8 +95,20 @@ def main() -> int:
             except Exception as e:  # noqa: BLE001 - страница могла перезагрузиться
                 time.sleep(POLL_S)
                 continue
-            body = (data.get("bodySample") or "").lower()
-            if any(m in body for m in CAPTCHA_MARKERS):
+            body = (data.get("bodySample") or "")
+            title = (data.get("title") or "")
+
+            # Пустое тело — это НЕ «капчи нет», а «страница ещё не отрисовалась».
+            # Первая версия считала такое успехом и рапортовала о пройденной
+            # капче, когда в заголовке ещё стояло «Сопоставьте пазл».
+            if not body.strip():
+                time.sleep(POLL_S)
+                continue
+
+            # Ищем маркеры и в заголовке тоже: у страницы капчи он говорящий,
+            # а тело может не успеть наполниться.
+            haystack = f"{title} {body}".lower()
+            if any(m in haystack for m in CAPTCHA_MARKERS):
                 time.sleep(POLL_S)
                 continue
 
