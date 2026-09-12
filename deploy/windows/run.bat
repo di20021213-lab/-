@@ -1,40 +1,40 @@
 @echo off
-chcp 65001 >nul
-rem Запуск бота на Windows без сборки exe. Двойной щелчок по этому файлу.
-rem При первом запуске поставит зависимости и браузер — это займёт минут пять.
+rem Start the bot on Windows. Double-click this file.
+rem First run installs dependencies and the browser (about 5 minutes).
+rem Russian instructions: deploy\windows\AFTER_INSTALL.md
+rem
+rem ASCII-only on purpose: cmd.exe misparses UTF-8 Cyrillic in batch files.
 cd /d "%~dp0..\.."
 
 where python >nul 2>nul
 if errorlevel 1 (
-    echo Не найден Python. Поставь его с python.org и при установке
-    echo обязательно отметь галочку "Add python.exe to PATH".
+    echo Python not found. Install it from python.org and tick
+    echo "Add python.exe to PATH" during setup.
     pause
     exit /b 1
 )
 
 if not exist ".venv" (
-    echo Создаю окружение...
+    echo Creating virtual environment...
     python -m venv .venv || goto :fail
 )
 
-echo Проверяю зависимости...
+echo Checking dependencies...
 .venv\Scripts\python -m pip install --quiet --upgrade pip || goto :fail
 .venv\Scripts\python -m pip install --quiet -r requirements.txt || goto :fail
-
-rem Ставится один раз; при повторных запусках просто убеждается, что браузер на месте.
 .venv\Scripts\python -m playwright install chromium || goto :fail
 
 if not exist "config.yaml" (
     echo.
-    echo Нет config.yaml. Скопируй config.multiregion.example.yaml в config.yaml
-    echo и впиши свои поиски, а в .env — токен бота и chat_id.
+    echo config.yaml is missing. Copy config.multiregion.example.yaml to
+    echo config.yaml, and put your token and chat_id into .env
     pause
     exit /b 1
 )
 
 echo.
-echo Запускаю. Окно не закрывай — бот работает, пока оно открыто.
-echo Остановить: Ctrl+C
+echo Running. Keep this window open - the bot works while it is.
+echo Stop with Ctrl+C
 echo.
 .venv\Scripts\python -m avito_watcher.main %*
 pause
@@ -42,6 +42,6 @@ exit /b 0
 
 :fail
 echo.
-echo Не получилось. Скопируй последние строки выше — по ним видно, что именно.
+echo Failed. Copy the last lines above - they say what went wrong.
 pause
 exit /b 1

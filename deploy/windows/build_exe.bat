@@ -1,21 +1,20 @@
 @echo off
-chcp 65001 >nul
-rem Собирает avito-watcher.exe. ЗАПУСКАТЬ НА WINDOWS: PyInstaller делает exe
-rem только на той системе, под которую собирает, — с Linux его не сделать.
-rem
-rem На выходе: dist\avito-watcher\ — папку можно целиком скопировать на другой
-rem компьютер, Python там не нужен.
+rem Build avito-watcher.exe. RUN THIS ON WINDOWS: PyInstaller only produces a
+rem Windows exe on Windows, it cannot cross-compile from Linux.
+rem Output: dist\avito-watcher\ - copy the whole folder anywhere, no Python needed.
+rem Russian notes: deploy\windows\README.md
+rem ASCII-only on purpose - see tunnel.bat for why.
 cd /d "%~dp0..\.."
 
 if not exist ".venv" (
-    echo Сначала запусти run.bat — он поставит окружение и браузер.
+    echo Run run.bat first - it sets up the environment and the browser.
     pause
     exit /b 1
 )
 
 .venv\Scripts\python -m pip install --quiet pyinstaller || goto :fail
 
-echo Собираю...
+echo Building...
 .venv\Scripts\python -m PyInstaller --noconfirm --clean ^
     --name avito-watcher ^
     --collect-all playwright ^
@@ -23,9 +22,9 @@ echo Собираю...
     --hidden-import yaml ^
     deploy\windows\entry.py || goto :fail
 
-rem Браузер кладём рядом с exe: бот сам его там найдёт (см. paths.py),
-rem и папку можно переносить без установки Playwright на новой машине.
-echo Копирую браузер рядом с exe...
+rem Put the browser next to the exe: paths.py picks it up from there, so the
+rem folder can be copied to a machine with no Playwright installed.
+echo Copying the browser next to the exe...
 set "PLAYWRIGHT_BROWSERS_PATH=%CD%\dist\avito-watcher\browsers"
 .venv\Scripts\python -m playwright install chromium || goto :fail
 
@@ -33,14 +32,14 @@ copy config.yaml dist\avito-watcher\ >nul 2>nul
 copy .env dist\avito-watcher\ >nul 2>nul
 
 echo.
-echo Готово: dist\avito-watcher\avito-watcher.exe
-echo Рядом с exe должны лежать config.yaml и .env — если их не скопировало,
-echo положи вручную.
+echo Done: dist\avito-watcher\avito-watcher.exe
+echo config.yaml and .env must sit next to the exe - copy them if the lines
+echo above did not.
 pause
 exit /b 0
 
 :fail
 echo.
-echo Сборка не удалась. Последние строки выше объясняют, почему.
+echo Build failed. The last lines above explain why.
 pause
 exit /b 1

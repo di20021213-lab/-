@@ -1,30 +1,29 @@
 @echo off
-chcp 65001 >nul
-rem Туннель для Telegram — замена autossh с Linux.
+rem SSH tunnel to the foreign VDS: SOCKS5 for Telegram + remote desktop forward.
+rem Replaces autossh from the Linux setup. See RDP.md for the Russian guide.
 rem
-rem Зачем: api.telegram.org из России не открывается напрямую, поэтому бот
-rem ходит туда через SOCKS-прокси на зарубежном сервере. В .env это строка
-rem TELEGRAM_PROXY=socks5h://127.0.0.1:1080 — она остаётся прежней, меняется
-rem только то, кто держит туннель.
+rem NOTE: this file is deliberately ASCII-only. cmd.exe reads batch files in the
+rem OEM codepage, so UTF-8 Cyrillic here breaks line parsing and random fragments
+rem get executed as commands. Keep explanations in the .md files.
 rem
-rem ssh.exe в Windows уже есть (начиная с Windows 10), ставить нечего.
-rem Ключ должен лежать в %USERPROFILE%\.ssh\id_ed25519 — скопируй его с мини-ПК.
-rem
-rem Окно не закрывать. Для постоянной работы — через Планировщик задач,
-rem как описано в README.md рядом.
+rem Key must be at %USERPROFILE%\.ssh\id_ed25519 (see AFTER_INSTALL.md).
 
 set VDS_USER=root
 set VDS_HOST=87.58.205.159
 set VDS_PORT=22
 
 :loop
-echo %date% %time%  подключаюсь к %VDS_HOST%...
-ssh -N -D 127.0.0.1:1080 ^
-    -o ServerAliveInterval=30 -o ServerAliveCountMax=3 ^
-    -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=accept-new ^
+echo [%date% %time%] connecting to %VDS_HOST% ...
+ssh -N ^
+    -D 127.0.0.1:1080 ^
+    -R 127.0.0.1:3389:127.0.0.1:3389 ^
+    -o ServerAliveInterval=30 ^
+    -o ServerAliveCountMax=3 ^
+    -o ExitOnForwardFailure=yes ^
+    -o StrictHostKeyChecking=accept-new ^
     -p %VDS_PORT% %VDS_USER%@%VDS_HOST%
 
-rem Сюда попадаем, только если соединение оборвалось: ждём и поднимаем заново.
-echo %date% %time%  связь оборвалась, повтор через 15 секунд
+rem We only get here if the connection dropped. Wait and bring it back up.
+echo [%date% %time%] tunnel down, retry in 15 s
 timeout /t 15 /nobreak >nul
 goto loop
