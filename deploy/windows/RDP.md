@@ -18,9 +18,17 @@ PowerShell **от администратора**:
 Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
 ```
 
+Вторая команда нужна **только если хочешь заходить из домашней сети**. Через
+туннель соединение приходит с `127.0.0.1`, а трафик от самой машины брандмауэр
+не фильтрует — так что этот шаг можно пропустить.
+
 ```powershell
-Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+Get-NetFirewallRule | Where-Object { $_.Group -eq '@FirewallAPI.dll,-28752' } | Enable-NetFirewallRule
 ```
+
+Здесь внутренний идентификатор группы, а не её название: на русской Windows
+группа зовётся «Удалённый рабочий стол», и `-DisplayGroup "Remote Desktop"`
+выдаёт «Не найдены объекты MSFT_NetFirewallRule».
 
 Проверить, что слушает:
 
