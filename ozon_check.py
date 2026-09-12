@@ -30,6 +30,13 @@ load_dotenv()
 
 PAUSE_S = int(os.getenv("OZON_PAUSE_S", "20"))
 
+# Профиль общий с ozon_login.py: сессия, добытая человеком, лежит именно там.
+PROFILE = os.getenv("OZON_PROFILE_DIR", "ozon-profile")
+# Если капчу проходил человек, проверки надо гонять тем же видимым браузером:
+# в headless отпечаток другой, и сессия не признаётся.
+HEADLESS = (os.getenv("OZON_HEADLESS", "1").strip().lower()
+            not in {"0", "false", "no", "нет"})
+
 # Признаки того, что вместо товара нам отдали заглушку.
 # «Ой, что-то пошло не так. Обновите страницу» — это и есть антибот Озона.
 # Выглядит как случайный сбой, поэтому его легко принять за проблему разбора:
@@ -156,9 +163,10 @@ def main() -> int:
 
     proxy = (os.getenv("PROXY") or "").strip() or None
     ok = blocked = 0
-    with AvitoScraper(headless=True, proxy=proxy,
+    print(f"Профиль: {PROFILE}  ·  браузер: {'скрытый' if HEADLESS else 'видимый'}")
+    with AvitoScraper(headless=HEADLESS, proxy=proxy,
                       executable_path=os.getenv("PLAYWRIGHT_EXECUTABLE_PATH") or None,
-                      user_data_dir=os.getenv("BROWSER_PROFILE_DIR") or None) as scraper:
+                      user_data_dir=PROFILE) as scraper:
         for i, url in enumerate(urls, 1):
             if i > 1:
                 time.sleep(PAUSE_S + random.uniform(0, 5))
