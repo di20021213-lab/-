@@ -30,11 +30,20 @@ load_dotenv()
 
 PAUSE_S = int(os.getenv("OZON_PAUSE_S", "20"))
 
-# Признаки того, что вместо товара нам отдали проверку.
+# Признаки того, что вместо товара нам отдали заглушку.
+# «Ой, что-то пошло не так. Обновите страницу» — это и есть антибот Озона.
+# Выглядит как случайный сбой, поэтому его легко принять за проблему разбора:
+# первая версия так и сделала и отчиталась невнятным «цену не нашёл».
 BLOCK_MARKERS = (
-    "доступ ограничен", "проверка", "captcha", "challenge",
+    "что-то пошло не так", "обновите страницу",
+    "доступ ограничен", "captcha", "challenge",
     "подтвердите, что вы не робот", "access denied",
 )
+
+# Сколько раз перезагрузить страницу, наткнувшись на заглушку. Настоящий
+# человек в такой ситуации жмёт «Обновить», и иногда этого достаточно.
+RELOAD_TRIES = 3
+RELOAD_PAUSE_S = 6
 
 # Сколько ждать цену: страница отдаёт каркас сразу, а цену дорисовывает скриптом.
 PRICE_WAIT_MS = 8000
@@ -89,21 +98,37 @@ def money(value) -> Optional[int]:
     return int(digits) if digits else None
 
 
-def check(scraper: AvitoScraper, url: str) -> dict:
+def check(scraper: AvitoScraper, url: str, full_resources: bool = True) -> dict:
     page = scraper._context.new_page()
+    if full_resources:
+        # Правило страницы перекрывает правило контекста, где картинки, шрифты
+        # и счётчики режутся ради экономии запросов к Авито. Озону это может
+        # выйти боком: свои проверки он грузит как раз такими файлами, и,
+        # обрезая их, мы сами напрашиваемся на заглушку.
+        page.route("**/*", lambda route: route.continue_())
     try:
-        page.goto(url, wait_until="domcontentloaded", timeout=scraper.timeout_ms)
-        # Цену рисует скрипт уже после загрузки каркаса — ждём её появления,
-        # но не падаем, если не дождались: разберём то, что есть.
-        try:
-            page.wait_for_selector('[data-widget="webPrice"], script[type="application/ld+json"]',
-                                   timeout=PRICE_WAIT_MS)
-        except Exception:  # noqa: BLE001
-            pass
-        data = page.evaluate(EXTRACT_JS)
-        data["url"] = page.url
-        body = (data.get("bodySample") or "").lower()
-        data["blocked"] = any(m in body for m in BLOCK_MARKERS)
+        for attempt in range(1, RELOAD_TRIES + 1):
+            if attempt == 1:
+                page.goto(url, wait_until="domcontentloaded", timeout=scraper.timeout_ms)
+            else:
+                time.sleep(RELOAD_PAUSE_S)
+                page.reload(wait_until="domcontentloaded", timeout=scraper.timeout_ms)
+            # Цену рисует скрипт уже после каркаса — ждём, но не падаем.
+            try:
+                page.wait_for_selector(
+                    '[data-widget="webPrice"], script[type="application/ld+json"]',
+                    timeout=PRICE_WAIT_MS)
+            except Exception:  # noqa: BLE001
+                pass
+            data = page.evaluate(EXTRACT_JS)
+            data["url"] = page.url
+            data["attempts"] = attempt
+            body = (data.get("bodySample") or "").lower()
+            data["blocked"] = any(m in body for m in BLOCK_MARKERS)
+            if not data["blocked"]:
+                return data
+            if attempt < RELOAD_TRIES:
+                print(f"     заглушка, обновляю страницу ({attempt}/{RELOAD_TRIES - 1})")
         return data
     finally:
         page.close()
@@ -137,7 +162,7 @@ def main() -> int:
 
             if d["blocked"]:
                 blocked += 1
-                print("  ✗ Озон показал проверку, а не товар")
+                print(f"  ✗ Озон показал заглушку (попыток: {d.get('attempts', 1)})")
                 print(f"     начало страницы: {(d.get('bodySample') or '')[:160]!r}")
                 continue
 
@@ -160,7 +185,9 @@ def main() -> int:
     elif ok:
         print("Пускает через раз: либо вёрстка разная, либо лимит. Покажи вывод мне.")
     else:
-        print("Не пустил ни разу. Возможно, нужен другой подход — покажи вывод.")
+        print("Не пустил ни разу, даже с перезагрузками и всеми ресурсами.")
+        print("Это осознанная защита Озона от автоматики, а не наша ошибка.")
+        print("Обходить её я не буду — расскажу, что делать вместо этого.")
     return 0
 
 
