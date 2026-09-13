@@ -206,10 +206,19 @@ def _parse_models(raw, label: str) -> list[ModelRule]:
 
 
 def match_model(title: Optional[str], rules: list[ModelRule]) -> Optional[ModelRule]:
-    """Первое подошедшее правило, либо None. Порядок правил значим."""
+    """Первое подошедшее правило, либо None. Порядок правил значим.
+
+    Сравнение идёт по НАЧАЛУ слова, а не по подстроке. Простое вхождение
+    подвело сразу на живых данных: Intel ARC B580 попала под правило RX 580,
+    потому что «580» лежит внутри «B580», и объявление за 31990 ₽ отсеялось
+    с формулировкой «дороже потолка RX 580».
+
+    Границы в конце нет намеренно: образцы вроде «1060 6» должны ловить
+    «1060 6GB», а «\b...\b» такое отрезало бы.
+    """
     text = (title or "").lower()
     for rule in rules:
-        if any(m in text for m in rule.match):
+        if any(re.search(r"\b" + re.escape(m), text) for m in rule.match):
             return rule
     return None
 
