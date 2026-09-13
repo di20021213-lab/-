@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .config import SearchConfig
+from .config import SearchConfig, match_model
 from .dates import format_age
 from .scraper import Listing
 
@@ -41,12 +41,24 @@ def explain(listing: Listing, search: SearchConfig) -> Optional[str]:
             return "возраст неизвестен, а включён require_age"
 
     price = listing.price_value
-    has_bounds = search.max_price is not None or search.min_price is not None
+
+    # Потолок по модели важнее общего: 4000 ₽ — находка для 1060 и переплата
+    # для 750 Ti, одной цифрой это не выразить.
+    max_price = search.max_price
+    if search.models:
+        rule = match_model(listing.title, search.models)
+        if rule is None:
+            return "модель не из списка"
+        max_price = rule.max_price
+
+    has_bounds = max_price is not None or search.min_price is not None
     if has_bounds and price is None:
         # Задан ценовой диапазон, а цена не указана («договорная») — вне диапазона.
         return "цена не указана, а задан ценовой диапазон"
-    if search.max_price is not None and price > search.max_price:
-        return f"дороже max_price ({price} > {search.max_price})"
+    if max_price is not None and price > max_price:
+        rule = match_model(listing.title, search.models) if search.models else None
+        limit = f"{rule.name}: {max_price}" if rule else str(max_price)
+        return f"дороже потолка ({price} > {limit})"
     if search.min_price is not None and price < search.min_price:
         return f"дешевле min_price ({price} < {search.min_price})"
 

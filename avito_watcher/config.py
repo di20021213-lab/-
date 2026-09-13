@@ -27,6 +27,21 @@ class ConfigError(Exception):
 
 
 @dataclass
+class ModelRule:
+    """Модель со своим потолком цены.
+
+    Нужна там, где одна цифра max_price бессмысленна: 4000 ₽ — находка для
+    1060 6GB и переплата для 750 Ti. Правила проверяются ПО ПОРЯДКУ, побеждает
+    первое совпавшее, поэтому частные пишутся раньше общих: «1060 6gb» должна
+    стоять выше, чем «1060», иначе шестигигабайтную посчитают по потолку
+    трёхгигабайтной.
+    """
+    name: str
+    match: list[str]
+    max_price: int
+
+
+@dataclass
 class SearchConfig:
     label: str
     url: str
@@ -52,6 +67,9 @@ class SearchConfig:
     # пишешь ты, просто не тратя время на обдумывание. Пустая строка — не показывать.
     # Можно подставить {title}, {price}, {location}.
     message_template: Optional[str] = DEFAULT_MESSAGE_TEMPLATE
+    # Потолки по моделям. Если список задан, объявление обязано совпасть хотя бы
+    # с одной моделью — остальное отсеивается как «не наша модель».
+    models: list[ModelRule] = field(default_factory=list)
 
 
 @dataclass
@@ -163,6 +181,39 @@ def _opt_path(value) -> Optional[str]:
     return resolve(value) if value else None
 
 
+def _parse_models(raw, label: str) -> list[ModelRule]:
+    """Разбирает список моделей с потолками цен."""
+    if not raw:
+        return []
+    rules: list[ModelRule] = []
+    for i, item in enumerate(raw, 1):
+        if not isinstance(item, dict):
+            raise ConfigError(f"'{label}.models[{i}]': ожидается блок с полями "
+                              "name/match/max_price")
+        match = item.get("match") or ([item["name"]] if item.get("name") else [])
+        if not match:
+            raise ConfigError(f"'{label}.models[{i}]': не задано ни 'match', ни 'name'")
+        price = _as_opt_int(item.get("max_price"), f"{label}.models[{i}].max_price")
+        if price is None:
+            raise ConfigError(f"'{label}.models[{i}]': не задан 'max_price' — "
+                              "ради него список моделей и нужен")
+        rules.append(ModelRule(
+            name=str(item.get("name") or match[0]),
+            match=[str(m).lower() for m in match],
+            max_price=price,
+        ))
+    return rules
+
+
+def match_model(title: Optional[str], rules: list[ModelRule]) -> Optional[ModelRule]:
+    """Первое подошедшее правило, либо None. Порядок правил значим."""
+    text = (title or "").lower()
+    for rule in rules:
+        if any(m in text for m in rule.match):
+            return rule
+    return None
+
+
 def load_settings(config_path: str = "config.yaml") -> Settings:
     """Читает config.yaml + переменные окружения и валидирует их."""
     path = Path(resolve(config_path))
@@ -200,6 +251,7 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
                 message_template=(DEFAULT_MESSAGE_TEMPLATE
                                   if item.get("message_template") is None
                                   else (str(item["message_template"]).strip() or None)),
+                models=_parse_models(item.get("models"), label),
                 keywords=[str(k).lower() for k in (item.get("keywords") or [])],
                 exclude_keywords=[str(k).lower() for k in (item.get("exclude_keywords") or [])],
             )
