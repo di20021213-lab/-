@@ -95,6 +95,69 @@ def load_search(config_path: str, label: str):
     return None
 
 
+def by_model(rows, search) -> None:
+    """Разбивка по моделям: сколько, почём, и не врут ли наши потолки.
+
+    Ради этой таблицы отчёт и нужен: выставлять потолок по памяти — гадание,
+    а тут видно настоящий разброс по каждой карте.
+    """
+    if search is None or not search.models:
+        return
+    from avito_watcher.config import match_model
+
+    groups: dict[str, list[int]] = {}
+    for r in rows:
+        price = money(r[4])
+        if price is None:
+            continue
+        rule = match_model(r[3], search.models)
+        if rule:
+            groups.setdefault(rule.name, []).append(price)
+
+    if not groups:
+        print("\n  по моделям: ни одна не набрала данных")
+        return
+
+    print("\n  \033[1mпо моделям\033[0m:")
+    print(f"    {'модель':<14} {'шт':>3}   {'мин':>6} {'медиана':>7} {'макс':>6}"
+          f"   {'потолок':>7} {'советую':>7}   что даст")
+    limits = {m.name: m.max_price for m in search.models}
+    for name in sorted(groups, key=lambda n: -len(groups[n])):
+        v = sorted(groups[name])
+        med, low = pct(v, 50), pct(v, 25)
+        cap = limits.get(name, 0)
+        under = sum(1 for x in v if x <= cap)
+        # Потолок имеет смысл только ниже медианы: иначе «находкой» объявляется
+        # обычная цена и уведомления идут потоком. Ориентир — нижняя четверть:
+        # так проходит примерно каждое четвёртое, и это действительно дёшево.
+        if cap >= med:
+            verdict = f"⚠ {under} из {len(v)} — почти всё, это не находки"
+        elif cap < v[0]:
+            verdict = "⚠ ничего не пройдёт, потолок ниже рынка"
+        else:
+            verdict = f"проходит {under} из {len(v)}"
+        print(f"    {name:<14} {len(v):>3}   {v[0]:>6} \033[1m{med:>7}\033[0m {v[-1]:>6}"
+              f"   {cap:>7} {low:>7}   {verdict}")
+    print("    «Советую» — нижняя четверть цен: проходит примерно каждое четвёртое")
+    print("    объявление, и это действительно дёшево, а не обычная цена.")
+
+    print("\n  \033[1mподозрительно дёшево\033[0m (меньше 40% от медианы своей модели):")
+    found = False
+    for r in rows:
+        price = money(r[4])
+        rule = match_model(r[3], search.models) if price else None
+        if not rule:
+            continue
+        med = pct(sorted(groups[rule.name]), 50)
+        if med and price < med * 0.4:
+            found = True
+            print(f"    {price:>6} ₽ при медиане {med:>6} — {(r[3] or '')[:52]}")
+    if not found:
+        print("    (нет)")
+    else:
+        print("    Такие цены на живую карту не ставят: это приманка либо предоплата.")
+
+
 def report(conn: sqlite3.Connection, label: str, config_path: str) -> None:
     rows = conn.execute(
         "SELECT first_seen, last_seen, notified, title, price FROM seen WHERE search_label = ?",
@@ -151,6 +214,12 @@ def report(conn: sqlite3.Connection, label: str, config_path: str) -> None:
     for b in sorted(buckets):
         lo_b = lo + b * step
         print(f"    {lo_b:>6}-{lo_b + step - 1:<6} {buckets[b]:>3}  {bar(buckets[b], top)}")
+
+    # ВСЕ строки, а не отфильтрованные: таблица описывает рынок, а не нашу
+    # выборку. На отфильтрованных получался замкнутый круг — медиана зависела
+    # от потолка, который мы по этой же медиане и собирались выставлять.
+    # Постороннее сюда не попадёт: match_model пропускает только наши модели.
+    by_model(rows, load_search(config_path, label))
 
     lifes = [r[1] - r[0] for r in good if r[1] and r[0] and r[1] > r[0]]
     print()
