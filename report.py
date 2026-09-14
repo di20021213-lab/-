@@ -176,7 +176,8 @@ def report(conn: sqlite3.Connection, label: str, config_path: str) -> None:
           f"({span / DAY:.1f} дн)")
     print(f"  объявлений всего: {len(rows)}  →  {len(rows) / (span / DAY):.1f} в день")
 
-    good, filtered = matching(rows, load_search(config_path, label))
+    search = load_search(config_path, label)
+    good, filtered = matching(rows, search)
     if filtered:
         print(f"  из них подходящих под твои фильтры: {len(good)} "
               f"({len(good) / (span / DAY):.1f} в день)")
@@ -185,9 +186,15 @@ def report(conn: sqlite3.Connection, label: str, config_path: str) -> None:
         print("  (настройки поиска не нашлись — считаю по всему подряд, "
               "вместе с посторонним)")
 
+    # Разбивка по моделям печатается ДО проверки «мало данных»: она считается
+    # по всем объявлениям, а не по прошедшим фильтры, и нужна как раз тогда,
+    # когда фильтры пропускают мало — чтобы понять, не в них ли дело.
+    by_model(rows, search)
+
     prices = sorted(p for p in (money(r[4]) for r in good) if p)
     if len(prices) < 5:
-        print("  слишком мало данных для выводов — подожди, пока накопится")
+        print("\n  Под фильтры прошло слишком мало, чтобы считать по ним статистику.")
+        print("  Смотри таблицу по моделям выше: там видно, где потолки не пускают.")
         return
 
     p25, med, p75 = pct(prices, 25), pct(prices, 50), pct(prices, 75)
@@ -214,12 +221,6 @@ def report(conn: sqlite3.Connection, label: str, config_path: str) -> None:
     for b in sorted(buckets):
         lo_b = lo + b * step
         print(f"    {lo_b:>6}-{lo_b + step - 1:<6} {buckets[b]:>3}  {bar(buckets[b], top)}")
-
-    # ВСЕ строки, а не отфильтрованные: таблица описывает рынок, а не нашу
-    # выборку. На отфильтрованных получался замкнутый круг — медиана зависела
-    # от потолка, который мы по этой же медиане и собирались выставлять.
-    # Постороннее сюда не попадёт: match_model пропускает только наши модели.
-    by_model(rows, load_search(config_path, label))
 
     lifes = [r[1] - r[0] for r in good if r[1] and r[0] and r[1] > r[0]]
     print()
