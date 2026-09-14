@@ -30,7 +30,14 @@ log = logging.getLogger("avito_watcher")
 # измерениям. Пятнадцать были обречены — первая попытка почти всегда упиралась
 # в тот же лимит, пауза удваивалась до 30, и простой выходил 45 минут вместо 20.
 BLOCKED_COOLDOWN_S = 1200
-BLOCKED_COOLDOWN_MAX_S = 3600   # дольше часа не ждём в любом случае
+# Потолок паузы. Был час — и это оказалось ошибкой. В ночь на 14 сентября бот
+# упёрся в него и трижды подряд ходил ровно через 60 минут, каждый раз получая
+# 429: бан держался около пяти часов, а пересидеть его бот структурно не мог.
+# Хуже того, каждая попытка из-под бана продлевала бан. Час имел смысл, пока
+# были окна свежести (см. _cooldown_ceiling): ждать дольше окна — значит
+# пропустить объявление, ради которого и ждём. Для старых видюх окна нет вовсе,
+# защищать нечего, и отсидеться дольше выгоднее, чем стучаться чаще.
+BLOCKED_COOLDOWN_MAX_S = 6 * 3600
 
 # После скольких заблокированных циклов подряд написать об этом в Telegram:
 # молча простаивать полчаса — хуже, чем одно сообщение.
@@ -98,12 +105,19 @@ def _freshness_rank(listing) -> tuple[int, int]:
     return (2, 0)
 
 
+# Пауза между заходами на страницы объявлений. Пятнадцать запросов подряд за
+# несколько секунд — это подпись робота, даже если их всего пятнадцать. Ровно
+# те же запросы, разнесённые во времени, выглядят как человек, листающий выдачу.
+DETAIL_PAUSE_S = (4.0, 10.0)
+
+
 def process_search(
     search: SearchConfig,
     scraper: AvitoScraper,
     store: SeenStore,
     notifier: TelegramNotifier,
     max_notifications: int,
+    max_details: int = 3,
 ) -> int:
     """Проверяет один поиск. Возвращает число отправленных уведомлений."""
     listings = scraper.fetch(search.url, search.max_age_minutes)
@@ -154,6 +168,8 @@ def process_search(
 
     sent = 0
     deferred = 0
+    details_fetched = 0   # заходов на страницы объявлений за этот цикл
+    details_skipped = 0
     for lst in new_listings:
         if not filters.passes(lst, search):
             # Не подошло — запоминаем, чтобы не переоценивать каждый цикл.
@@ -178,9 +194,21 @@ def process_search(
             reason = quality.broken_reason(lst.title, lst.card_text,
                                            extra=search.extra_broken_markers)
             if reason is None and search.check_description and lst.url:
-                details, ok = _fetch_details_safe(scraper, lst.url, search.label)
-                reason = quality.broken_reason(details, extra=search.extra_broken_markers)
-                unchecked = not ok
+                if details_fetched >= max_details:
+                    # Бюджет заходов исчерпан. Объявление всё равно отправляем —
+                    # просто с честной пометкой, что описание не читали. Молчать
+                    # о нём нельзя: оно подходит, а следующего цикла может и не
+                    # быть, если адрес к тому времени заблокируют.
+                    details_skipped += 1
+                    unchecked = True
+                else:
+                    # Разносим заходы во времени, а не бьём очередью.
+                    if details_fetched:
+                        time.sleep(random.uniform(*DETAIL_PAUSE_S))
+                    details, ok = _fetch_details_safe(scraper, lst.url, search.label)
+                    details_fetched += 1
+                    reason = quality.broken_reason(details, extra=search.extra_broken_markers)
+                    unchecked = not ok
             if reason and search.on_broken == "skip":
                 log.info("[%s] пропуск, похоже нерабочая («%s»): %s | %s",
                          search.label, reason, lst.title, lst.price)
@@ -206,6 +234,10 @@ def process_search(
     if deferred:
         log.info("[%s] лимит %d уведомлений за цикл исчерпан; ещё %d подходящих "
                  "отложены до следующего цикла", search.label, max_notifications, deferred)
+    if details_fetched or details_skipped:
+        log.info("[%s] заходов на страницы объявлений: %d из %d разрешённых"
+                 "%s", search.label, details_fetched, max_details,
+                 f"; ещё {details_skipped} ушли без чтения описания" if details_skipped else "")
     return sent
 
 
@@ -541,6 +573,7 @@ def _loop(scraper, settings: Settings, store: SeenStore,
                 stats.notified += process_search(
                     search, scraper, store, notifier,
                     settings.max_notifications_per_cycle,
+                    settings.max_detail_fetches_per_cycle,
                 )
                 ok_count += 1
             except AntibotError as e:

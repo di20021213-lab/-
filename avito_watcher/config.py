@@ -86,6 +86,13 @@ class Settings:
     telegram_proxy: Optional[str] = None
     db_path: str = "seen.sqlite3"
     max_notifications_per_cycle: int = 15
+    # Сколько страниц объявлений за цикл разрешено открыть ради описания.
+    # Это ГЛАВНЫЙ расход бюджета адреса: сама выдача — один запрос, а вот
+    # check_description добавляет по запросу на каждого финалиста. Пока их было
+    # трое в сутки, это не замечалось; после поднятия потолков финалистов стало
+    # много, и цикл начал бить по Авито полутора десятками запросов подряд —
+    # отсюда и 429. Остальные объявления уходят с пометкой «не проверено».
+    max_detail_fetches_per_cycle: int = 3
     request_timeout_ms: int = 45000
     # None — собрать UA под реальную версию браузера (так он совпадёт с client
     # hints, которые Chromium шлёт сам). Строка — жёстко задать свой.
@@ -309,6 +316,8 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
         db_path=resolve(os.getenv("DB_PATH") or s.get("db_path") or "seen.sqlite3"),
         max_notifications_per_cycle=_as_int(s.get("max_notifications_per_cycle"), 15,
                                             "max_notifications_per_cycle"),
+        max_detail_fetches_per_cycle=_as_int(s.get("max_detail_fetches_per_cycle"), 3,
+                                             "max_detail_fetches_per_cycle"),
         request_timeout_ms=_as_int(s.get("request_timeout_ms"), 45000, "request_timeout_ms"),
         user_agent=(s.get("user_agent") or None),
         rotate_searches=_as_bool(s.get("rotate_searches"), False),
