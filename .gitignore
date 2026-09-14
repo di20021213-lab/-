@@ -26,3 +26,6 @@ ip_watch.log
 page_dump.html
 browser-profile/
 ozon-profile/
+
+# Флаг ручного сеанса: ставит и снимает deploy/minipc/screen.sh
+PAUSE.flag

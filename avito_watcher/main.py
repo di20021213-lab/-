@@ -16,7 +16,7 @@ from . import filters, quality
 from .config import ConfigError, SearchConfig, Settings, load_settings
 from .dates import format_age
 from .notifier import TelegramNotifier
-from .paths import setup_bundled_browsers
+from .paths import resolve, setup_bundled_browsers
 from .scraper import AntibotError, AvitoScraper
 from .storage import SeenStore
 
@@ -43,6 +43,17 @@ LAST_CYCLE_KEY = "last_cycle_at"
 # Когда последний раз слали сводку. Тоже в базе: перезапуск не должен
 # оборачиваться внеочередным сообщением.
 HEARTBEAT_KEY = "last_heartbeat_at"
+
+# Пока человек сам сидит в браузере через удалённый экран (deploy/minipc/screen.sh),
+# бот не должен лезть в тот же профиль: Chromium не открывает одну папку профиля
+# дважды, и полез бы — уронил бы человеку окно посреди капчи.
+PAUSE_FILE = "PAUSE.flag"
+# Флаг с истечением, а не просто файл. Если его забудут снять — сел телефон,
+# оборвался туннель, закрыли терминал не тем способом — бот через час вернётся
+# к работе сам, а не будет молча стоять до следующего перезапуска. Час взят с
+# запасом: живой сеанс с телефона столько не длится, а скрипт всё это время
+# обновляет отметку файла, так что настоящую работу пауза не прервёт.
+PAUSE_MAX_S = 3600
 
 _stop = False
 
@@ -467,6 +478,20 @@ def _maybe_heartbeat(settings: Settings, store: SeenStore,
         stats.reset()
 
 
+def _pause_active() -> bool:
+    """Стоит ли сейчас флаг «браузером управляют руками»."""
+    flag = Path(resolve(PAUSE_FILE))
+    try:
+        age = time.time() - flag.stat().st_mtime
+    except OSError:
+        return False
+    if age > PAUSE_MAX_S:
+        log.warning("Флаг паузы %s не обновлялся %.0f мин — считаю забытым "
+                    "и продолжаю работу.", flag, age / 60)
+        return False
+    return True
+
+
 def _loop(scraper, settings: Settings, store: SeenStore,
           notifier: TelegramNotifier, once: bool = False) -> None:
     """Основной цикл: проверить все поиски, поспать, повторить.
@@ -483,6 +508,17 @@ def _loop(scraper, settings: Settings, store: SeenStore,
     stats = _Stats()
     cycle = 0
     while not _stop:
+        # Проверяем до всего остального: заход на Авито стоит бюджета адреса,
+        # а профиль браузера сейчас занят человеком.
+        if _pause_active():
+            if once:
+                log.warning("Стоит флаг паузы (%s): браузером управляют руками. "
+                            "Убери файл, если это не так.", PAUSE_FILE)
+                return
+            log.info("Пауза: экран отдан человеку, к Авито не хожу.")
+            _sleep_interruptibly(30)
+            continue
+
         ok_count = 0
         blocked_count = 0
         block_shot = None   # снимок последней страницы блокировки за цикл
@@ -552,7 +588,11 @@ def _loop(scraper, settings: Settings, store: SeenStore,
             if blocked_streak == BLOCKED_ALERT_AFTER and not alerted:
                 alerted = True
                 text = ("⚠️ Авито блокирует запросы с этого IP. Жду, пока лимит спадёт — "
-                        "объявления пока не приходят. Напишу, когда восстановится.")
+                        "объявления пока не приходят. Напишу, когда восстановится.\n\n"
+                        "Посмотри на снимок: если там кнопка или пазл — это капча, её "
+                        "можно решить руками с телефона (screen.sh на мини-ПК). Если "
+                        "«Доступ ограничен» или «проблема с IP» — нажимать нечего, "
+                        "лимит снимается только временем.")
                 # Со снимком страницы: видно, заглушка это про лимит или капча,
                 # которую в принципе можно решить.
                 if not (block_shot and notifier.send_photo(block_shot, text)):
