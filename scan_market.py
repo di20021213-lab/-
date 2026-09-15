@@ -96,7 +96,17 @@ CREATE TABLE IF NOT EXISTS scan (
     found      INTEGER NOT NULL,
     note       TEXT
 );
+CREATE TABLE IF NOT EXISTS meta (
+    key        TEXT PRIMARY KEY,
+    value      REAL NOT NULL
+);
 """
+
+# Ключ в нашей собственной базе: когда МЫ последний раз дёрнули Авито. Отметка
+# бота этого не покрывает — если предыдущий обход прервали и тут же запустили
+# заново, бюджет адреса занят нами самими, и первый же заход ловит 429. Ровно
+# это и случилось дважды за вечер.
+LAST_REQUEST_KEY = "last_request_at"
 
 
 def plural(n: int, one: str, few: str, many: str) -> str:
@@ -145,32 +155,50 @@ def browser_settings() -> dict:
     }
 
 
-def wait_out_bot(delay_min: int) -> None:
-    """Переждать, если бот ходил к Авито совсем недавно.
-
-    Флаг паузы останавливает бота, но не отменяет уже сделанного им запроса.
-    Стартовать сразу после его цикла — значит гарантированно получить 429 на
-    первом же названии.
-    """
+def _bot_last_cycle() -> float | None:
+    """Когда бот последний раз ходил к Авито (по его собственной отметке)."""
     db_path = Path(resolve("seen.sqlite3"))
     if not db_path.is_file():
-        return
+        return None
     try:
         con = sqlite3.connect(db_path)
         row = con.execute("SELECT value FROM meta WHERE key = ?",
                           (LAST_CYCLE_KEY,)).fetchone()
         con.close()
-    except sqlite3.Error:
+        return float(row[0]) if row else None
+    except (sqlite3.Error, TypeError, ValueError):
+        return None
+
+
+def _our_last_request(db: sqlite3.Connection) -> float | None:
+    row = db.execute("SELECT value FROM meta WHERE key = ?",
+                     (LAST_REQUEST_KEY,)).fetchone()
+    return float(row[0]) if row else None
+
+
+def note_request(db: sqlite3.Connection) -> None:
+    """Отметить, что мы только что дёрнули Авито — удачно или нет."""
+    db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+               (LAST_REQUEST_KEY, time.time()))
+    db.commit()
+
+
+def wait_out_previous(db: sqlite3.Connection, delay_min: int) -> None:
+    """Переждать, если к Авито недавно ходил бот ИЛИ прошлый запуск обхода.
+
+    Флаг паузы останавливает бота, но не отменяет уже сделанного запроса. А
+    прерванный обход и вовсе не оставляет следов в чужой базе — поэтому свою
+    отметку ведём сами. Берём более позднюю из двух.
+    """
+    stamps = [t for t in (_bot_last_cycle(), _our_last_request(db)) if t]
+    if not stamps:
         return
-    if not row:
-        return
-    try:
-        last = float(row[0])
-    except (TypeError, ValueError):
-        return
-    left = delay_min - (time.time() - last)
+    last = max(stamps)
+    ago = time.time() - last
+    left = delay_min - ago
     if left > 0:
-        print(f"Бот ходил к Авито {(time.time() - last) / 60:.0f} мин назад. "
+        who = "Бот" if last == _bot_last_cycle() else "Прошлый обход"
+        print(f"{who} ходил к Авито {ago / 60:.0f} мин назад. "
               f"Жду {left / 60:.0f} мин, иначе первый же заход поймает 429.")
         time.sleep(left)
 
@@ -204,7 +232,7 @@ def scan(titles, db: sqlite3.Connection, region: str, delay: tuple[int, int],
 
     try:
         pause.touch()
-        wait_out_bot(delay[0])
+        wait_out_previous(db, delay[0])
         with AvitoScraper(**browser_settings()) as scraper:
             for i, title in enumerate(todo, 1):
                 pause.touch()   # держим бота в стороне, пока идём
@@ -212,7 +240,8 @@ def scan(titles, db: sqlite3.Connection, region: str, delay: tuple[int, int],
                 listings = None
                 for attempt in range(1, BLOCKED_RETRIES + 1):
                     try:
-                        listings = scraper.fetch(url)
+                        note_request(db)   # отметку ставим ДО запроса: если нас
+                        listings = scraper.fetch(url)   # убьют, она уже сохранена
                         blocked_pause = BLOCKED_PAUSE_S
                         break
                     except AntibotError as e:
