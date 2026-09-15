@@ -112,14 +112,17 @@ class TelegramNotifier:
         )
 
     def send_listing(self, listing, search_label: str, warning: Optional[str] = None,
-                     unchecked: bool = False, message_template: Optional[str] = None) -> bool:
+                     unchecked: bool = False, message_template: Optional[str] = None,
+                     priority_name: Optional[str] = None) -> bool:
         """Шлёт карточку объявления. Пытается с фото, при неудаче — обычным текстом.
 
         warning — найденный признак неисправности; добавляется в карточку как пометка ⚠️.
         unchecked — описание прочитать не удалось, проверка на неисправность неполная.
+        priority_name — название приоритетной модели; выносится наверх, чтобы такое
+        объявление было видно в ленте с одного взгляда, не читая заголовок.
         """
         caption = self._format_caption(listing, search_label, warning, unchecked,
-                                       message_template)
+                                       message_template, priority_name)
 
         if listing.image_url:
             payload = {"chat_id": self.chat_id, "caption": caption, "parse_mode": "HTML"}
@@ -180,9 +183,12 @@ class TelegramNotifier:
     @staticmethod
     def _format_caption(listing, search_label: str, warning: Optional[str] = None,
                         unchecked: bool = False,
-                        message_template: Optional[str] = None) -> str:
+                        message_template: Optional[str] = None,
+                        priority_name: Optional[str] = None) -> str:
         title = html.escape(listing.title or "Без названия")
-        parts = [f"🎮 <b>{html.escape(search_label)}</b>", "", f"<b>{title}</b>"]
+        head = (f"🎯 <b>{html.escape(priority_name)}</b>" if priority_name
+                else f"🎮 <b>{html.escape(search_label)}</b>")
+        parts = [head, "", f"<b>{title}</b>"]
         if warning:
             parts.append(f"⚠️ <b>Возможно неисправна:</b> «{html.escape(warning)}»")
         elif unchecked:

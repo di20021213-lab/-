@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import filters, quality
-from .config import ConfigError, SearchConfig, Settings, load_settings
+from .config import ConfigError, SearchConfig, Settings, load_settings, match_model
 from .dates import format_age
 from .notifier import TelegramNotifier
 from .paths import resolve, setup_bundled_browsers
@@ -111,6 +111,20 @@ def _freshness_rank(listing) -> tuple[int, int]:
 DETAIL_PAUSE_S = (4.0, 10.0)
 
 
+def _priority_rule(listing, search: SearchConfig):
+    """Правило приоритетной модели, если объявление под неё подходит.
+
+    Приоритет решает два вопроса сразу: такие объявления уходят первыми (а
+    значит попадают и в лимит уведомлений, и в бюджет чтения описаний, который
+    у нас всего три захода), и с них снимается пометка «возможно неисправна»
+    по extra_broken_markers. Для P106 эта пометка была развёрнута задом
+    наперёд: она предупреждала об отсутствии видеовыходов у карты, которую
+    берут именно такой.
+    """
+    rule = match_model(listing.title, search.models)
+    return rule if rule is not None and rule.priority else None
+
+
 def process_search(
     search: SearchConfig,
     scraper: AvitoScraper,
@@ -161,7 +175,9 @@ def process_search(
     # свежее уезжало в хвост очереди, а за лимитом в 15 — вообще в следующий
     # цикл, то есть на полчаса. Именно эти полчаса и решают, успеть или нет.
     new_listings = [lst for lst in listings if not store.is_seen(search.label, lst.id)]
-    new_listings.sort(key=_freshness_rank)
+    # Приоритетные модели — впереди всего, остальное по свежести.
+    new_listings.sort(key=lambda x: (0 if _priority_rule(x, search) else 1,)
+                      + _freshness_rank(x))
 
     if not new_listings:
         return 0
@@ -188,11 +204,16 @@ def process_search(
         # само объявление: описание и параметры. Только для финалистов, их мало.
         warning = None
         unchecked = False
+        prio = _priority_rule(lst, search)
+        # У приоритетной модели свои приметы — не признаки поломки, а её
+        # собственные свойства, ради которых её и ищут. Базовый список
+        # («не работает», «артефакты») проверяется по-прежнему.
+        broken_extra = () if prio else search.extra_broken_markers
         if search.on_broken != "ignore":
             # Сначала бесплатное: заголовок и текст самой карточки. Открывать
             # страницу объявления — дорого, каждый такой заход приближает 429.
             reason = quality.broken_reason(lst.title, lst.card_text,
-                                           extra=search.extra_broken_markers)
+                                           extra=broken_extra)
             if reason is None and search.check_description and lst.url:
                 if details_fetched >= max_details:
                     # Бюджет заходов исчерпан. Объявление всё равно отправляем —
@@ -207,7 +228,7 @@ def process_search(
                         time.sleep(random.uniform(*DETAIL_PAUSE_S))
                     details, ok = _fetch_details_safe(scraper, lst.url, search.label)
                     details_fetched += 1
-                    reason = quality.broken_reason(details, extra=search.extra_broken_markers)
+                    reason = quality.broken_reason(details, extra=broken_extra)
                     unchecked = not ok
             if reason and search.on_broken == "skip":
                 log.info("[%s] пропуск, похоже нерабочая («%s»): %s | %s",
@@ -217,7 +238,8 @@ def process_search(
                 continue
             warning = reason  # режим flag: покажем с пометкой ⚠️
         ok = notifier.send_listing(lst, search.label, warning=warning, unchecked=unchecked,
-                                   message_template=search.message_template)
+                                   message_template=search.message_template,
+                                   priority_name=prio.name if prio else None)
         if ok:
             store.mark_seen(search.label, lst.id, notified=True,
                             title=lst.title, price=lst.price)
@@ -275,17 +297,20 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
 
         broken = None
         checked = True
+        prio = _priority_rule(lst, search)
+        broken_extra = () if prio else search.extra_broken_markers
         if search.on_broken != "ignore":
-            broken = quality.broken_reason(lst.title, lst.card_text,
-                                           extra=search.extra_broken_markers)
+            broken = quality.broken_reason(lst.title, lst.card_text, extra=broken_extra)
             if broken is None and search.check_description and lst.url:
                 details, checked = _fetch_details_safe(scraper, lst.url, search.label)
-                broken = quality.broken_reason(details, extra=search.extra_broken_markers)
+                broken = quality.broken_reason(details, extra=broken_extra)
         if broken and search.on_broken == "skip":
             print(f"  ✗ {head}\n      — похоже нерабочая («{broken}»)")
             continue
 
         good += 1
+        if prio:
+            head = f"🎯 {head}"
         if broken:
             print(f"  ⚠ {head}\n      — прошло, но похоже нерабочая («{broken}»)")
         elif not checked:

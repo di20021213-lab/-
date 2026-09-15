@@ -39,6 +39,13 @@ class ModelRule:
     name: str
     match: list[str]
     max_price: int
+    # Приоритетная модель: её шлём первой и не вешаем на неё пометку
+    # «возможно неисправна» из extra_broken_markers. Нужно там, где модель из
+    # опасности превратилась в цель: P106 — это 1060 6GB без видеовыходов, и
+    # предупреждать о том, что у неё нет видеовыходов, бессмысленно, когда
+    # именно за этим её и берут. Настоящие признаки поломки проверяются
+    # по-прежнему — они в базовом списке, а не в extra.
+    priority: bool = False
 
 
 @dataclass
@@ -208,6 +215,7 @@ def _parse_models(raw, label: str) -> list[ModelRule]:
             name=str(item.get("name") or match[0]),
             match=[str(m).lower() for m in match],
             max_price=price,
+            priority=_as_bool(item.get("priority"), False),
         ))
     return rules
 
