@@ -26,7 +26,7 @@ echo Installing the browser (about 150 MB on first run)...
 .venv\Scripts\python -m playwright install chromium || goto :fail
 
 echo.
-echo Ready. Next: ozon.bat to test Ozon, or run.bat to start the bot.
+echo Ready. Next: check.bat to verify setup, or run.bat to start the bot.
 pause
 exit /b 0
 

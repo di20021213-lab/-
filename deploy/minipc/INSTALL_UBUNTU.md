@@ -78,8 +78,8 @@ chmod 600 ~/.ssh/id_ed25519
 ```
 
 Из архива нужны `.env` и `seen.sqlite3` — положи их в `~/avito-watcher/`.
-`config.yaml` оттуда **не бери**, он от старого поиска по диску; возьми
-`config.oldgpu.example.yaml` и впиши свою ссылку.
+`config.yaml` бери свежий: `cp config.games.example.yaml config.yaml`, а список
+игр собери генератором — см. `make_searches.py`.
 
 ## 7. Туннель и автозапуск
 

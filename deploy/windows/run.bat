@@ -26,7 +26,7 @@ echo Checking dependencies...
 
 if not exist "config.yaml" (
     echo.
-    echo config.yaml is missing. Copy config.multiregion.example.yaml to
+    echo config.yaml is missing. Copy config.games.example.yaml to
     echo config.yaml, and put your token and chat_id into .env
     pause
     exit /b 1
