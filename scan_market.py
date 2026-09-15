@@ -69,6 +69,16 @@ BLOCKED_PAUSE_MAX_S = 6 * 3600
 # повторный запуск продолжал обход, а не начинал его заново.
 FRESH_ENOUGH_S = 20 * 3600
 
+# Сколько раз повторить название, упёршееся в блокировку, прежде чем отложить
+# его до следующего запуска. Пауза всё равно отсижена — разумнее потратить её
+# на то же название, чем идти дальше и получить отказ снова.
+BLOCKED_RETRIES = 3
+
+# Бот пишет сюда время последнего захода к Авито. Мы читаем то же самое:
+# если он ходил только что, бюджет адреса уже занят, и первый же наш запрос
+# схватит 429 — ровно это и случилось на первом живом запуске.
+LAST_CYCLE_KEY = "last_cycle_at"
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS listing (
     game       TEXT NOT NULL,
@@ -135,6 +145,36 @@ def browser_settings() -> dict:
     }
 
 
+def wait_out_bot(delay_min: int) -> None:
+    """Переждать, если бот ходил к Авито совсем недавно.
+
+    Флаг паузы останавливает бота, но не отменяет уже сделанного им запроса.
+    Стартовать сразу после его цикла — значит гарантированно получить 429 на
+    первом же названии.
+    """
+    db_path = Path(resolve("seen.sqlite3"))
+    if not db_path.is_file():
+        return
+    try:
+        con = sqlite3.connect(db_path)
+        row = con.execute("SELECT value FROM meta WHERE key = ?",
+                          (LAST_CYCLE_KEY,)).fetchone()
+        con.close()
+    except sqlite3.Error:
+        return
+    if not row:
+        return
+    try:
+        last = float(row[0])
+    except (TypeError, ValueError):
+        return
+    left = delay_min - (time.time() - last)
+    if left > 0:
+        print(f"Бот ходил к Авито {(time.time() - last) / 60:.0f} мин назад. "
+              f"Жду {left / 60:.0f} мин, иначе первый же заход поймает 429.")
+        time.sleep(left)
+
+
 def scan(titles, db: sqlite3.Connection, region: str, delay: tuple[int, int],
          force: bool) -> int:
     import random
@@ -164,24 +204,34 @@ def scan(titles, db: sqlite3.Connection, region: str, delay: tuple[int, int],
 
     try:
         pause.touch()
+        wait_out_bot(delay[0])
         with AvitoScraper(**browser_settings()) as scraper:
             for i, title in enumerate(todo, 1):
                 pause.touch()   # держим бота в стороне, пока идём
                 url = url_for(title, region)
-                try:
-                    listings = scraper.fetch(url)
-                    blocked_pause = BLOCKED_PAUSE_S
-                except AntibotError as e:
-                    print(f"  ✗ {title}: {e}")
-                    print(f"    Пауза {blocked_pause / 60:.0f} мин — лимит снимается "
-                          f"только временем без запросов.")
-                    print("    Название не потеряно: прочёсанным не отмечено, "
-                          "следующий запуск его подхватит.")
-                    time.sleep(blocked_pause)
-                    blocked_pause = min(blocked_pause * 2, BLOCKED_PAUSE_MAX_S)
-                    continue
-                except Exception as e:  # noqa: BLE001 - одно сбойное название не должно ронять обход
-                    print(f"  ✗ {title}: не получилось ({e})")
+                listings = None
+                for attempt in range(1, BLOCKED_RETRIES + 1):
+                    try:
+                        listings = scraper.fetch(url)
+                        blocked_pause = BLOCKED_PAUSE_S
+                        break
+                    except AntibotError as e:
+                        print(f"  ✗ {title}: {e}")
+                        if attempt == BLOCKED_RETRIES:
+                            print("    Три попытки подряд в отказ. Откладываю: "
+                                  "прочёсанным не отмечено, следующий запуск "
+                                  "подхватит.")
+                            break
+                        print(f"    Пауза {blocked_pause / 60:.0f} мин — лимит снимается "
+                              f"только временем без запросов. Потом повторю это же "
+                              f"название (попытка {attempt + 1} из {BLOCKED_RETRIES}).")
+                        pause.touch()
+                        time.sleep(blocked_pause)
+                        blocked_pause = min(blocked_pause * 2, BLOCKED_PAUSE_MAX_S)
+                    except Exception as e:  # noqa: BLE001 - одно сбойное название не должно ронять обход
+                        print(f"  ✗ {title}: не получилось ({e})")
+                        break
+                if listings is None:
                     continue
 
                 now = time.time()
