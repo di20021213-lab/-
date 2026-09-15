@@ -347,6 +347,15 @@ def main(argv=None) -> int:
                         help="прочесать заново даже то, что смотрели недавно")
     args = parser.parse_args(argv)
 
+    # Питон буферизует вывод, когда он идёт не в терминал, а в файл. Обход
+    # длится часами, и с буфером в лог по дороге не попадает НИЧЕГО: снаружи
+    # это неотличимо от зависшего скрипта. Переключаем на построчный вывод,
+    # чтобы `tail -f scan.log` показывал происходящее сразу, как бы скрипт ни
+    # запустили — через nohup, через systemd или вручную.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(line_buffering=True)
+
     db = open_db(resolve(args.db))
     try:
         if args.report:
