@@ -6,7 +6,7 @@
   · какой разброс цен — есть ли зазор между «дёшево» и «обычно»;
   · за сколько вещи уходят — быстро ли надо реагировать.
 
-Запуск:  python report.py            (или --db путь, --label "Имя поиска")
+Запуск:  .venv/bin/python report.py            (или --db путь, --label "Имя поиска")
 """
 
 from __future__ import annotations
@@ -19,7 +19,11 @@ import sys
 import time
 from datetime import datetime
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError as _e:  # запущено не тем питоном
+    from avito_watcher.paths import venv_hint
+    raise SystemExit(venv_hint(_e))
 
 load_dotenv()
 

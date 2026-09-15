@@ -9,8 +9,8 @@
 доказывает — ни про IP, ни про что-либо ещё. А вот если он ПРОШЁЛ, значит
 адрес точно чист, и тогда виноват отпечаток браузера.
 
-Запуск:  python diag.py            (URL берётся из config.yaml)
-         python diag.py <url>      (проверить конкретный URL)
+Запуск:  .venv/bin/python diag.py            (URL берётся из config.yaml)
+         .venv/bin/python diag.py <url>      (проверить конкретный URL)
 """
 
 from __future__ import annotations
@@ -18,11 +18,15 @@ from __future__ import annotations
 import os
 import sys
 
-import requests
-from dotenv import load_dotenv
+try:
+    import requests
+    from dotenv import load_dotenv
 
-from avito_watcher.probe import TIMEOUT_S, probe, url_from_config
-from avito_watcher.scraper import AntibotError, AvitoScraper
+    from avito_watcher.probe import TIMEOUT_S, probe, url_from_config
+    from avito_watcher.scraper import AntibotError, AvitoScraper
+except ImportError as _e:  # запущено не тем питоном
+    from avito_watcher.paths import venv_hint
+    raise SystemExit(venv_hint(_e))
 
 load_dotenv()
 

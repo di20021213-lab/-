@@ -4,7 +4,7 @@
   1. Создай бота у @BotFather, получи токен.
   2. Положи токен в .env (TELEGRAM_BOT_TOKEN=...), либо экспортируй в окружение.
   3. Напиши что-нибудь СВОЕМУ боту в Telegram (например, /start).
-  4. Запусти:  python get_chat_id.py
+  4. Запусти:  .venv/bin/python get_chat_id.py
   5. Скопируй показанный chat_id в .env (TELEGRAM_CHAT_ID=...).
 """
 
@@ -13,8 +13,12 @@ from __future__ import annotations
 import os
 import sys
 
-import requests
-from dotenv import load_dotenv
+try:
+    import requests
+    from dotenv import load_dotenv
+except ImportError as _e:  # запущено не тем питоном
+    from avito_watcher.paths import venv_hint
+    raise SystemExit(venv_hint(_e))
 
 load_dotenv()
 

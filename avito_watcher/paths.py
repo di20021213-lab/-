@@ -40,3 +40,28 @@ def setup_bundled_browsers() -> Path | None:
         return None
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(bundled)
     return bundled
+
+
+def venv_hint(exc: BaseException) -> str:
+    """Объяснение вместо голого ModuleNotFoundError.
+
+    Зависимости живут в .venv, а по привычке набирается `python3 скрипт.py` —
+    системный питон, где ничего этого нет. Голая трассировка про 'dotenv' не
+    подсказывает, что делать, поэтому подсказываем сами и называем готовую
+    команду с путём именно к этому скрипту.
+    """
+    venv = app_dir() / ".venv" / "bin" / "python"
+    script = Path(sys.argv[0]).name or "скрипт.py"
+    lines = [
+        f"Не хватает библиотеки: {exc}",
+        "",
+        "Похоже, запущено системным питоном. Зависимости стоят в виртуальном",
+        "окружении проекта — запускать надо его питоном:",
+        "",
+        f"    {venv if venv.exists() else '.venv/bin/python'} {script} "
+        + " ".join(sys.argv[1:]),
+    ]
+    if not venv.exists():
+        lines += ["", "Окружения нет вовсе — собери его:",
+                  "    python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"]
+    return "\n".join(lines)

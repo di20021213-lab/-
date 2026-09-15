@@ -7,8 +7,8 @@
 Полный HTML страницы сохраняется рядом (page_dump.html), чтобы можно было
 посмотреть глазами, ничего никуда не отправляя.
 
-Запуск:  python dump_page.py            (URL из config.yaml)
-         python dump_page.py <url>
+Запуск:  .venv/bin/python dump_page.py            (URL из config.yaml)
+         .venv/bin/python dump_page.py <url>
 """
 
 from __future__ import annotations
@@ -16,10 +16,14 @@ from __future__ import annotations
 import os
 import sys
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
 
-from avito_watcher.probe import url_from_config
-from avito_watcher.scraper import AvitoScraper
+    from avito_watcher.probe import url_from_config
+    from avito_watcher.scraper import AvitoScraper
+except ImportError as _e:  # запущено не тем питоном
+    from avito_watcher.paths import venv_hint
+    raise SystemExit(venv_hint(_e))
 
 load_dotenv()
 

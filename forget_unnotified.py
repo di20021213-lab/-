@@ -13,9 +13,9 @@ notified=1, и оно остаётся в базе нетронутым. Не п
 придёт: его снова отсеют те же фильтры, просто ещё раз.
 
 Использование:
-  python3 forget_unnotified.py                 — показать, что будет удалено
-  python3 forget_unnotified.py --yes           — удалить
-  python3 forget_unnotified.py --label "Имя"   — только по одному поиску
+  .venv/bin/python forget_unnotified.py                 — показать, что будет удалено
+  .venv/bin/python forget_unnotified.py --yes           — удалить
+  .venv/bin/python forget_unnotified.py --label "Имя"   — только по одному поиску
 """
 
 from __future__ import annotations
@@ -28,7 +28,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError as _e:  # запущено не тем питоном
+    from avito_watcher.paths import venv_hint
+    raise SystemExit(venv_hint(_e))
 
 load_dotenv()
 

@@ -9,9 +9,9 @@
 
 Использование:
 
-    python3 make_searches.py games.txt              — напечатать блоки
-    python3 make_searches.py games.txt >> config.yaml
-    python3 make_searches.py "Hollow Knight" "Celeste"
+    .venv/bin/python make_searches.py games.txt              — напечатать блоки
+    .venv/bin/python make_searches.py games.txt >> config.yaml
+    .venv/bin/python make_searches.py "Hollow Knight" "Celeste"
 
 Формат файла со списком — по названию в строке. Пустые строки и строки,
 начинающиеся с #, пропускаются. Цену можно задать прямо в строке:
@@ -28,7 +28,7 @@
 Но проверить первый сгенерированный поиск всё равно нужно — выдача Авито по
 чужому названию может повести себя иначе:
 
-    python3 -m avito_watcher.main --check
+    .venv/bin/python -m avito_watcher.main --check
 
 --check ничего не шлёт и не пишет в базу, так что гонять его безопасно.
 
@@ -146,7 +146,7 @@ def main(argv=None) -> int:
         print(block(title, top, bottom, args.region))
 
     print(f"# Готово: {len(games)} поисков. Проверь первый запуском "
-          f"python3 -m avito_watcher.main --check", file=sys.stderr)
+          f".venv/bin/python -m avito_watcher.main --check", file=sys.stderr)
     return 0
 
 

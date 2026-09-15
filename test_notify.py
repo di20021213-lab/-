@@ -15,10 +15,14 @@ import os
 import sys
 from datetime import datetime
 
-import requests
-from dotenv import load_dotenv
+try:
+    import requests
+    from dotenv import load_dotenv
 
-from avito_watcher.notifier import DEFAULT_API_BASE, TelegramNotifier
+    from avito_watcher.notifier import DEFAULT_API_BASE, TelegramNotifier
+except ImportError as _e:  # запущено не тем питоном
+    from avito_watcher.paths import venv_hint
+    raise SystemExit(venv_hint(_e))
 
 load_dotenv()
 
@@ -64,7 +68,7 @@ def main() -> int:
               + (f" (@{c['username']})" if c.get("username") else ""))
     elif data:
         print(f"чат            : Telegram не признаёт этот chat_id — {data.get('description')}")
-        print("                 Запусти `python get_chat_id.py`, напиши боту и вставь новый.")
+        print("                 Запусти `.venv/bin/python get_chat_id.py`, напиши боту и вставь новый.")
 
     stamp = f"{datetime.now():%H:%M:%S}"
     if notifier.send_message(f"🔧 Проверка связи в {stamp}. Если видишь это — канал жив."):

@@ -7,8 +7,12 @@
 измерением: обходит названия, собирает всё, что по ним есть, и показывает, где
 есть смысл сидеть в засаде.
 
-    python3 scan_market.py games.example.txt     — прочесать (долго, см. ниже)
-    python3 scan_market.py --report              — отчёт, к Авито не ходит
+    .venv/bin/python scan_market.py games.example.txt     — прочесать (долго, см. ниже)
+    .venv/bin/python scan_market.py --report              — отчёт, к Авито не ходит
+
+Именно .venv/bin/python, а не python3: зависимости стоят в окружении проекта,
+системный питон о них не знает. Ошибёшься — скрипт скажет об этом по-русски,
+а не трассировкой.
 
 ПРО ВРЕМЯ. Быстро не получится, и это не лень скрипта. Домашний адрес за CGNAT
 терпит примерно один заход в 10-18 минут — измерено по журналу бота. Двадцать
@@ -35,12 +39,16 @@ import sys
 import time
 from pathlib import Path
 
-import yaml
-from dotenv import load_dotenv
+try:
+    import yaml
+    from dotenv import load_dotenv
 
-from avito_watcher.paths import app_dir, resolve, setup_bundled_browsers
-from avito_watcher.scraper import AntibotError, AvitoScraper
-from make_searches import QUERY_SUFFIX, URL_TEMPLATE, read_titles
+    from avito_watcher.paths import app_dir, resolve, setup_bundled_browsers
+    from avito_watcher.scraper import AntibotError, AvitoScraper
+    from make_searches import QUERY_SUFFIX, URL_TEMPLATE, read_titles
+except ImportError as _e:  # запущено не тем питоном
+    from avito_watcher.paths import venv_hint
+    raise SystemExit(venv_hint(_e))
 
 load_dotenv(app_dir() / ".env")
 
@@ -145,7 +153,7 @@ def scan(titles, db: sqlite3.Connection, region: str, delay: tuple[int, int],
         todo.append(title)
 
     if not todo:
-        print("\nВсё уже прочёсано. Отчёт: python3 scan_market.py --report")
+        print("\nВсё уже прочёсано. Отчёт: .venv/bin/python scan_market.py --report")
         return 0
 
     est_lo = len(todo) * delay[0] / 3600
@@ -240,7 +248,7 @@ def report(db: sqlite3.Connection) -> None:
     games = [r[0] for r in db.execute(
         "SELECT game FROM scan ORDER BY game").fetchall()]
     if not games:
-        print("База пуста. Сначала прочеши рынок: python3 scan_market.py games.example.txt")
+        print("База пуста. Сначала прочеши рынок: .venv/bin/python scan_market.py games.example.txt")
         return
 
     print(f"\n{'игра':<28} {'шт.':>4} {'мин':>7} {'медиана':>8} {'макс':>7}  вердикт")
@@ -300,7 +308,7 @@ def main(argv=None) -> int:
         n = scan(titles, db, args.region, tuple(args.delay), args.force)
         if n:
             print(f"\nГотово, прочёсано названий: {n}.")
-        print("Отчёт: python3 scan_market.py --report")
+        print("Отчёт: .venv/bin/python scan_market.py --report")
         return 0
     except KeyboardInterrupt:
         print("\n\nОстановлено. Собранное сохранено — запусти снова, продолжит "

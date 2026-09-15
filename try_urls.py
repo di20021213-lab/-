@@ -11,9 +11,9 @@
 кроме первого запроса, вернёт 429, и сравнивать будет нечего — на этом я уже
 обжёгся, поставив 25 секунд.
 
-Ускорить можно только сознательно: URL_PAUSE_S=60 python try_urls.py ...
+Ускорить можно только сознательно: URL_PAUSE_S=60 .venv/bin/python try_urls.py ...
 
-Запуск:  python try_urls.py "url1" "url2" ...
+Запуск:  .venv/bin/python try_urls.py "url1" "url2" ...
 """
 
 from __future__ import annotations
@@ -22,9 +22,13 @@ import os
 import sys
 import time
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
 
-from avito_watcher.scraper import AntibotError, AvitoScraper
+    from avito_watcher.scraper import AntibotError, AvitoScraper
+except ImportError as _e:  # запущено не тем питоном
+    from avito_watcher.paths import venv_hint
+    raise SystemExit(venv_hint(_e))
 
 load_dotenv()
 

@@ -11,7 +11,7 @@
 Пишет строку в лог и, когда Авито впервые открывается после блокировки, шлёт
 сообщение в Telegram. Повторно об одном и том же не пишет.
 
-Запуск вручную:  python watch_ip.py
+Запуск вручную:  .venv/bin/python watch_ip.py
 """
 
 from __future__ import annotations
@@ -21,10 +21,14 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
 
-from avito_watcher.notifier import TelegramNotifier
-from avito_watcher.probe import probe_browser, url_from_config
+    from avito_watcher.notifier import TelegramNotifier
+    from avito_watcher.probe import probe_browser, url_from_config
+except ImportError as _e:  # запущено не тем питоном
+    from avito_watcher.paths import venv_hint
+    raise SystemExit(venv_hint(_e))
 
 load_dotenv()
 

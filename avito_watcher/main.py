@@ -414,7 +414,7 @@ def run_check(settings: Settings) -> int:
     _record_cycle(settings)
 
     print(f"\nГотово. Подходящих объявлений сейчас: {total}.")
-    print("Если всё выглядит правильно — запускай без флагов: python -m avito_watcher.main\n")
+    print("Если всё выглядит правильно — запускай без флагов: .venv/bin/python -m avito_watcher.main\n")
     return 0
 
 

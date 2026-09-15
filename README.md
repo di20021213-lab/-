@@ -55,7 +55,7 @@ cp .env.example .env
 Впиши в `.env` свой `TELEGRAM_BOT_TOKEN`. Затем узнай свой `chat_id`:
 
 ```bash
-python get_chat_id.py     # сначала напиши своему боту любое сообщение в Telegram
+.venv/bin/python get_chat_id.py     # сначала напиши своему боту любое сообщение в Telegram
 ```
 
 Скопируй показанный `chat_id` в `.env` (`TELEGRAM_CHAT_ID=...`).
@@ -157,7 +157,7 @@ searches:
 ### Сначала — проверь настройку
 
 ```bash
-python -m avito_watcher.main --check
+.venv/bin/python -m avito_watcher.main --check
 ```
 
 Разовая проверка: подтверждает токен Telegram, открывает твой поиск и показывает,
@@ -187,17 +187,17 @@ python -m avito_watcher.main --check
 |---|---|
 | `✗ Telegram: токен не принят` | Проверь `TELEGRAM_BOT_TOKEN` в `.env` |
 | `найдено на странице: 0` | Открой свой `url` в обычном браузере. Пусто и там — поправь фильтры; есть объявления — Авито отдал антибот-страницу, нужен российский IP или `PROXY` |
-| `Антибот/капча Авито` | Запусти `python diag.py` — он скажет, спалили браузер или лимит по IP (см. ниже) |
+| `Антибот/капча Авито` | Запусти `.venv/bin/python diag.py` — он скажет, спалили браузер или лимит по IP (см. ниже) |
 | `Не удалось запустить браузер` | `playwright install chromium` |
 | Всё в `✗` по фильтрам | Фильтры слишком строгие — ослабь `max_age` или диапазон цен |
 
-### Если Авито блокирует: `python diag.py`
+### Если Авито блокирует: `.venv/bin/python diag.py`
 
 `--check` говорит «антибот», но не говорит почему. Причин ровно две, и лечатся они
 по-разному, поэтому есть отдельная диагностика:
 
 ```bash
-python diag.py
+.venv/bin/python diag.py
 ```
 
 Она дважды запрашивает твой же URL — простым HTTP-запросом и через Chromium —
@@ -224,7 +224,7 @@ python diag.py
 [deploy/minipc/](deploy/minipc/README.md#4а-если-ip-под-лимитом-сторож)):
 
 ```bash
-python watch_ip.py      # разово; для фона есть systemd-таймер
+.venv/bin/python watch_ip.py      # разово; для фона есть systemd-таймер
 ```
 
 **Бот не долбит Авито, пока заблокирован.** Если целый цикл не прошёл ни один поиск,
@@ -238,7 +238,7 @@ python watch_ip.py      # разово; для фона есть systemd-тай�
 ### Обычный запуск
 
 ```bash
-python -m avito_watcher.main
+.venv/bin/python -m avito_watcher.main
 ```
 
 Бот пришлёт в Telegram «✅ Бот запущен …» и начнёт присылать новые объявления.
@@ -247,7 +247,7 @@ python -m avito_watcher.main
 ### Один проход и выход
 
 ```bash
-python -m avito_watcher.main --once
+.venv/bin/python -m avito_watcher.main --once
 ```
 
 Проверяет все поиски один раз, шлёт уведомления и завершается. Удобно для `cron`,
@@ -285,7 +285,7 @@ After=network-online.target
 
 [Service]
 WorkingDirectory=/opt/avito-watcher
-ExecStart=/opt/avito-watcher/.venv/bin/python -m avito_watcher.main
+ExecStart=/opt/avito-watcher/.venv/bin/.venv/bin/python -m avito_watcher.main
 Restart=always
 RestartSec=15
 
@@ -454,7 +454,7 @@ searches:
 ### Есть ли в категории заработок
 
 ```bash
-.venv/bin/python report.py
+.venv/bin/.venv/bin/python report.py
 ```
 
 Считает по объявлениям, которые бот уже видел: сколько появляется в день,
@@ -502,8 +502,8 @@ Telegram, ноль — бот его увидел и слать не стал: �
 кончился лимит уведомлений за цикл. Чтобы бот оценил такие записи заново:
 
 ```bash
-.venv/bin/python forget_unnotified.py            # показать, что будет удалено
-.venv/bin/python forget_unnotified.py --yes      # удалить (с копией базы)
+.venv/bin/.venv/bin/python forget_unnotified.py            # показать, что будет удалено
+.venv/bin/.venv/bin/python forget_unnotified.py --yes      # удалить (с копией базы)
 ```
 
 Присланного это не касается — оно останется в базе и повторно не придёт.

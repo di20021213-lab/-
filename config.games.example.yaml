@@ -15,7 +15,7 @@
 # Блоки поисков не пиши руками — их генерирует make_searches.py по списку
 # названий, с правильным кодированием запроса и стоп-словами:
 #
-#   python3 make_searches.py games.txt >> config.yaml
+#   .venv/bin/python make_searches.py games.txt >> config.yaml
 #
 # Скопировать себе:  cp config.games.example.yaml config.yaml
 #
@@ -25,7 +25,7 @@
 # файла:
 #
 #     cp config.games.example.yaml config.yaml
-#     python3 make_searches.py games.example.txt >> config.yaml
+#     .venv/bin/python make_searches.py games.example.txt >> config.yaml
 #
 # Если поменять блоки местами, дописанное уедет внутрь settings и конфиг
 # перестанет читаться. YAML порядок ключей верхнего уровня не важен, а вот нам
@@ -102,12 +102,12 @@ searches: true за цикл проверяется ровно ОДИН
 #
 # Свои поиски собери генератором, он допишет их сюда:
 #
-#     python3 make_searches.py games.example.txt >> config.yaml
+#     .venv/bin/python make_searches.py games.example.txt >> config.yaml
 #
 # А чтобы список игр был не из головы, а по факту — сначала прочеши рынок:
 #
-#     python3 scan_market.py games.example.txt
-#     python3 scan_market.py --report
+#     .venv/bin/python scan_market.py games.example.txt
+#     .venv/bin/python scan_market.py --report
 #
 # Он обойдёт названия, посмотрит, что из этого водится на Авито и почём, и
 # покажет, где есть разброс цен. Следить имеет смысл за тем, что появляется
