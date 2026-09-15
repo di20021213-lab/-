@@ -120,6 +120,25 @@ def ads(n: int) -> str:
     return f"{n} {plural(n, 'объявление', 'объявления', 'объявлений')}"
 
 
+# Бот считает флаг паузы протухшим через час — так задумано, чтобы забытый
+# файл не оставил его стоять навсегда. Но наши паузы при блокировке удваиваются
+# и легко переваливают за час: флаг тихо протухал прямо во время сна, бот
+# просыпался, шёл к Авито и держал адрес занятым — ровно то, от чего мы и
+# пытались уйти. Поэтому длинные паузы спим кусками, обновляя отметку.
+PAUSE_REFRESH_S = 300
+
+
+def sleep_holding_pause(seconds: float, pause: Path) -> None:
+    """Проспать, не дав флагу паузы протухнуть."""
+    left = seconds
+    while left > 0:
+        pause.touch()
+        chunk = min(PAUSE_REFRESH_S, left)
+        time.sleep(chunk)
+        left -= chunk
+    pause.touch()
+
+
 def open_db(path: str) -> sqlite3.Connection:
     db = sqlite3.connect(path)
     db.executescript(SCHEMA)
@@ -200,7 +219,7 @@ def wait_out_previous(db: sqlite3.Connection, delay_min: int) -> None:
         who = "Бот" if last == _bot_last_cycle() else "Прошлый обход"
         print(f"{who} ходил к Авито {ago / 60:.0f} мин назад. "
               f"Жду {left / 60:.0f} мин, иначе первый же заход поймает 429.")
-        time.sleep(left)
+        sleep_holding_pause(left, Path(resolve(PAUSE_FILE)))
 
 
 def scan(titles, db: sqlite3.Connection, region: str, delay: tuple[int, int],
@@ -254,8 +273,7 @@ def scan(titles, db: sqlite3.Connection, region: str, delay: tuple[int, int],
                         print(f"    Пауза {blocked_pause / 60:.0f} мин — лимит снимается "
                               f"только временем без запросов. Потом повторю это же "
                               f"название (попытка {attempt + 1} из {BLOCKED_RETRIES}).")
-                        pause.touch()
-                        time.sleep(blocked_pause)
+                        sleep_holding_pause(blocked_pause, pause)
                         blocked_pause = min(blocked_pause * 2, BLOCKED_PAUSE_MAX_S)
                     except Exception as e:  # noqa: BLE001 - одно сбойное название не должно ронять обход
                         print(f"  ✗ {title}: не получилось ({e})")
@@ -282,7 +300,7 @@ def scan(titles, db: sqlite3.Connection, region: str, delay: tuple[int, int],
                 if i < len(todo):
                     wait = random.uniform(*delay)
                     print(f"    пауза {wait / 60:.0f} мин…")
-                    time.sleep(wait)
+                    sleep_holding_pause(wait, pause)
     finally:
         pause.unlink(missing_ok=True)
 
