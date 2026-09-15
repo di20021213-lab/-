@@ -256,7 +256,11 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
 
     raw_searches = raw.get("searches") or []
     if not raw_searches:
-        raise ConfigError("В config.yaml не задан ни один поиск (секция 'searches').")
+        raise ConfigError(
+            "В config.yaml не задан ни один поиск (секция 'searches').\n"
+            "Собери их генератором:  python3 make_searches.py games.example.txt >> config.yaml\n"
+            "А чтобы список был по факту, а не из головы, сначала прочеши рынок:\n"
+            "  python3 scan_market.py games.example.txt  &&  python3 scan_market.py --report")
 
     searches: list[SearchConfig] = []
     for i, item in enumerate(raw_searches):
