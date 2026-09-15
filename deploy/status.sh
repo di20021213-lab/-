@@ -42,7 +42,11 @@ say "публичный адрес" "${addr:-НЕ ОТВЕЧАЕТ (интерн
 # адрес общий и бюджет запросов к Авито делится с соседями.
 hops=$( { traceroute -n -w 2 -q 1 -m 4 8.8.8.8 2>/dev/null || tracepath -n -m 4 8.8.8.8 2>/dev/null; } \
         | grep -oE '(^| )(100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])|10|172\.(1[6-9]|2[0-9]|3[01]))\.[0-9.]+' | head -1)
-say "NAT провайдера" "${hops:+да, через${hops} (CGNAT — адрес общий)}${hops:-не обнаружен}"
+if [ -n "$hops" ]; then
+    say "NAT провайдера" "да, через${hops} — CGNAT, адрес общий с соседями"
+else
+    say "NAT провайдера" "не обнаружен (адрес, похоже, твой собственный)"
+fi
 
 section "Авито за $SINCE"
 if command -v journalctl >/dev/null; then
@@ -94,13 +98,26 @@ fi
 
 section "База виденных"
 DB="$BOT_DIR/seen.sqlite3"
-if [ -f "$DB" ] && command -v sqlite3 >/dev/null; then
+if [ -f "$DB" ]; then
     say "размер" "$(du -h "$DB" | cut -f1)"
-    sqlite3 "$DB" "SELECT '  '||label||': '||COUNT(*)||' объявлений, из них отправлено '||
-                          SUM(notified) FROM seen GROUP BY label ORDER BY COUNT(*) DESC LIMIT 15;" \
-        2>/dev/null || echo "  (таблица seen не читается)"
-elif [ -f "$DB" ]; then
-    say "размер" "$(du -h "$DB" | cut -f1) (sqlite3 не установлен, подробностей нет)"
+    python3 - "$DB" <<'PYEOF' 2>/dev/null || echo "  (таблица seen не читается)"
+import sqlite3, sys
+
+
+def plural(n):
+    """1 объявление, 2 объявления, 5 объявлений — иначе отчёт читается коряво."""
+    if n % 100 // 10 == 1:
+        return "объявлений"
+    return {1: "объявление", 2: "объявления", 3: "объявления",
+            4: "объявления"}.get(n % 10, "объявлений")
+
+
+db = sqlite3.connect(sys.argv[1])
+rows = db.execute("SELECT label, COUNT(*), SUM(notified) FROM seen "
+                  "GROUP BY label ORDER BY COUNT(*) DESC LIMIT 15").fetchall()
+for label, total, sent in rows:
+    print(f"  {label}: {total} {plural(total)}, из них отправлено {sent or 0}")
+PYEOF
 else
     say "seen.sqlite3" "нет — бот ещё ни разу не отработал"
 fi
