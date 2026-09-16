@@ -317,10 +317,17 @@ def median(values: list[int]) -> int:
 def verdict(count: int, prices: list[int]) -> str:
     """Стоит ли за этим следить. Это эвристика, а не приговор.
 
-    Ищем сочетание «появляется, но редко» + «цены разнятся». Разброс важнее
-    самой цены: если все просят одинаково, купить дешевле рынка не выйдет, а
-    вот там, где минимум заметно ниже середины, кто-то не знает цену — и это
-    ровно то, что бот должен ловить.
+    Решает РАЗБРОС, а не количество. Если все просят примерно одинаково,
+    купить дешевле рынка неоткуда, сколько бы объявлений ни было. А где
+    минимум заметно ниже середины — там кто-то не знает цену, и это ровно то,
+    что бот должен ловить.
+
+    Прежняя версия сначала смотрела на количество и при 30+ объявлениях сразу
+    выносила «маржи нет». На первом же живом запуске это оказалось враньём:
+    у «Limited Run» 55 объявлений с разбросом от 777 до 40500 — то есть в
+    пятьдесят раз, — и это самый интересный случай, а не самый скучный.
+    Количество говорит лишь о том, КАК ЧАСТО будет шанс, а не о том, есть ли
+    он вообще.
     """
     if count == 0:
         return "не встречается — следить не за чем"
@@ -328,17 +335,52 @@ def verdict(count: int, prices: list[int]) -> str:
         return "цены не указаны, судить не по чему"
     lo, mid = prices[0], median(prices)
     spread = (mid - lo) / mid if mid else 0
-    if count > 30:
-        return f"ходовая ({count} шт.) — маржи, скорее всего, нет"
-    if count <= 3:
-        base = "редкая"
-    else:
-        base = "встречается изредка"
+
+    how_often = ("шансы часто" if count > 30
+                 else "шансы изредка" if count > 3
+                 else "редкость")
     if spread >= 0.3:
-        return f"{base}, разброс {spread:.0%} — СТОИТ СЛЕДИТЬ"
+        return f"разброс {spread:.0%}, {how_often} — СТОИТ СЛЕДИТЬ"
     if spread >= 0.15:
-        return f"{base}, разброс {spread:.0%} — можно попробовать"
-    return f"{base}, но цены ровные ({spread:.0%}) — ловить нечего"
+        return f"разброс {spread:.0%}, {how_often} — можно попробовать"
+    return f"цены ровные ({spread:.0%}) — ловить нечего"
+
+
+def details(db: sqlite3.Connection, needle: str) -> None:
+    """Все объявления по одному запросу, от дешёвых к дорогим.
+
+    Для широких сетей вроде «Limited Run» это и есть главный результат: под
+    одним запросом лежат десятки РАЗНЫХ игр, и сводная медиана по ним
+    бессмысленна. А вот список с ценами показывает, что именно сейчас лежит
+    дёшево — из него и набирается настоящий список для охоты.
+    """
+    # Сопоставляем в питоне, а не в SQL: встроенный lower() у SQLite работает
+    # только с латиницей, и «Коллекционное издание» ему не по зубам — запрос
+    # молча не нашёл бы ничего.
+    names = [r[0] for r in db.execute("SELECT DISTINCT game FROM listing")]
+    want = needle.casefold()
+    matched = [n for n in names if want in n.casefold()]
+    rows = []
+    for name in matched:
+        rows += db.execute(
+            "SELECT game, title, price, location, age_min FROM listing "
+            "WHERE game = ? ", (name,)).fetchall()
+    rows.sort(key=lambda r: (r[2] is None, r[2] or 0))
+    if not rows:
+        have = [r[0] for r in db.execute("SELECT game FROM scan ORDER BY game")]
+        print(f"По запросу «{needle}» ничего не собрано.")
+        if have:
+            print("Есть данные по:", ", ".join(have))
+        return
+    print(f"\n{ads(len(rows))} по запросу «{needle}», от дешёвых к дорогим:\n")
+    for game, title, price, location, age in rows:
+        money = f"{price:>7} ₽" if price else "     без цены"
+        where = f" — {location}" if location else ""
+        days = f" ({age // 1440} д)" if age and age >= 1440 else ""
+        print(f"  {money}  {(title or '?')[:60]}{where}{days}")
+    print(f"\nЗапрос{'ы' if len(matched) > 1 else ''}: {', '.join(matched)}")
+    print("Что тут дёшево против остальных — то и стоит добавить в games.txt\n"
+          "отдельной строкой со своим потолком.")
 
 
 def report(db: sqlite3.Connection) -> None:
@@ -369,7 +411,10 @@ def report(db: sqlite3.Connection) -> None:
         print("чтобы проходило только заметно дешёвое):\n")
         for game, mid in worth:
             print(f"  {game} | {int(mid * 0.7) // 100 * 100}")
-        print("\nЭти строки можно прямо вставить в свой games.txt.")
+        print("\nЭти строки можно вставить в свой games.txt — но только для\n"
+              "конкретных игр. Для широких сетей («Limited Run» и подобных)\n"
+              "средняя цена ни о чём не говорит: под одним запросом лежат\n"
+              "десятки разных игр. Там смотри --details.")
     else:
         print("\nНичего с широким разбросом не нашлось. Либо список не тот,")
         print("либо рынок ровный — тогда ловить нечего, и это тоже ответ.")
@@ -385,6 +430,9 @@ def main(argv=None) -> int:
                         help="файл со списком названий либо сами названия")
     parser.add_argument("--report", action="store_true",
                         help="только отчёт по накопленному, к Авито не ходить")
+    parser.add_argument("--details", metavar="ЗАПРОС",
+                        help="показать все объявления по одному запросу, от "
+                             "дешёвых к дорогим. К Авито не ходит")
     parser.add_argument("--db", default=DB_PATH, help=f"файл базы (по умолчанию {DB_PATH})")
     parser.add_argument("--region", default="orel", help="регион в ссылке")
     parser.add_argument("--delay", type=int, nargs=2, metavar=("МИН", "МАКС"),
@@ -405,6 +453,9 @@ def main(argv=None) -> int:
 
     db = open_db(resolve(args.db))
     try:
+        if args.details:
+            details(db, args.details)
+            return 0
         if args.report:
             report(db)
             return 0
