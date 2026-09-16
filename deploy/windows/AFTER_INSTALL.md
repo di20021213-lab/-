@@ -49,26 +49,29 @@ git checkout claude/avito-gpu-parser-mmp6rr
 > Подробно, с разбором ошибок — [SSH_KEY.md](SSH_KEY.md). Там же про права
 > на ключ, без которых Windows его не примет.
 
-Архив лежит на зарубежном сервере. `scp` и `tar` в Windows уже есть,
-ставить нечего:
+Архив снят скриптом `deploy/backup.sh` — внутри папка `avito-backup/` и в ней
+`README-BACKUP.txt` с описанием, что где лежит. `tar` в Windows уже есть,
+ставить нечего. Вставь флешку и:
 
 ```powershell
 cd C:\avito-watcher
-scp root@87.58.205.159:~/avito-backup.tgz .
-tar -xzf avito-backup.tgz
+tar -xzf E:\avito-backup-20260916-1830.tgz
 ```
+
+(архив на зарубежном сервере, а не на флешке — тогда сначала
+`scp root@87.58.205.159:~/avito-backup.tgz .`)
 
 Разложить по местам:
 
 ```powershell
-move avito-watcher\seen.sqlite3 .
-move avito-watcher\.env .
-move avito-watcher\config.yaml .
+move avito-backup\bot\* .
 mkdir $env:USERPROFILE\.ssh -Force
-move .ssh\id_ed25519 $env:USERPROFILE\.ssh\
-move .ssh\id_ed25519.pub $env:USERPROFILE\.ssh\
-rmdir avito-watcher, .ssh
+move avito-backup\ssh\* $env:USERPROFILE\.ssh\
+rmdir /s avito-backup
 ```
+
+Папка `avito-backup\systemd\` на Windows не нужна — это юниты от Linux,
+их место займут `run.bat` и планировщик задач.
 
 **Права на ключ.** Windows-версия SSH откажется брать ключ, который доступен
 кому-то ещё, — и это самая частая заминка на этом шаге:

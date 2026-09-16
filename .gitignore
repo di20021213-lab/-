@@ -29,3 +29,6 @@ browser-profile/
 # Флаг ручного сеанса: ставит и снимает deploy/minipc/screen.sh
 PAUSE.flag
 market.sqlite3
+
+# Юниты, разложенные deploy/restore.sh для сверки глазами
+restored-systemd/
