@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from .config import SearchConfig, match_model
@@ -9,15 +10,30 @@ from .dates import format_age
 from .scraper import Listing
 
 
+_PUNCT = re.compile(r"[^0-9a-zа-я]+")
+
+
+def _flat(text: str) -> str:
+    """Заголовок без пунктуации: слова через один пробел.
+
+    Продавцы пишут «Star wars: Dark Forces Remaster», а ключевое слово в
+    конфиге — «star wars dark forces». Без этой чистки двоеточие ломало поиск
+    подстроки, и поиск молча не находил ничего: ни ошибки, ни пустой выдачи —
+    просто ноль подходящих, что со стороны неотличимо от «объявлений нет».
+    """
+    return " " + _PUNCT.sub(" ", (text or "").lower().replace("ё", "е")).strip() + " "
+
+
 def explain(listing: Listing, search: SearchConfig) -> Optional[str]:
     """Причина, по которой объявление не подходит, либо None если подходит."""
-    title = (listing.title or "").lower()
+    title = _flat(listing.title)
 
-    if search.keywords and not any(k in title for k in search.keywords):
+    if search.keywords and not any(_flat(k).strip() in title for k in search.keywords):
         return f"в заголовке нет ни одного из {search.keywords}"
 
     if search.exclude_keywords:
-        hit = next((k for k in search.exclude_keywords if k in title), None)
+        hit = next((k for k in search.exclude_keywords
+                    if _flat(k).strip() in title), None)
         if hit:
             return f"в заголовке стоп-слово «{hit}»"
 
