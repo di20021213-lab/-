@@ -64,6 +64,15 @@ class SearchConfig:
     first_run: str = "seed"
     keywords: list[str] = field(default_factory=list)
     exclude_keywords: list[str] = field(default_factory=list)
+    # Стоп-слова по ТЕКСТУ КАРТОЧКИ, а не по заголовку: имя продавца, значок
+    # «Магазин», кусок описания. Всё это Авито уже отдало вместе с выдачей, так
+    # что проверка бесплатна — ни одного лишнего запроса.
+    #
+    # Отдельный список, а не общий с exclude_keywords, и это важно. В карточке
+    # продавца дисков легко встретится «есть ещё на PS3» — по заголовочному
+    # списку такое объявление вылетело бы, хотя продаётся ровно наш диск.
+    # Заголовок говорит, ЧТО продают; карточка — КТО продаёт.
+    exclude_card_keywords: list[str] = field(default_factory=list)
     # Максимальный возраст объявления в минутах (None — не фильтровать по свежести).
     max_age_minutes: Optional[int] = None
     # Что делать с объявлением, у которого возраст неизвестен (Авито не показал
@@ -296,6 +305,8 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
                 models=_parse_models(item.get("models"), label),
                 keywords=[str(k).lower() for k in (item.get("keywords") or [])],
                 exclude_keywords=[str(k).lower() for k in (item.get("exclude_keywords") or [])],
+                exclude_card_keywords=[str(k).lower()
+                                       for k in (item.get("exclude_card_keywords") or [])],
             )
         )
 

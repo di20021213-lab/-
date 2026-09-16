@@ -110,6 +110,18 @@ def _freshness_rank(listing) -> tuple[int, int]:
 # те же запросы, разнесённые во времени, выглядят как человек, листающий выдачу.
 DETAIL_PAUSE_S = (4.0, 10.0)
 
+# Сколько уведомлений за один цикл — уже не находка, а лента.
+#
+# Редкая игра появляется раз в недели: один-два за цикл это охота. Четыре
+# разных продавца в одном заходе означают не удачу, а то, что потолок стоит
+# ВЫШЕ рынка — под него подходит вообще всё, что продаётся. Так было с
+# Pragmata (81 уведомление за сутки) и повторилось со Star Wars Dark Forces,
+# где потолок 4000 накрыл весь рынок от 2814 до 3400.
+#
+# Молча это не отличить от «повезло», поэтому предупреждаем в журнале. Ничего
+# не блокируем: решать, опускать потолок или нет, всё равно человеку.
+FEED_WARN_PER_CYCLE = 4
+
 
 def _priority_rule(listing, search: SearchConfig):
     """Правило приоритетной модели, если объявление под неё подходит.
@@ -263,10 +275,19 @@ def process_search(
         log.info("[%s] заходов на страницы объявлений: %d из %d разрешённых"
                  "%s", search.label, details_fetched, max_details,
                  f"; ещё {details_skipped} ушли без чтения описания" if details_skipped else "")
+    # Первый запуск не в счёт: при first_run: send он и должен выгрести всё,
+    # что уже лежало. Тревожно, когда столько набегает в обычном цикле.
+    if sent >= FEED_WARN_PER_CYCLE and not first_run:
+        log.warning("[%s] за один цикл ушло %d уведомлений — это уже лента, а не "
+                    "охота. Похоже, потолок %s стоит выше рынка: под него "
+                    "подходит всё подряд. Посмотри цены в пришедшем и опусти "
+                    "max_price ниже самого дешёвого.",
+                    search.label, sent, search.max_price)
     return sent
 
 
-def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings) -> int:
+def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings,
+                 show_cards: bool = False) -> int:
     """Разовая проверка: показать, что бот видит и как отработали фильтры.
 
     Ничего не шлёт и не пишет в базу — безопасно гонять сколько угодно.
@@ -292,6 +313,10 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
             else:
                 age += " (даты в карточке нет)"
         head = f"{lst.title} | {price} | {age}"
+        if show_cards:
+            # Заголовок в тексте карточки и так есть — печатаем то, что вокруг
+            # него: имя продавца и кусок описания. Ради этого флаг и заведён.
+            head += f"\n      карточка: {(lst.card_text or 'пусто')[:300]}"
 
         reason = filters.explain(lst, search)
         if reason:
@@ -373,7 +398,7 @@ def check_search(search: SearchConfig, scraper: AvitoScraper, settings: Settings
     return good
 
 
-def run_check(settings: Settings) -> int:
+def run_check(settings: Settings, show_cards: bool = False) -> int:
     """Режим --check: проверить конфиг, Telegram и каждый поиск. Ничего не отправляя."""
     print("\n### Проверка настройки ###")
 
@@ -400,7 +425,7 @@ def run_check(settings: Settings) -> int:
                           user_data_dir=settings.user_data_dir) as scraper:
             for search in settings.searches:
                 try:
-                    total += check_search(search, scraper, settings)
+                    total += check_search(search, scraper, settings, show_cards=show_cards)
                 except AntibotError as e:
                     print(f"\n=== [{search.label}] ===\n  ✗ {e}\n"
                           "     Нужен российский IP или PROXY в .env.")
@@ -673,6 +698,10 @@ def run(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--check", action="store_true",
                         help="разовая проверка настройки: что бот видит и как отработали "
                              "фильтры. Ничего не шлёт и не пишет в базу")
+    parser.add_argument("--cards", action="store_true",
+                        help="вместе с --check: печатать текст карточки целиком. "
+                             "По нему видно, кто продавец (магазин, скупка), и по "
+                             "чему настраивать exclude_card_keywords")
     parser.add_argument("--once", action="store_true",
                         help="один проход по всем поискам и выход (удобно для cron)")
     parser.add_argument("--config", default="config.yaml",
@@ -698,7 +727,7 @@ def run(argv: Optional[list[str]] = None) -> int:
         return 2
 
     if args.check:
-        return run_check(settings)
+        return run_check(settings, show_cards=args.cards)
 
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
