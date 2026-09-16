@@ -401,27 +401,46 @@ def details(db: sqlite3.Connection, needle: str,
 # платформа, состояние, издатель, служебное. Их выкидываем, чтобы осталось
 # собственно название игры.
 _NOISE = {
-    "ps5", "ps4", "ps3", "ps2", "psv", "xbox", "series", "one", "switch",
-    "nintendo", "sony", "playstation", "lrg", "srg", "limited", "run", "games",
+    # Состояние и служебное — есть почти в каждом заголовке.
     "игра", "игры", "игру", "диск", "диски", "дисков", "новая", "новый",
-    "новое", "новые", "издание", "издания", "edition", "sealed", "новый/sealed",
-    "русские", "русская", "русский", "субтитры", "версия", "озвучка", "для",
-    "прошитая", "запечатан", "запечатана", "коллекционное", "collector",
-    "collectors", "deluxe", "standard", "exclusive", "американка", "америка",
+    "новое", "новые", "для", "прошитая", "запечатан", "запечатана",
+    "sealed", "бу", "used", "лицензия", "оригинал", "бук", "версия",
+    # Издатель и серия — не отличают одну игру от другой.
+    "lrg", "srg", "limited", "run", "games",
+    # Регион, язык, формат.
+    "ntsc", "pal", "япония", "японская", "japan", "usa", "europe", "eur",
+    "английская", "английский", "русские", "русская", "русский", "русском",
+    "субтитры", "озвучка", "америка", "американка", "регион",
 }
+
+# ВНИМАНИЕ: слов «deluxe», «premium», «collector», «exclusive» здесь НЕТ, и
+# это осознанно. Сначала я их сюда записал как «служебные» — и получил
+# «Onimusha Way of the Sword» за 6499 в одной группе с «Onimusha Way Sword
+# Premium Deluxe» за 8499, то есть выдуманную маржу в 2000 ₽ на сравнении
+# обычного издания с коллекционным. Для этого рынка тип издания — главное,
+# что вообще отличает товар.
+_EDITIONS = {"deluxe", "premium", "collector", "collectors", "collector's",
+             "exclusive", "коллекционное", "коллекционка", "steelbook",
+             "anniversary", "ultimate", "gold", "goty"}
 
 _CITY_TAIL = re.compile(r"\s+в\s+[^\s]+\s*$")
 _ISSUE_NO = re.compile(r"#\s*\d+")          # номер выпуска LRG — не отличает игру
-_PLATFORMS = {
-    "ps5": "ps5", "playstation5": "ps5",
-    "ps4": "ps4", "playstation4": "ps4",
-    "ps3": "ps3", "ps2": "ps2",
-    "xbox": "xbox", "switch": "switch", "nintendo": "switch",
-}
+# Порядок важен: «psvita» должна проверяться раньше «ps», иначе съест её.
+_PLATFORMS = (
+    ("psvita", "vita"), ("psv", "vita"), ("vita", "vita"),
+    ("psp", "psp"),
+    ("ps5", "ps5"), ("playstation5", "ps5"),
+    ("ps4", "ps4"), ("playstation4", "ps4"),
+    ("ps3", "ps3"), ("ps2", "ps2"), ("ps1", "ps1"),
+    ("xbox", "xbox"), ("switch", "switch"), ("nintendo", "switch"),
+    ("saturn", "saturn"), ("dreamcast", "dreamcast"), ("gamecube", "gamecube"),
+    ("sega", "sega"), ("wii", "wii"), ("3ds", "3ds"),
+)
+_PLATFORM_WORDS = {w for w, _ in _PLATFORMS} | {"playstation", "sony"}
 
 
 class Sig:
-    """Разобранный заголовок: слова, числа и платформа — по отдельности.
+    """Разобранный заголовок: слова, числа, платформа и тип издания.
 
     Числа и платформа вынесены не для красоты. На живой выдаче «Yakuza 0» и
     «Yakuza 7 частей игры» сливались в одну игру с разницей 35 500 ₽, а
@@ -429,16 +448,18 @@ class Sig:
     маржа, то есть худший вид ошибки: по ней человек пойдёт покупать.
     """
 
-    __slots__ = ("words", "numbers", "platform")
+    __slots__ = ("words", "numbers", "platform", "edition")
 
-    def __init__(self, words, numbers, platform):
+    def __init__(self, words, numbers, platform, edition):
         self.words = words
         self.numbers = numbers
         self.platform = platform
+        self.edition = edition
 
     def merged(self, other: "Sig") -> "Sig":
         return Sig(self.words | other.words, self.numbers | other.numbers,
-                   self.platform or other.platform)
+                   self.platform or other.platform,
+                   self.edition | other.edition)
 
 
 def signature(title: str) -> Sig:
@@ -450,30 +471,32 @@ def signature(title: str) -> Sig:
     платформу и слова-пустышки, а сравниваем по тому, что осталось.
     """
     raw = (title or "").lower().replace("ё", "е")
-    platform = ""
-    for token, name in _PLATFORMS.items():
-        if token in raw.replace(" ", ""):
-            platform = name
-            break
+    flat = re.sub(r"[^a-zа-я0-9]", "", raw)
+    platform = next((name for token, name in _PLATFORMS if token in flat), "")
     t = _CITY_TAIL.sub("", raw)
     t = _ISSUE_NO.sub(" ", t)
     t = re.sub(r"[^a-zа-я0-9\s]", " ", t)
-    words, numbers = set(), set()
+    words, numbers, edition = set(), set(), set()
     for w in t.split():
         if w.isdigit():
             numbers.add(w)
-        elif len(w) >= 3 and w not in _NOISE:
+        elif w in _EDITIONS:
+            edition.add(w)
+        elif len(w) >= 3 and w not in _NOISE and w not in _PLATFORM_WORDS:
             words.add(w)
-    return Sig(frozenset(words), frozenset(numbers), platform)
+    return Sig(frozenset(words), frozenset(numbers), platform, frozenset(edition))
 
 
 def same_game(a: Sig, b: Sig) -> bool:
     """Одна ли это игра.
 
-    Три условия, и каждое появилось из настоящего промаха на живой выдаче:
+    Условия, и каждое появилось из настоящего промаха на живой выдаче:
       · числа не должны противоречить — «Volume 1» и «Volume 2» разные;
-      · платформа не должна противоречить — диск для Xbox не перепродать
-        владельцу PS5;
+      · платформа не должна противоречить — «Final Fantasy Type-0» для PSP
+        и для PS4 попали в одну группу с разницей 64%, хотя это разные диски;
+      · тип издания не должен противоречить — «Onimusha Way of the Sword» за
+        6499 и «Onimusha Way Sword Premium Deluxe» за 8499 давали выдуманные
+        2000 ₽ маржи;
       · меньшее название должно почти целиком входить в большее. Двух общих
         слов мало: «Sam & Max Beyond Time and Space» и «Sam & Max Save The
         World» — совершенно разные игры.
@@ -482,12 +505,18 @@ def same_game(a: Sig, b: Sig) -> bool:
         return False
     if a.platform and b.platform and a.platform != b.platform:
         return False
+    # Обычное издание против коллекционного — разный товар и разная цена.
+    if a.edition != b.edition:
+        return False
     common = a.words & b.words
     if not common:
         return False
+    # Односложные названия (Quake, Humanity) сводим только с такими же
+    # односложными. Иначе «Игры на psp» цеплялось к «Final Fantasy Type-0 psp»
+    # по единственному общему слову.
+    if len(a.words) == 1 and len(b.words) == 1:
+        return True
     smaller = min(len(a.words), len(b.words))
-    if smaller == 1:
-        return True                     # односложные названия: Quake, Humanity
     return len(common) >= 2 and len(common) / smaller >= 0.7
 
 
