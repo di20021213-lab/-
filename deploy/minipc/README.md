@@ -143,7 +143,7 @@ TELEGRAM_PROXY=socks5h://127.0.0.1:1080
 
 ```bash
 cd ~/avito-watcher
-.venv/bin/.venv/bin/python -m avito_watcher.main --check
+.venv/bin/python -m avito_watcher.main --check
 ```
 
 Ждём две зелёные строки:
@@ -156,7 +156,7 @@ cd ~/avito-watcher
 Ругается на антибот — запусти диагностику, она скажет, в IP дело или в браузере:
 
 ```bash
-.venv/bin/.venv/bin/python diag.py
+.venv/bin/python diag.py
 ```
 
 ## 4а. Если IP под лимитом: сторож
@@ -256,5 +256,5 @@ journalctl -u avito-watcher -f      # выйти из просмотра лог�
 | `status=1/FAILURE`, в логе «Не найден файл конфигурации» | Юнит смотрит не в ту папку. Проверь `WorkingDirectory` в `/etc/systemd/system/avito-watcher.service` — он должен совпадать с тем, куда ты клонировал код |
 | `Telegram ... Network is unreachable` | Туннель не поднят: `systemctl status avito-tunnel`. Или в `.env` нет `TELEGRAM_PROXY` |
 | `✗ Telegram: токен не принят` при живом туннеле | Неверный токен в `.env` |
-| `Антибот/капча Авито` | `.venv/bin/.venv/bin/python diag.py` — он разделит «забанен IP» и «спалили браузер» |
+| `Антибот/капча Авито` | `.venv/bin/python diag.py` — он разделит «забанен IP» и «спалили браузер» |
 | Бот пишет «не отправилось, повторю» | Туннель моргнул. Объявление не потеряно: оно не помечено виденным и уйдёт следующим циклом |

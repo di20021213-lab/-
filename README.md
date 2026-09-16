@@ -285,7 +285,7 @@ After=network-online.target
 
 [Service]
 WorkingDirectory=/opt/avito-watcher
-ExecStart=/opt/avito-watcher/.venv/bin/.venv/bin/python -m avito_watcher.main
+ExecStart=/opt/avito-watcher/.venv/bin/python -m avito_watcher.main
 Restart=always
 RestartSec=15
 
@@ -454,7 +454,7 @@ searches:
 ### Есть ли в категории заработок
 
 ```bash
-.venv/bin/.venv/bin/python report.py
+.venv/bin/python report.py
 ```
 
 Считает по объявлениям, которые бот уже видел: сколько появляется в день,
@@ -502,8 +502,8 @@ Telegram, ноль — бот его увидел и слать не стал: �
 кончился лимит уведомлений за цикл. Чтобы бот оценил такие записи заново:
 
 ```bash
-.venv/bin/.venv/bin/python forget_unnotified.py            # показать, что будет удалено
-.venv/bin/.venv/bin/python forget_unnotified.py --yes      # удалить (с копией базы)
+.venv/bin/python forget_unnotified.py            # показать, что будет удалено
+.venv/bin/python forget_unnotified.py --yes      # удалить (с копией базы)
 ```
 
 Присланного это не касается — оно останется в базе и повторно не придёт.

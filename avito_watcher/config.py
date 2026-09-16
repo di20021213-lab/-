@@ -258,9 +258,9 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
     if not raw_searches:
         raise ConfigError(
             "В config.yaml не задан ни один поиск (секция 'searches').\n"
-            "Собери их генератором:  .venv/bin/.venv/bin/python make_searches.py games.example.txt >> config.yaml\n"
+            "Собери их генератором:  .venv/bin/python make_searches.py games.example.txt >> config.yaml\n"
             "А чтобы список был по факту, а не из головы, сначала прочеши рынок:\n"
-            "  .venv/bin/.venv/bin/python scan_market.py games.example.txt  &&  .venv/bin/.venv/bin/python scan_market.py --report")
+            "  .venv/bin/python scan_market.py games.example.txt  &&  .venv/bin/python scan_market.py --report")
 
     searches: list[SearchConfig] = []
     for i, item in enumerate(raw_searches):

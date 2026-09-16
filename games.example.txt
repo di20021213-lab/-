@@ -4,7 +4,7 @@
 # Формат:  Название [| потолок [| нижняя граница]]
 # Скормить генератору:
 #     cp config.games.example.yaml config.yaml
-#     .venv/bin/.venv/bin/python make_searches.py games.example.txt >> config.yaml
+#     .venv/bin/python make_searches.py games.example.txt >> config.yaml
 #
 # ПРО ПОТОЛКИ. Они здесь намеренно щедрые — 8000 почти у всех. Это не оценка
 # стоимости, а осознанное решение: сначала УВИДЕТЬ рынок, потом его сузить.
