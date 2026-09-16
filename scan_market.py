@@ -54,6 +54,11 @@ except ImportError as _e:  # запущено не тем питоном
 load_dotenv(app_dir() / ".env")
 
 DB_PATH = "market.sqlite3"
+
+# Ниже этого — цифровые копии, а не диски. «Directive 8020 PS5 На Русском» за
+# 349 ₽ в пяти городах сразу это ровно они: их публикуют пачками по всей
+# стране, и в анализе рынка они только мешают. Порог тот же, что у бота.
+MIN_REAL_PRICE = 1000
 PAUSE_FILE = "PAUSE.flag"
 
 # Пауза между названиями. По умолчанию как у бота: реже — дольше ждать,
@@ -347,7 +352,8 @@ def verdict(count: int, prices: list[int]) -> str:
     return f"цены ровные ({spread:.0%}) — ловить нечего"
 
 
-def details(db: sqlite3.Connection, needle: str) -> None:
+def details(db: sqlite3.Connection, needle: str,
+            min_price: int = MIN_REAL_PRICE) -> None:
     """Все объявления по одному запросу, от дешёвых к дорогим.
 
     Для широких сетей вроде «Limited Run» это и есть главный результат: под
@@ -361,11 +367,18 @@ def details(db: sqlite3.Connection, needle: str) -> None:
     names = [r[0] for r in db.execute("SELECT DISTINCT game FROM listing")]
     want = needle.casefold()
     matched = [n for n in names if want in n.casefold()]
+    seen_ids: set[str] = set()
     rows = []
     for name in matched:
-        rows += db.execute(
-            "SELECT game, title, price, location, age_min FROM listing "
-            "WHERE game = ? ", (name,)).fetchall()
+        for game, item_id, title, price, location, age in db.execute(
+                "SELECT game, item_id, title, price, location, age_min "
+                "FROM listing WHERE game = ?", (name,)):
+            if item_id in seen_ids:
+                continue          # то же объявление под другим запросом
+            if price is not None and price < min_price:
+                continue          # цифровая копия, а не диск
+            seen_ids.add(item_id)
+            rows.append((game, title, price, location, age))
     rows.sort(key=lambda r: (r[2] is None, r[2] or 0))
     if not rows:
         have = [r[0] for r in db.execute("SELECT game FROM scan ORDER BY game")]
@@ -478,7 +491,8 @@ def same_game(a: Sig, b: Sig) -> bool:
     return len(common) >= 2 and len(common) / smaller >= 0.7
 
 
-def dupes(db: sqlite3.Connection, needle: str | None = None) -> None:
+def dupes(db: sqlite3.Connection, needle: str | None = None,
+          min_price: int = MIN_REAL_PRICE) -> None:
     """Одна и та же игра у разных продавцов — и на сколько цены разошлись.
 
     Вот здесь и живёт заработок. Сводная медиана по широкому запросу вроде
@@ -487,13 +501,24 @@ def dupes(db: sqlite3.Connection, needle: str | None = None) -> None:
     ОДНА игра лежит у одного за 3990, а у другого за 4800 — это уже цифра,
     с которой можно работать.
     """
-    q = "SELECT game, title, price, location FROM listing WHERE price IS NOT NULL"
-    rows = db.execute(q).fetchall()
+    rows = db.execute(
+        "SELECT game, item_id, title, price, location FROM listing "
+        "WHERE price IS NOT NULL AND price >= ?", (min_price,)).fetchall()
     if needle:
         want = needle.casefold()
         rows = [r for r in rows if want in r[0].casefold()]
+
+    # Одно и то же объявление приходит под разными запросами: и по «Limited
+    # Run», и по «Коллекционное издание». Ключ в таблице — (запрос, id), так
+    # что в базе это две строки, и без чистки объявление сравнивалось само с
+    # собой — отсюда и вереница «разница 0 ₽».
+    by_item: dict[str, tuple] = {}
+    for game, item_id, title, price, location in rows:
+        by_item.setdefault(item_id, (game, title, price, location))
+    rows = list(by_item.values())
+
     if not rows:
-        print("Нет собранных объявлений с ценой.")
+        print(f"Нет собранных объявлений дороже {min_price} ₽.")
         return
 
     groups: list[dict] = []
@@ -516,7 +541,9 @@ def dupes(db: sqlite3.Connection, needle: str | None = None) -> None:
             continue
         prices = sorted(p for p, _, _ in g["items"])
         lo, hi = prices[0], prices[-1]
-        if not lo:
+        # Нулевая разница — не находка, а просто одинаковая цена у двоих.
+        # Показывать её значит топить настоящие пары в шуме.
+        if not lo or hi == lo:
             continue
         interesting.append((hi - lo, lo, hi, g))
     # Ключ только по числам. Без него при одинаковых (разница, мин, макс)
@@ -525,9 +552,9 @@ def dupes(db: sqlite3.Connection, needle: str | None = None) -> None:
     interesting.sort(key=lambda x: x[:3], reverse=True)
 
     if not interesting:
-        print("\nНи одной игры не встретилось дважды. Либо выборка мала, либо\n"
-              "у каждого продавца своя игра — тогда сравнивать не с чем, и это\n"
-              "тоже ответ: перепродавать нечего.")
+        print("\nНи одной игры не нашлось у двух продавцов по РАЗНОЙ цене.\n"
+              "Либо выборка мала, либо у каждого своя игра — тогда сравнивать\n"
+              "не с чем, и это тоже ответ: перепродавать нечего.")
         return
 
     print(f"\nИгры, встретившиеся больше одного раза "
@@ -603,6 +630,11 @@ def main(argv=None) -> int:
     parser.add_argument("--delay", type=int, nargs=2, metavar=("МИН", "МАКС"),
                         default=[DELAY_MIN_S, DELAY_MAX_S],
                         help="пауза между названиями в секундах")
+    parser.add_argument("--min-price", type=int, default=MIN_REAL_PRICE,
+                        dest="min_price",
+                        help=f"в отчётах не учитывать дешевле этого (сейчас "
+                             f"{MIN_REAL_PRICE} — ниже идут цифровые копии). "
+                             f"0 — показывать всё")
     parser.add_argument("--force", action="store_true",
                         help="прочесать заново даже то, что смотрели недавно")
     args = parser.parse_args(argv)
@@ -619,10 +651,10 @@ def main(argv=None) -> int:
     db = open_db(resolve(args.db))
     try:
         if args.dupes is not None:
-            dupes(db, args.dupes or None)
+            dupes(db, args.dupes or None, args.min_price)
             return 0
         if args.details:
-            details(db, args.details)
+            details(db, args.details, args.min_price)
             return 0
         if args.report:
             report(db)
