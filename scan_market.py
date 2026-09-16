@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -383,6 +384,164 @@ def details(db: sqlite3.Connection, needle: str) -> None:
           "отдельной строкой со своим потолком.")
 
 
+# Слова, которые есть почти в каждом заголовке и потому ничего не различают:
+# платформа, состояние, издатель, служебное. Их выкидываем, чтобы осталось
+# собственно название игры.
+_NOISE = {
+    "ps5", "ps4", "ps3", "ps2", "psv", "xbox", "series", "one", "switch",
+    "nintendo", "sony", "playstation", "lrg", "srg", "limited", "run", "games",
+    "игра", "игры", "игру", "диск", "диски", "дисков", "новая", "новый",
+    "новое", "новые", "издание", "издания", "edition", "sealed", "новый/sealed",
+    "русские", "русская", "русский", "субтитры", "версия", "озвучка", "для",
+    "прошитая", "запечатан", "запечатана", "коллекционное", "collector",
+    "collectors", "deluxe", "standard", "exclusive", "американка", "америка",
+}
+
+_CITY_TAIL = re.compile(r"\s+в\s+[^\s]+\s*$")
+_ISSUE_NO = re.compile(r"#\s*\d+")          # номер выпуска LRG — не отличает игру
+_PLATFORMS = {
+    "ps5": "ps5", "playstation5": "ps5",
+    "ps4": "ps4", "playstation4": "ps4",
+    "ps3": "ps3", "ps2": "ps2",
+    "xbox": "xbox", "switch": "switch", "nintendo": "switch",
+}
+
+
+class Sig:
+    """Разобранный заголовок: слова, числа и платформа — по отдельности.
+
+    Числа и платформа вынесены не для красоты. На живой выдаче «Yakuza 0» и
+    «Yakuza 7 частей игры» сливались в одну игру с разницей 35 500 ₽, а
+    «Volume 1» и «Volume 2» — в одну с разницей 1140. Это была бы выдуманная
+    маржа, то есть худший вид ошибки: по ней человек пойдёт покупать.
+    """
+
+    __slots__ = ("words", "numbers", "platform")
+
+    def __init__(self, words, numbers, platform):
+        self.words = words
+        self.numbers = numbers
+        self.platform = platform
+
+    def merged(self, other: "Sig") -> "Sig":
+        return Sig(self.words | other.words, self.numbers | other.numbers,
+                   self.platform or other.platform)
+
+
+def signature(title: str) -> Sig:
+    """Значимые слова заголовка — то, чем одна игра отличается от другой.
+
+    Заголовки на Авито пишут как попало: «Star wars: Dark Forces Remaster LRG
+    #107 Новая в Москве» и «Игра star wars: Dark Forces Remaster в Жуковском» —
+    это одна и та же игра. Чтобы их свести, выкидываем город, номер выпуска,
+    платформу и слова-пустышки, а сравниваем по тому, что осталось.
+    """
+    raw = (title or "").lower().replace("ё", "е")
+    platform = ""
+    for token, name in _PLATFORMS.items():
+        if token in raw.replace(" ", ""):
+            platform = name
+            break
+    t = _CITY_TAIL.sub("", raw)
+    t = _ISSUE_NO.sub(" ", t)
+    t = re.sub(r"[^a-zа-я0-9\s]", " ", t)
+    words, numbers = set(), set()
+    for w in t.split():
+        if w.isdigit():
+            numbers.add(w)
+        elif len(w) >= 3 and w not in _NOISE:
+            words.add(w)
+    return Sig(frozenset(words), frozenset(numbers), platform)
+
+
+def same_game(a: Sig, b: Sig) -> bool:
+    """Одна ли это игра.
+
+    Три условия, и каждое появилось из настоящего промаха на живой выдаче:
+      · числа не должны противоречить — «Volume 1» и «Volume 2» разные;
+      · платформа не должна противоречить — диск для Xbox не перепродать
+        владельцу PS5;
+      · меньшее название должно почти целиком входить в большее. Двух общих
+        слов мало: «Sam & Max Beyond Time and Space» и «Sam & Max Save The
+        World» — совершенно разные игры.
+    """
+    if a.numbers and b.numbers and not (a.numbers & b.numbers):
+        return False
+    if a.platform and b.platform and a.platform != b.platform:
+        return False
+    common = a.words & b.words
+    if not common:
+        return False
+    smaller = min(len(a.words), len(b.words))
+    if smaller == 1:
+        return True                     # односложные названия: Quake, Humanity
+    return len(common) >= 2 and len(common) / smaller >= 0.7
+
+
+def dupes(db: sqlite3.Connection, needle: str | None = None) -> None:
+    """Одна и та же игра у разных продавцов — и на сколько цены разошлись.
+
+    Вот здесь и живёт заработок. Сводная медиана по широкому запросу вроде
+    «Limited Run» ни о чём не говорит: под ним десятки разных игр, и разброс
+    от 777 до 40500 — это не возможность, а просто разные товары. А вот когда
+    ОДНА игра лежит у одного за 3990, а у другого за 4800 — это уже цифра,
+    с которой можно работать.
+    """
+    q = "SELECT game, title, price, location FROM listing WHERE price IS NOT NULL"
+    rows = db.execute(q).fetchall()
+    if needle:
+        want = needle.casefold()
+        rows = [r for r in rows if want in r[0].casefold()]
+    if not rows:
+        print("Нет собранных объявлений с ценой.")
+        return
+
+    groups: list[dict] = []
+    for game, title, price, location in rows:
+        sig = signature(title)
+        if not sig.words:
+            continue
+        for g in groups:
+            if same_game(sig, g["sig"]):
+                g["items"].append((price, title, location))
+                g["sig"] = g["sig"].merged(sig)
+                break
+        else:
+            groups.append({"sig": sig, "items": [(price, title, location)],
+                           "game": game})
+
+    interesting = []
+    for g in groups:
+        if len(g["items"]) < 2:
+            continue
+        prices = sorted(p for p, _, _ in g["items"])
+        lo, hi = prices[0], prices[-1]
+        if not lo:
+            continue
+        interesting.append((hi - lo, lo, hi, g))
+    interesting.sort(reverse=True)
+
+    if not interesting:
+        print("\nНи одной игры не встретилось дважды. Либо выборка мала, либо\n"
+              "у каждого продавца своя игра — тогда сравнивать не с чем, и это\n"
+              "тоже ответ: перепродавать нечего.")
+        return
+
+    print(f"\nИгры, встретившиеся больше одного раза "
+          f"({len(interesting)} из {len(groups)}):\n")
+    for gap, lo, hi, g in interesting:
+        pct = gap / hi if hi else 0
+        print(f"  разница {gap} ₽ ({pct:.0%}):")
+        for price, title, location in sorted(g["items"]):
+            where = f" — {location}" if location else ""
+            print(f"      {price:>7} ₽  {title[:64]}{where}")
+        print()
+
+    print("Разница — это ВЕРХНЯЯ граница возможного заработка, до вычета\n"
+          "доставки, времени и риска. И это цены, которые просят: то, что\n"
+          "висит дороже, может не продаваться вовсе.")
+
+
 def report(db: sqlite3.Connection) -> None:
     games = [r[0] for r in db.execute(
         "SELECT game FROM scan ORDER BY game").fetchall()]
@@ -433,6 +592,9 @@ def main(argv=None) -> int:
     parser.add_argument("--details", metavar="ЗАПРОС",
                         help="показать все объявления по одному запросу, от "
                              "дешёвых к дорогим. К Авито не ходит")
+    parser.add_argument("--dupes", nargs="?", const="", metavar="ЗАПРОС",
+                        help="найти одну и ту же игру у разных продавцов и "
+                             "показать, насколько разошлись цены. К Авито не ходит")
     parser.add_argument("--db", default=DB_PATH, help=f"файл базы (по умолчанию {DB_PATH})")
     parser.add_argument("--region", default="orel", help="регион в ссылке")
     parser.add_argument("--delay", type=int, nargs=2, metavar=("МИН", "МАКС"),
@@ -453,6 +615,9 @@ def main(argv=None) -> int:
 
     db = open_db(resolve(args.db))
     try:
+        if args.dupes is not None:
+            dupes(db, args.dupes or None)
+            return 0
         if args.details:
             details(db, args.details)
             return 0
