@@ -144,6 +144,7 @@ def process_search(
     notifier: TelegramNotifier,
     max_notifications: int,
     max_details: int = 3,
+    stats: Optional["_Stats"] = None,
 ) -> int:
     """Проверяет один поиск. Возвращает число отправленных уведомлений."""
     listings = scraper.fetch(search.url, search.max_age_minutes)
@@ -153,6 +154,8 @@ def process_search(
     with_photo = sum(1 for x in listings if x.image_url)
     log.info("[%s] получено объявлений: %d (с фото: %d)",
              search.label, len(listings), with_photo)
+    if stats is not None:
+        stats.looked += len(listings)
     if listings and not with_photo:
         log.warning("[%s] ни у одной карточки нет ссылки на фото — уведомления "
                     "уйдут текстом. Смотреть надо разбор выдачи, а не Telegram.",
@@ -517,6 +520,12 @@ class _Stats:
         self.cycles = 0
         self.blocked = 0
         self.notified = 0
+        # Сколько карточек бот вообще разобрал и по каким поискам. Без этого
+        # «новых подходящих: 0» читается двусмысленно: то ли выдача пустая, то
+        # ли она полна, но всё уже виденное или дороже потолка. Снаружи это
+        # ровно то, что человек и хочет знать, глядя на ноль.
+        self.looked = 0
+        self.labels: set[str] = set()
 
 
 def _heartbeat_text(stats: "_Stats", store: SeenStore, minutes: int) -> str:
@@ -528,7 +537,10 @@ def _heartbeat_text(stats: "_Stats", store: SeenStore, minutes: int) -> str:
     """
     lines = [f"🤖 Бот жив. За последние {format_age(minutes)}:",
              f"· проверок: {stats.cycles}, из них заблокировано: {stats.blocked}",
+             f"· просмотрено карточек: {stats.looked}",
              f"· новых подходящих: {stats.notified}"]
+    if stats.labels:
+        lines.append(f"· поиски: {', '.join(sorted(stats.labels))}")
 
     last = store.get_float(LAST_CYCLE_KEY)
     if last:
@@ -540,8 +552,13 @@ def _heartbeat_text(stats: "_Stats", store: SeenStore, minutes: int) -> str:
                      "а не потому, что их нет.")
     elif not stats.notified:
         lines.append("")
-        lines.append("Тишина здесь означает «новых объявлений не было». "
-                     "Проверки идут, бот работает.")
+        if stats.looked:
+            lines.append(f"Выдачу бот видит — разобрал {stats.looked} карточек. "
+                         "Просто среди них нет новых, которые прошли бы фильтры "
+                         "и потолок цены.")
+        else:
+            lines.append("Тишина здесь означает «новых объявлений не было». "
+                         "Проверки идут, бот работает.")
     return "\n".join(lines)
 
 
@@ -627,7 +644,9 @@ def _loop(scraper, settings: Settings, store: SeenStore,
                     search, scraper, store, notifier,
                     settings.max_notifications_per_cycle,
                     settings.max_detail_fetches_per_cycle,
+                    stats=stats,
                 )
+                stats.labels.add(search.label)
                 ok_count += 1
             except AntibotError as e:
                 blocked_count += 1
