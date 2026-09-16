@@ -519,7 +519,10 @@ def dupes(db: sqlite3.Connection, needle: str | None = None) -> None:
         if not lo:
             continue
         interesting.append((hi - lo, lo, hi, g))
-    interesting.sort(reverse=True)
+    # Ключ только по числам. Без него при одинаковых (разница, мин, макс)
+    # питон доходил до сравнения словарей и падал с TypeError — на живых
+    # данных такие совпадения встречаются сразу же.
+    interesting.sort(key=lambda x: x[:3], reverse=True)
 
     if not interesting:
         print("\nНи одной игры не встретилось дважды. Либо выборка мала, либо\n"
