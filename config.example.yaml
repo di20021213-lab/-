@@ -1,0 +1,75 @@
+# ---------------------------------------------------------------------------
+# Скопируйте в config.yaml и заполните. config.yaml в .gitignore — не коммитьте.
+# ---------------------------------------------------------------------------
+
+telegram:
+  # https://my.telegram.org -> API development tools
+  api_id: 1234567
+  api_hash: "ваш_api_hash"
+  session: "data/tg.session"
+
+  # Откуда ловим объявления. @username канала, ссылка t.me/..., либо числовой id.
+  # Пустой список = слушать всё, куда приходят сообщения (не рекомендуется).
+  sources:
+    - "@some_avito_channel"
+    - -1001234567890
+
+  # Куда бот шлёт свои отчёты и запросы на ручное вмешательство.
+  # "me" = ваши «Избранное».
+  report_to: "me"
+
+avito:
+  # Каталог с профилем браузера. Логинитесь один раз через `python login.py`,
+  # дальше сессия живёт здесь.
+  profile_dir: "data/chrome-profile"
+  headless: false          # первое время держите false и смотрите глазами
+  slow_mo_ms: 120
+  nav_timeout_ms: 45000
+
+sending:
+  dry_run: true            # ВАЖНО: true = ничего не отправляет, только логирует
+  max_per_hour: 8
+  max_per_day: 40
+  # Случайная пауза между откликами, секунды
+  delay_min_s: 45
+  delay_max_s: 240
+  # Не писать по объявлению, если уже писали (по id объявления)
+  skip_duplicates: true
+  # Тихие часы (по локальному времени машины), не отправлять в этот интервал
+  quiet_hours: [23, 8]
+
+# Шаблоны. Выбирается случайный, плейсхолдеры подставляются из карточки.
+# Доступно: {title} {price} {seller} {url}
+templates:
+  - "Здравствуйте! Актуально ещё? Готов забрать сегодня."
+  - "Добрый день! Интересует «{title}». Актуально? Когда можно посмотреть?"
+  - "Здравствуйте, по объявлению «{title}» — ещё продаёте? Могу подъехать в удобное время."
+
+storage:
+  db: "data/state.sqlite3"
+
+# Селекторы Авито меняются — держим их в конфиге, чтобы чинить без правки кода.
+selectors:
+  message_button:
+    - "[data-marker='item-contact-bar/link']"
+    - "button:has-text('Написать сообщение')"
+    - "button:has-text('Написать продавцу')"
+    - "a:has-text('Написать')"
+  chat_input:
+    - "[data-marker='messenger/input'] textarea"
+    - "textarea[data-marker='input']"
+    - "div[contenteditable='true']"
+  send_button:
+    - "[data-marker='messenger/send']"
+    - "button[type='submit']:has-text('Отправить')"
+  title:
+    - "[data-marker='item-view/title-info']"
+    - "h1"
+  price:
+    - "[data-marker='item-view/item-price']"
+    - "[itemprop='price']"
+  seller:
+    - "[data-marker='seller-info/name']"
+  login_marker:
+    - "[data-marker='header/login-button']"
+    - "a[href*='/profile/login']"
