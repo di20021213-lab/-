@@ -16,6 +16,16 @@ notified=1, и оно остаётся в базе нетронутым. Не п
   .venv/bin/python forget_unnotified.py                 — показать, что будет удалено
   .venv/bin/python forget_unnotified.py --yes           — удалить
   .venv/bin/python forget_unnotified.py --label "Имя"   — только по одному поиску
+
+  .venv/bin/python forget_unnotified.py --all --label "Имя"
+      Стереть по поиску ВСЁ, включая помеченное как присланное. Нужно после
+      первичного посева: при первом запуске бот молча запоминает всю текущую
+      выдачу с отметкой «прислано», хотя ничего не слал. Обычный режим такие
+      записи не трогает — у них notified=1, — и объявления, которые уже лежали
+      на Авито, не придут никогда. Этот флаг возвращает их в игру.
+
+      Осторожно: по поиску, который давно работает, это пришлёт заново всё
+      подходящее. Для свежего поиска после посева — ровно то, что нужно.
 """
 
 from __future__ import annotations
@@ -77,6 +87,9 @@ def main() -> int:
                     help="откуда узнать настройки поисков (для точных предупреждений)")
     ap.add_argument("--label", help="только этот поиск (по умолчанию — все)")
     ap.add_argument("--yes", action="store_true", help="выполнить, а не показать")
+    ap.add_argument("--all", action="store_true", dest="all_rows",
+                    help="стереть и помеченное присланным — нужно, чтобы отменить "
+                         "первичный посев нового поиска")
     args = ap.parse_args()
 
     db = Path(args.db)
@@ -89,7 +102,7 @@ def main() -> int:
     searches = _load_searches(args.config)
 
     conn = sqlite3.connect(db)
-    where = "notified = 0"
+    where = "1 = 1" if args.all_rows else "notified = 0"
     params: list[str] = []
     if args.label:
         where += " AND search_label = ?"
@@ -99,18 +112,26 @@ def main() -> int:
         f"SELECT search_label, item_id, title, price FROM seen WHERE {where}", params
     ).fetchall()
     if not rows:
-        print("Нечего забывать: записей без отправки нет.")
+        print("Нечего забывать: подходящих записей нет.")
         return 0
+
+    if args.all_rows and not args.label:
+        print("С --all нужен и --label: стирать разом всю базу по всем поискам —\n"
+              "почти наверняка не то, что ты хотел.")
+        return 1
 
     by_label: dict[str, list] = {}
     for label, item_id, title, price in rows:
         by_label.setdefault(label, []).append((title, price))
 
     for label, items in by_label.items():
-        left = conn.execute(
+        left = 0 if args.all_rows else conn.execute(
             "SELECT COUNT(*) FROM seen WHERE search_label = ? AND notified = 1", (label,)
         ).fetchone()[0]
         print(f"\n[{label}] к удалению: {len(items)}; останется присланных: {left}")
+        if args.all_rows:
+            print("    ВНИМАНИЕ: стирается вся память по этому поиску. Всё, что\n"
+                  "    подходит под фильтры и лежит на Авито сейчас, придёт заново.")
         for title, price in items[:10]:
             print(f"    {(price or '—'):>10}  {(title or '')[:60]}")
         if len(items) > 10:

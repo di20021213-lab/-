@@ -54,6 +54,14 @@ class SearchConfig:
     url: str
     max_price: Optional[int] = None
     min_price: Optional[int] = None
+    # Что делать на ПЕРВОМ запуске нового поиска:
+    #   seed — молча запомнить всё, что сейчас в выдаче, и слать только то,
+    #          что появится после. Годится для широкой категории, где иначе
+    #          прилетит сотня старых объявлений разом.
+    #   send — прислать всё подходящее, что уже лежит. Именно это нужно на
+    #          охоте: фильтры узкие, подходящих единицы, и это как раз те
+    #          объявления, ради которых поиск и заводили.
+    first_run: str = "seed"
     keywords: list[str] = field(default_factory=list)
     exclude_keywords: list[str] = field(default_factory=list)
     # Максимальный возраст объявления в минутах (None — не фильтровать по свежести).
@@ -279,6 +287,8 @@ def load_settings(config_path: str = "config.yaml") -> Settings:
                 on_broken=_as_choice(item.get("on_broken"), "skip", ("skip", "flag", "ignore"),
                                      f"{label}.on_broken"),
                 check_description=_as_bool(item.get("check_description"), True),
+                first_run=_as_choice(item.get("first_run"), "seed", ("seed", "send"),
+                                     f"{label}.first_run"),
                 extra_broken_markers=[str(k) for k in (item.get("extra_broken_markers") or [])],
                 message_template=(DEFAULT_MESSAGE_TEMPLATE
                                   if item.get("message_template") is None

@@ -157,12 +157,15 @@ def process_search(
     # Первичный посев БЕЗ фильтра свежести: молча запоминаем всё, чтобы не завалить
     # пользователя старьём на старте. Если задан max_age — наоборот, сразу шлём то,
     # что подходит по свежести (ради этого его и ставят), остальное просто запоминаем.
-    if first_run and search.max_age_minutes is None:
+    if first_run and search.max_age_minutes is None and search.first_run == "seed":
         for lst in listings:
             store.mark_seen(search.label, lst.id, notified=True, title=lst.title, price=lst.price)
         log.info("[%s] первичный посев: запомнил %d объявлений (без уведомлений)",
                  search.label, len(listings))
         return 0
+    if first_run and search.first_run == "send":
+        log.info("[%s] первый запуск, first_run: send — пришлю всё подходящее, "
+                 "что уже лежит", search.label)
     if first_run:
         log.info("[%s] первый запуск с max_age: пришлю то, что не старше %d мин",
                  search.label, search.max_age_minutes)
