@@ -6,6 +6,7 @@ import argparse
 import logging
 import random
 import signal
+import socket
 import sqlite3
 import sys
 import time
@@ -535,7 +536,7 @@ def _heartbeat_text(stats: "_Stats", store: SeenStore, minutes: int) -> str:
     Без такой сводки единственный способ это выяснить — лезть в журнал по SSH,
     а под рукой не всегда даже компьютер.
     """
-    lines = [f"🤖 Бот жив. За последние {format_age(minutes)}:",
+    lines = [f"🤖 Бот жив на {_machine_id()}. За последние {format_age(minutes)}:",
              f"· проверок: {stats.cycles}, из них заблокировано: {stats.blocked}",
              f"· просмотрено карточек: {stats.looked}",
              f"· новых подходящих: {stats.notified}"]
@@ -560,6 +561,22 @@ def _heartbeat_text(stats: "_Stats", store: SeenStore, minutes: int) -> str:
             lines.append("Тишина здесь означает «новых объявлений не было». "
                          "Проверки идут, бот работает.")
     return "\n".join(lines)
+
+
+def _machine_id() -> str:
+    """Кто именно прислал это сообщение: имя машины и папка бота.
+
+    Без этого «бот запущен» приходит от анонима. Выяснилось это дорого: пришло
+    сообщение о запуске с конфигом, которого на рабочей машине быть не могло, —
+    а сама машина в тот момент лежала разобранной. Понять, откуда сообщение,
+    было нельзя вообще никак: токен один, а кто им пользуется, Telegram не
+    показывает. Одна строка в сообщении отвечает на этот вопрос сразу.
+    """
+    try:
+        host = socket.gethostname()
+    except OSError:
+        host = "?"
+    return f"{host}:{Path.cwd()}"
 
 
 def _config_mismatch(settings: Settings, store: SeenStore) -> Optional[str]:
@@ -797,7 +814,8 @@ def run(argv: Optional[list[str]] = None) -> int:
                  len(settings.searches), labels,
                  settings.poll_interval_min, settings.poll_interval_max)
         notifier.send_message(
-            f"✅ Бот запущен. Слежу за {len(settings.searches)} поиском(ами): {labels}"
+            f"✅ Бот запущен на {_machine_id()}.\n"
+            f"Слежу за {len(settings.searches)} поиском(ами): {labels}"
             + (f"\n\n{swapped}" if swapped else "")
         )
 
