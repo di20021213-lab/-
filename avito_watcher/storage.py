@@ -113,6 +113,16 @@ class SeenStore:
         )
         self._conn.commit()
 
+    def labels(self) -> set[str]:
+        """Поиски, по которым в базе вообще что-то есть.
+
+        Нужно, чтобы на старте сверить базу с конфигом: если совпадений нет ни
+        одного, config.yaml почти наверняка подменили. Молча это не заметить —
+        бот честно запустится и будет следить не за тем.
+        """
+        return {row[0] for row in
+                self._conn.execute("SELECT DISTINCT search_label FROM seen")}
+
     def count(self, search_label: str) -> int:
         cur = self._conn.execute(
             "SELECT COUNT(*) FROM seen WHERE search_label = ?", (search_label,)

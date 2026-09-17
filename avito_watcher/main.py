@@ -562,6 +562,31 @@ def _heartbeat_text(stats: "_Stats", store: SeenStore, minutes: int) -> str:
     return "\n".join(lines)
 
 
+def _config_mismatch(settings: Settings, store: SeenStore) -> Optional[str]:
+    """Предупреждение, если запущенный конфиг не тот, с которым жила база.
+
+    Случай из жизни: после возни с переустановкой на месте config.yaml оказался
+    старый — тот, что искал видеокарты. Бот запустился совершенно честно и всю
+    ночь следил не за тем, а охота за дисками просто не шла. Снаружи это
+    выглядит как «объявлений нет», то есть никак.
+
+    Ловим только полное расхождение: в базе есть история, и ни одного её поиска
+    в конфиге нет. Убрать один поиск из пяти — обычное дело и поводом для
+    тревоги быть не должно.
+    """
+    known = store.labels()
+    current = {s.label for s in settings.searches}
+    if not known or not current or not known.isdisjoint(current):
+        return None
+    shown = ", ".join(sorted(known)[:5])
+    if len(known) > 5:
+        shown += f" и ещё {len(known) - 5}"
+    return ("⚠️ Похоже, config.yaml не тот. В базе лежит история по другим "
+            f"поискам, и ни один из них сейчас не запущен: {shown}.\n"
+            "Если это не задумано — проверь, какой конфиг подставился: "
+            "grep 'label:' config.yaml")
+
+
 def _maybe_heartbeat(settings: Settings, store: SeenStore,
                      notifier: TelegramNotifier, stats: "_Stats") -> None:
     minutes = settings.heartbeat_minutes
@@ -762,6 +787,9 @@ def run(argv: Optional[list[str]] = None) -> int:
     )
 
     labels = ", ".join(s.label for s in settings.searches)
+    swapped = _config_mismatch(settings, store)
+    if swapped:
+        log.warning("%s", swapped.replace("\n", " "))
     if args.once:
         log.info("Разовый проход. Поисков: %d (%s).", len(settings.searches), labels)
     else:
@@ -770,6 +798,7 @@ def run(argv: Optional[list[str]] = None) -> int:
                  settings.poll_interval_min, settings.poll_interval_max)
         notifier.send_message(
             f"✅ Бот запущен. Слежу за {len(settings.searches)} поиском(ами): {labels}"
+            + (f"\n\n{swapped}" if swapped else "")
         )
 
     try:
