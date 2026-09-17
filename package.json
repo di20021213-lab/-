@@ -7,7 +7,7 @@
   "main": "server/src/index.js",
   "scripts": {
     "start": "node server/src/index.js",
-    "dev": "NODE_ENV=development node server/src/index.js",
+    "dev": "node server/src/index.js",
     "migrate": "node server/src/migrate.js",
     "smoke": "node server/test/smoke.js"
   },

@@ -762,7 +762,7 @@ function authScreen(mode, prefill){
         .catch(function(e){ say(e.message, true); });
     } else if(mode === "register"){
       api("/api/auth/register", {email:email.value, password:pass.value, nick:nick.value})
-        .then(function(r){ closeAll(); verifyScreen(email.value, r.message); })
+        .then(function(r){ closeAll(); if(r.verified) boot(); else verifyScreen(email.value, r.message); })
         .catch(function(e){ say(e.message, true); });
     } else {
       api("/api/auth/reset", {token:token, password:pass.value})

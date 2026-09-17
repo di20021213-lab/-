@@ -1,4 +1,6 @@
 "use strict";
+require("./env");
+const os = require("os");
 const path = require("path");
 const express = require("express");
 const {migrate, db, rateLimit, logEvent, now} = require("./db");
@@ -12,6 +14,10 @@ migrate();
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_URL = (process.env.PUBLIC_URL || ("http://localhost:" + PORT)).replace(/\/+$/, "");
 const SECURE = PUBLIC_URL.startsWith("https://");
+const HOST = process.env.HOST || "0.0.0.0";
+/* Подтверждение почты можно выключить — но только осознанно, для локальной игры
+   в одной сети, где почтового сервера нет и не будет. По умолчанию включено. */
+const REQUIRE_VERIFY = String(process.env.REQUIRE_EMAIL_VERIFY || "true") !== "false";
 const COOKIE = "dyshlo_sid";
 
 const app = express();
@@ -45,7 +51,7 @@ function auth(req, res, next){
   next();
 }
 function requireVerified(req, res, next){
-  if(!req.user.email_verified_at){
+  if(REQUIRE_VERIFY && !req.user.email_verified_at){
     return res.status(403).json({error:"Подтвердите почту — мы прислали ссылку.", code:"email_unverified"});
   }
   next();
@@ -78,9 +84,14 @@ app.post("/api/auth/register", async (req, res) => {
   }
   const user = A.createUser(e.email, p.pw, n.nick);
   G.createFarm(user.id, user.nick);
+  logEvent(null, "register", {user:user.id});
+  if(!REQUIRE_VERIFY){
+    A.markVerified(user.id);
+    setSession(res, A.createSession(user.id, req.headers["user-agent"], ipOf(req)), A.SESSION_TTL);
+    return res.json({ok:true, verified:true, message:"Колхоз заведён, заходите."});
+  }
   const token = A.issueEmailToken(user.id, "verify");
   await mail.sendVerify(user.email, PUBLIC_URL + "/api/auth/verify?token=" + token).catch(err => console.error(err));
-  logEvent(null, "register", {user:user.id});
   res.json({ok:true, message:"Готово. Ссылка для подтверждения ушла на " + user.email + "."});
 });
 
@@ -182,10 +193,38 @@ function gameError(res, err){
 
 app.use((req, res) => res.status(404).json({error:"Нет такой страницы."}));
 
+function lanAddresses(){
+  const out = [];
+  const ifaces = os.networkInterfaces();
+  Object.keys(ifaces).forEach(name => (ifaces[name] || []).forEach(a => {
+    if(a.family === "IPv4" && !a.internal) out.push(a.address);
+  }));
+  return out;
+}
 if(require.main === module){
-  app.listen(PORT, () => {
-    console.log("Колхоз слушает " + PUBLIC_URL);
-    if(!mail.realSmtp) console.log("Почта: SMTP не настроен, письма падают в var/mail и печатаются сюда же.");
+  app.listen(PORT, HOST, () => {
+    console.log("");
+    console.log("  Колхоз «Червонэ дышло» запущен.");
+    console.log("  На этом компьютере:  http://localhost:" + PORT);
+    const lan = lanAddresses();
+    if(HOST === "0.0.0.0" && lan.length){
+      console.log("  Игрокам в вашей сети — дайте любую из ссылок:");
+      lan.forEach(ip => console.log("      http://" + ip + ":" + PORT));
+    }
+    console.log("  Ссылки в письмах ведут на: " + PUBLIC_URL);
+    if(PUBLIC_URL.includes("localhost") && lan.length){
+      console.log("      ^ для игры по сети пропишите в .env PUBLIC_URL=http://" + lan[0] + ":" + PORT);
+    }
+    if(!mail.realSmtp) console.log("  Почта: SMTP не настроен — письма падают в var/mail и печатаются сюда.");
+    if(!REQUIRE_VERIFY) console.log("  ВНИМАНИЕ: подтверждение почты выключено (REQUIRE_EMAIL_VERIFY=false).");
+    console.log("  Остановить: Ctrl+C");
+    console.log("");
+  }).on("error", err => {
+    if(err.code === "EADDRINUSE"){
+      console.error("Порт " + PORT + " уже занят. Закройте второй сервер или пропишите в .env другой PORT.");
+      process.exit(1);
+    }
+    throw err;
   });
 }
 module.exports = app;

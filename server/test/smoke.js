@@ -40,7 +40,7 @@ const ok = (name) => console.log("  ✓ " + name);
   srv.stderr.on("data", d => process.stderr.write("[сервер] " + d));
   await new Promise((res, rej) => {
     const t = setTimeout(() => rej(new Error("сервер не поднялся")), 10000);
-    srv.stdout.on("data", d => { if(String(d).includes("слушает")){ clearTimeout(t); res(); } });
+    srv.stdout.on("data", d => { if(String(d).includes("запущен")){ clearTimeout(t); res(); } });
   });
 
   try{
