@@ -1,0 +1,19 @@
+{
+  "name": "chervone-dyshlo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Колхоз «Червонэ дышло» — игра, сервер и база",
+  "type": "commonjs",
+  "main": "server/src/index.js",
+  "scripts": {
+    "start": "node server/src/index.js",
+    "dev": "NODE_ENV=development node server/src/index.js",
+    "migrate": "node server/src/migrate.js",
+    "smoke": "node server/test/smoke.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "express": "^4.21.2",
+    "nodemailer": "^6.9.16"
+  }
+}

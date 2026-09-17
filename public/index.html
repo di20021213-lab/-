@@ -1,0 +1,305 @@
+<title>Червонэ дышло</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🐔</text></svg>">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=PT+Sans:wght@400;700&display=swap">
+<style>
+:root{
+  --sky:#a9dcf2; --sky2:#d9f0fa;
+  --grass:#6faa3c; --grass-dk:#4d8628;
+  --dirt:#cda56a; --dirt-dk:#ae8449;
+  --wood:#8b5a2b; --wood-dk:#5f3d1c; --wood-lt:#c08b4e;
+  --thatch:#e2b551; --thatch-dk:#c2952f;
+  --tile:#c0473a; --tile-dk:#96322a;
+  --tan:#d8b483; --tan-dk:#b98e5c; --tan-lt:#ecd6b0;
+  --pane:#c79a63; --pane-lt:#e3c496;
+  --ink:#3b2614; --ink-soft:#7a5a38;
+  --red:#bf3b2c; --silver:#e8e8ea; --gem:#49b6e8;
+  --ok:#4e9b35; --warn:#d98324;
+  --sh:0 3px 0 rgba(59,38,20,.35);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--grass-dk);color:var(--ink);
+  font-family:"PT Sans",system-ui,sans-serif;font-size:15px;line-height:1.4;-webkit-text-size-adjust:100%}
+#app{max-width:1040px;margin:0 auto;padding:0 16px 150px}
+h1,h2,h3{font-family:"Russo One","PT Sans",sans-serif;font-weight:400;margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+.num{font-variant-numeric:tabular-nums}
+.hide{display:none!important}
+
+/* ---------- HUD ---------- */
+.hud{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;margin:0 -16px 8px;padding:6px 16px;
+  background:linear-gradient(180deg,#e9d7ab,#d0b381);border-bottom:4px solid var(--wood-dk);
+  display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+.ava{width:38px;height:38px;border-radius:5px;border:3px solid var(--wood-dk);flex:none;
+  background:linear-gradient(160deg,#9bd0ea,#5aa7cd);display:grid;place-items:center;font-size:20px}
+.nickbox{display:flex;flex-direction:column;gap:2px;min-width:96px}
+.nickbox b{font-size:13px;line-height:1.1}
+.nickbox small{color:var(--ink-soft);font-size:11px}
+.meters{display:flex;flex-direction:column;gap:3px;flex:1 1 170px;min-width:150px}
+.mrow{display:flex;align-items:center;gap:5px}
+.mrow>i{font-style:normal;font-size:13px;width:15px;text-align:center;flex:none}
+.bar{position:relative;height:12px;flex:1;border:2px solid var(--wood-dk);border-radius:7px;background:#7a5a37;overflow:hidden}
+.bar span{position:absolute;inset:0;width:0}
+.bar em{position:absolute;inset:0;display:grid;place-items:center;font-style:normal;font-size:9px;font-weight:700;
+  color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.65)}
+.bar.xp span{background:linear-gradient(180deg,#7fd0f2,#2f8fc4)}
+.bar.dog span{background:linear-gradient(180deg,#ff8f8f,#c93a3a)}
+.bar.cat span{background:linear-gradient(180deg,#b79be0,#6b46a8)}
+.bar.en span{background:linear-gradient(180deg,#9ade6a,#4e9b35)}
+.purse{display:flex;gap:5px;flex:none}
+.pill{display:flex;align-items:center;gap:5px;padding:3px 9px;border:2px solid var(--wood-dk);border-radius:20px;
+  background:var(--tan-lt);font-weight:700;font-size:13px}
+.dot{width:14px;height:14px;flex:none;border:2px solid rgba(0,0,0,.28)}
+.dot.s{border-radius:50%;background:radial-gradient(circle at 32% 30%,#fff,#b9bcc4)}
+.dot.c{border-radius:3px;transform:rotate(45deg);background:radial-gradient(circle at 32% 30%,#c9f0ff,var(--gem))}
+.tbtn{padding:6px 11px;border:3px solid var(--wood-dk);border-radius:8px;box-shadow:0 2px 0 var(--wood-dk);
+  background:linear-gradient(180deg,#f6d98a,#e0ab3e);font-family:"Russo One",sans-serif;font-size:12px}
+.tbtn:active{transform:translateY(2px);box-shadow:none}
+.tbtn.alert{animation:nudge 1.8s ease-in-out infinite}
+@keyframes nudge{0%,88%,100%{transform:none}92%{transform:rotate(-3deg)}96%{transform:rotate(3deg)}}
+.quick{display:flex;gap:4px;flex-wrap:wrap}
+.quick button{width:32px;height:32px;border:2px solid var(--wood-dk);border-radius:6px;background:var(--tan-lt);
+  font-size:17px;line-height:1;display:grid;place-items:center;position:relative;padding:0}
+.quick button .badge{position:absolute;top:-6px;right:-6px;min-width:17px;padding:0 3px;border-radius:9px;border:2px solid #fff;
+  background:var(--ok);color:#fff;font-size:10px;font-weight:700;line-height:14px}
+
+/* ---------- арка ---------- */
+.arch{text-align:center;margin:2px 0 8px}
+.arch .board{display:inline-block;padding:5px 42px 7px;border:4px solid var(--wood-dk);border-radius:60px 60px 10px 10px;
+  background:linear-gradient(180deg,var(--wood-lt),var(--wood));box-shadow:var(--sh)}
+.arch .k{font-family:"Russo One",sans-serif;font-size:19px;color:#f6e6c0;letter-spacing:.22em;text-shadow:0 2px 0 rgba(0,0,0,.4)}
+.arch .n{font-family:"Russo One",sans-serif;font-size:15px;color:#f2c14e;text-shadow:0 2px 0 rgba(0,0,0,.45)}
+.arch .n button{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline dotted}
+
+/* ---------- двор ---------- */
+.yard{position:relative;padding:12px;border:5px solid var(--wood-dk);border-radius:12px;overflow:hidden;
+  background:radial-gradient(125% 72% at 50% 80%,var(--dirt) 0 46%,var(--dirt-dk) 47%,transparent 48%),
+             linear-gradient(180deg,var(--sky2) 0 13%,var(--sky) 13% 21%,var(--grass) 21% 100%)}
+.cloud{position:absolute;top:6px;left:-70px;font-size:22px;animation:drift 46s linear infinite}
+.cloud.b{top:24px;animation-duration:70s;animation-delay:-20s}
+@keyframes drift{from{transform:translateX(0)}to{transform:translateX(110vw)}}
+.barns{position:relative;z-index:2;display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px}
+.barn{border:0;background:none;padding:0;position:relative;text-align:center;
+  filter:drop-shadow(0 3px 2px rgba(0,0,0,.28))}
+.barn .roof{width:100%;height:28px;margin-bottom:-1px;clip-path:polygon(50% 0,100% 100%,0 100%);
+  background:linear-gradient(180deg,var(--tile),var(--tile-dk))}
+.barn.thatch .roof{background:linear-gradient(180deg,var(--thatch),var(--thatch-dk))}
+.barn .wall{padding:5px 7px 7px;border:3px solid var(--wood-dk);border-top:0;border-radius:0 0 8px 8px;
+  background:linear-gradient(180deg,#e7cfa4,#cdac74)}
+.barn .nm{display:block;font-family:"Russo One",sans-serif;font-size:12px;margin-bottom:2px}
+.barn .pen{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:2px;min-height:26px;font-size:19px}
+.barn .pen i{font-style:normal;line-height:1}
+.barn .pen i.hungry{filter:grayscale(.7);opacity:.7}
+.barn .cap{font-size:11px;font-weight:700;color:var(--ink-soft)}
+.barn:active{transform:translateY(2px)}
+.tag{position:absolute;top:14px;right:-4px;z-index:3;min-width:21px;padding:1px 5px;border-radius:11px;border:2px solid #fff;
+  font-size:11px;font-weight:700;color:#fff}
+.tag.ready{background:var(--ok);animation:pop 1.3s ease-in-out infinite}
+.tag.need{background:var(--warn)}
+@keyframes pop{50%{transform:scale(1.15)}}
+.yard-foot{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:9px}
+.decor-row{display:flex;flex-wrap:wrap;gap:4px;font-size:23px;line-height:1}
+.chair{position:relative;z-index:2;display:flex;align-items:flex-end;gap:6px;margin-top:8px}
+.chair .face{font-size:32px;line-height:1}
+.bubble{flex:1;padding:6px 11px;background:#fff;border:3px solid var(--wood-dk);border-radius:12px;font-size:13px;position:relative}
+.bubble:before{content:"";position:absolute;left:-11px;bottom:8px;border:7px solid transparent;border-right-color:var(--wood-dk)}
+
+/* ---------- нижняя полоса заданий + вкладки ---------- */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:40;background:linear-gradient(180deg,#d5bb87,#bb9c66);
+  border-top:4px solid var(--wood-dk);padding:5px 8px calc(5px + env(safe-area-inset-bottom,0px))}
+.dock-in{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:5px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tabs button{flex:1 1 auto;padding:5px 8px;border:2px solid var(--wood-dk);border-radius:7px 7px 0 0;background:var(--tan);
+  font-size:12px;font-weight:700}
+.tabs button[aria-pressed="true"]{background:linear-gradient(180deg,#f6d98a,#e0ab3e)}
+.qstrip{display:flex;align-items:center;gap:9px;padding:6px 9px;border:2px solid var(--wood-dk);border-radius:8px;
+  background:var(--tan-lt)}
+.qstrip .ic{width:34px;height:34px;flex:none;border:2px solid var(--wood-dk);border-radius:6px;background:#fff8e6;
+  display:grid;place-items:center;font-size:19px}
+.qstrip .body{flex:1;min-width:0}
+.qstrip b{display:block;font-size:13px;color:#2f6db5;text-decoration:underline}
+.qstrip small{display:block;font-size:11.5px;line-height:1.25}
+.qstrip .rw{font-size:11.5px;font-weight:700}
+.qstrip .pg{display:flex;flex-direction:column;gap:2px}
+.qstrip .pg button{width:22px;height:15px;border:2px solid var(--wood-dk);border-radius:4px;background:var(--tan);
+  font-size:9px;line-height:1;padding:0}
+
+/* ---------- модалки ---------- */
+.scrim{position:fixed;inset:0;z-index:50;background:rgba(30,18,8,.6);display:grid;place-items:center;padding:14px}
+.win{width:min(680px,100%);max-height:86vh;display:flex;flex-direction:column;
+  border:4px solid var(--wood-dk);border-radius:12px;background:var(--pane);box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.win.sm{width:min(430px,100%)}
+.win-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;
+  border-bottom:3px solid var(--wood-dk);border-radius:8px 8px 0 0;background:linear-gradient(180deg,var(--tan-lt),var(--tan))}
+.win-hd h2{font-size:17px}
+.x{padding:3px 10px;border:2px solid var(--wood-dk);border-radius:7px;background:#e0685a;color:#fff;font-weight:700}
+.win-bd{padding:10px;overflow:auto}
+.win-ft{display:flex;justify-content:flex-end;gap:7px;padding:8px 10px;border-top:3px solid var(--wood-dk)}
+.btn{padding:6px 14px;border:2px solid var(--wood-dk);border-radius:7px;background:linear-gradient(180deg,#f6d98a,#e0ab3e);
+  font-weight:700;font-size:13px;box-shadow:0 2px 0 var(--wood-dk)}
+.btn:active{transform:translateY(2px);box-shadow:none}
+.btn.go{background:linear-gradient(180deg,#a6e07a,#5ba233)}
+.btn.flat{background:var(--tan-lt);box-shadow:none}
+.btn[disabled]{background:#c3b193;color:#8a7a60;cursor:not-allowed;box-shadow:none}
+
+/* магазин */
+.shop{display:grid;grid-template-columns:186px 1fr;gap:9px}
+.shop-nav{display:flex;flex-direction:column;gap:3px;max-height:56vh;overflow:auto;padding-right:3px}
+.shop-nav button{text-align:left;padding:5px 9px;border:2px solid var(--wood-dk);border-radius:14px;background:var(--tan-lt);
+  font-size:13px;font-weight:700}
+.shop-nav button.sub{margin-left:14px;border-radius:7px;font-weight:400;font-size:12.5px;background:#f0ddba}
+.shop-nav button[aria-pressed="true"]{background:linear-gradient(180deg,#f6d98a,#e0ab3e)}
+.shop-main{display:flex;flex-direction:column;gap:8px;min-width:0}
+.filters{display:flex;flex-wrap:wrap;gap:12px;padding:5px 9px;border:2px solid var(--wood-dk);border-radius:8px;
+  background:var(--tan-lt);font-size:12.5px}
+.filters label{display:flex;align-items:center;gap:5px}
+.pager{display:flex;align-items:center;justify-content:center;gap:9px;font-size:12.5px;font-weight:700}
+.pager button{padding:1px 9px;border:2px solid var(--wood-dk);border-radius:6px;background:var(--tan-lt)}
+.goods{display:grid;grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:8px}
+.good{padding:7px;border:2px solid var(--wood-dk);border-radius:8px;background:var(--pane-lt);
+  display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
+.good .nm{font-size:12.5px;font-weight:700;min-height:2.4em;display:flex;align-items:center}
+.good .im{width:52px;height:52px;border:2px solid var(--wood-dk);border-radius:7px;background:#fff8e6;
+  display:grid;place-items:center;font-size:27px}
+.good .prices{display:flex;flex-direction:column;gap:2px;width:100%;font-size:12.5px;font-weight:700}
+.pr{display:flex;align-items:center;justify-content:center;gap:5px;padding:1px 6px;border:2px solid var(--wood-dk);
+  border-radius:6px;background:#efdcb8}
+.pr.zero{opacity:.45}
+.good .lvl{font-size:11.5px;font-weight:700;color:var(--red)}
+.good button.pick{width:100%;padding:4px;border:2px solid var(--wood-dk);border-radius:6px;
+  background:linear-gradient(180deg,#a6e07a,#5ba233);font-weight:700;font-size:12.5px}
+.good button.pick[disabled]{background:#c3b193;color:#8a7a60}
+/* карточка товара */
+.detail{display:flex;gap:12px;flex-wrap:wrap}
+.detail .left{display:flex;flex-direction:column;align-items:center;gap:7px}
+.detail .im{width:96px;height:96px;border:3px solid var(--wood-dk);border-radius:8px;background:#fff8e6;
+  display:grid;place-items:center;font-size:52px}
+.spin{display:flex;align-items:center;gap:3px}
+.spin input{width:54px;padding:3px 5px;border:2px solid var(--wood-dk);border-radius:5px;background:#fff8e6;
+  font:inherit;text-align:center}
+.spin button{width:22px;height:22px;border:2px solid var(--wood-dk);border-radius:4px;background:var(--tan-lt);
+  font-size:11px;line-height:1;padding:0}
+.specs{flex:1;min-width:210px;display:grid;grid-template-columns:auto 1fr;gap:3px 10px;align-content:start;font-size:13.5px}
+.specs dt{color:var(--ink-soft);text-align:right}
+.specs dd{margin:0;font-weight:700}
+.specs dd.desc{font-weight:400}
+.specs dd .dot,.pr .dot{display:inline-block;vertical-align:-2px}
+
+/* интерьер постройки */
+.inside{background:repeating-linear-gradient(180deg,#c89357 0 26px,#b8834a 26px 28px);
+  border:3px solid var(--wood-dk);border-radius:8px;padding:8px}
+.slot{display:flex;align-items:center;gap:9px;padding:6px 7px;margin-bottom:6px;border:2px solid var(--wood-dk);
+  border-radius:8px;background:linear-gradient(180deg,#f6e7c2,#e8d2a2)}
+.slot:last-child{margin-bottom:0}
+.slot .big{font-size:30px;line-height:1;flex:none}
+.slot .who{flex:1;min-width:0}
+.slot .who b{display:block;font-size:13.5px}
+.slot .st{font-size:12px;color:var(--ink-soft)}
+.slot .acts{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.slot.free{justify-content:center;font-style:italic;color:#6d5636;background:#e4cfa6}
+.seasons{display:inline-flex;align-items:center;gap:3px;padding:0 5px;border:2px solid var(--wood-dk);border-radius:10px;
+  background:#fff8e6;font-size:11px;font-weight:700}
+.mini{padding:4px 9px;border:2px solid var(--wood-dk);border-radius:6px;background:linear-gradient(180deg,#f6d98a,#e0ab3e);
+  font-weight:700;font-size:12px;white-space:nowrap}
+.mini.go{background:linear-gradient(180deg,#a6e07a,#5ba233)}
+.mini[disabled]{background:#c3b193;color:#8a7a60;cursor:not-allowed}
+.house-hd{display:flex;flex-wrap:wrap;gap:7px;align-items:center;justify-content:space-between;margin-bottom:8px}
+
+/* списки */
+.rows{display:flex;flex-direction:column;gap:6px}
+.row{display:flex;align-items:center;gap:9px;padding:6px 9px;border:2px solid var(--wood-dk);border-radius:8px;
+  background:var(--pane-lt)}
+.row .ic{font-size:21px;flex:none}
+.row .grow{flex:1;min-width:0}
+.row b{display:block;font-size:13.5px}
+.row small{color:var(--ink-soft);font-size:12px}
+.row.me{outline:3px solid var(--red);outline-offset:-3px}
+.done{color:#25611a;font-weight:700}
+.rank{width:26px;text-align:right;font-weight:700;color:var(--ink-soft)}
+
+/* подарок дня */
+.baskets{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:9px}
+.bsk{aspect-ratio:1;border:2px solid var(--wood-dk);border-radius:8px;font-size:25px;display:grid;place-items:center;
+  background:linear-gradient(180deg,#f2dcae,#dcbe85)}
+.bsk[disabled]{cursor:default}
+.bsk.open{background:#cbe6b6}
+.days{display:flex;gap:6px;justify-content:center;margin-top:8px}
+.day{width:33px;height:39px;border:2px solid var(--wood-dk);border-radius:5px;background:#f6e7c2;
+  display:grid;place-items:center;font-weight:700;font-size:12px}
+.day.on{background:var(--red);color:#fff}
+.reward-box{display:flex;flex-direction:column;align-items:center;gap:7px;padding:12px}
+.reward-box .im{width:70px;height:70px;border:3px solid var(--wood-dk);border-radius:8px;background:#5b8fc9;
+  display:grid;place-items:center;font-size:36px}
+
+#toasts{position:fixed;left:50%;bottom:132px;transform:translateX(-50%);z-index:60;width:min(420px,92vw);
+  display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
+.toast{padding:6px 13px;border:3px solid var(--wood-dk);border-radius:9px;background:var(--tan-lt);
+  font-size:13px;font-weight:700;box-shadow:var(--sh);animation:up .25s ease-out;text-align:center}
+.toast.bad{background:#f2c3bb}
+@keyframes up{from{opacity:0;transform:translateY(10px)}}
+@media (max-width:620px){
+  .shop{grid-template-columns:1fr}
+  .shop-nav{flex-direction:row;flex-wrap:wrap;max-height:none}
+  .shop-nav button.sub{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+:focus-visible{outline:3px solid #1f6fb0;outline-offset:2px}
+/* пока не вошли — двор не показываем, чтобы не мигали чужие цифры */
+body.booting #app, body.booting .dock{visibility:hidden}
+</style>
+
+<div id="app">
+  <div class="hud">
+    <div class="ava">🧑‍🌾</div>
+    <div class="nickbox"><b id="nick">test123 12345</b><small>ур. <span class="num" id="lvl">1</span></small></div>
+    <div class="meters">
+      <div class="mrow"><i>⭐</i><div class="bar xp"><span id="xpbar"></span><em id="xptxt"></em></div></div>
+      <div class="mrow"><i>🐕</i><div class="bar dog"><span id="dogbar"></span><em id="dogtxt"></em></div></div>
+      <div class="mrow"><i>🐈</i><div class="bar cat"><span id="catbar"></span><em id="cattxt"></em></div></div>
+      <div class="mrow"><i>⚡</i><div class="bar en"><span id="enbar"></span><em id="entxt"></em></div></div>
+    </div>
+    <div class="purse">
+      <span class="pill"><i class="dot s"></i><b class="num" id="silver">500</b></span>
+      <span class="pill"><i class="dot c"></i><b class="num" id="gems">0.00</b></span>
+    </div>
+    <div class="quick" id="quick"></div>
+    <button class="tbtn" id="shopBtn">🛒 Магазин</button>
+    <button class="tbtn alert" id="questBtn">Задание на сегодня</button>
+    <button class="tbtn" id="logoutBtn" title="Выйти из аккаунта">🚪</button>
+  </div>
+
+  <div class="arch">
+    <div class="board">
+      <div class="k">К О Л Х О З</div>
+      <div class="n">«<button id="renameBtn" title="Переименовать колхоз">Червонэ дышло</button>»</div>
+    </div>
+  </div>
+
+  <div class="yard">
+    <div class="cloud">☁️</div><div class="cloud b">☁️</div>
+    <div class="barns" id="barns"></div>
+    <div class="yard-foot">
+      <div class="decor-row" id="decorRow"></div>
+      <div class="decor-row">🐕 🐈 🐓</div>
+    </div>
+    <div class="chair">
+      <div class="face">👨‍🌾</div>
+      <div class="bubble" id="hint">Обрати внимание на ЗАДАНИЯ!</div>
+    </div>
+  </div>
+</div>
+
+<div class="dock">
+  <div class="dock-in">
+    <div class="tabs" id="tabs"></div>
+    <div class="qstrip" id="qstrip"></div>
+  </div>
+</div>
+
+<div id="modals"></div>
+<div id="toasts"></div>
+
+<script src="content.js"></script>
+<script src="game.js"></script>

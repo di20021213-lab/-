@@ -1,0 +1,848 @@
+"use strict";
+/* ===================== связь с сервером =====================
+   Состояние приходит с сервера и только с сервера: цены, сроки и урожай считает он.
+   Клиент рисует и отправляет намерения. */
+var S = null;              // состояние хозяйства (снимок с сервера)
+var ME = null;             // текущий пользователь
+var SKEW = 0;              // поправка на расхождение часов клиента и сервера
+var live = [];             // окна, которые перерисовываются каждую секунду (таймеры)
+var panels = [];           // окна, которые перерисовываются после действия
+
+function nowMs(){ return Date.now() + SKEW; }
+
+async function api(url, body, method){
+  var res = await fetch(url, {
+    method: method || (body ? "POST" : "GET"),
+    headers: body ? {"Content-Type":"application/json"} : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    credentials: "same-origin"
+  });
+  var data = null;
+  try{ data = await res.json(); }catch(e){ data = {}; }
+  if(!res.ok){
+    var err = new Error(data.error || ("Ошибка " + res.status));
+    err.code = data.code;
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+function applyResult(r){
+  S = r.state;
+  SKEW = (r.state.serverTime || Date.now()) - Date.now();
+  if(r.msg) toast(r.msg);
+  (r.quests || []).forEach(function(q){ showQuestDone(q); });
+  after();
+}
+/** Единственный путь что-то изменить: сервер проверяет и возвращает новое состояние. */
+function act(name, params){
+  return api("/api/game/" + name, params || {})
+    .then(applyResult)
+    .catch(function(e){
+      if(e.code === "no_session" || e.code === "email_unverified"){ boot(); return; }
+      toast(e.message, true);
+    });
+}
+function sync(){
+  return api("/api/game").then(applyResult).catch(function(e){
+    if(e.code === "no_session" || e.code === "email_unverified") boot();
+  });
+}
+
+/* ===================== утилиты ===================== */
+function $(id){ return document.getElementById(id); }
+function el(tag, cls, html){
+  var e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(html != null) e.innerHTML = html;
+  return e;
+}
+function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+function fmt(n){ return Math.floor(n).toLocaleString("ru-RU"); }
+function fmtC(n){ return (Math.round(n * 100) / 100).toFixed(2); }
+function priceC(n){ return (Math.round(n * 10) / 10).toFixed(1); }
+function breed(id){ for(var i = 0; i < BREEDS.length; i++) if(BREEDS[i].id === id) return BREEDS[i]; return null; }
+function feedById(id){ for(var i = 0; i < FEEDS.length; i++) if(FEEDS[i].id === id) return FEEDS[i]; return null; }
+function maxXp(l){ return 100 + (l - 1) * 140; }
+function maxEn(){ return 100; }
+function gtime(min){
+  min = Math.max(0, Math.round(min));
+  if(min >= 1440){ var d = Math.floor(min / 1440), h = Math.round((min - d * 1440) / 60); return d + " д. " + h + " ч."; }
+  if(min >= 60){ var hh = Math.floor(min / 60), mm = min - hh * 60; return hh + " ч. " + (mm < 10 ? "0" + mm : mm) + " мин."; }
+  return min + " мин.";
+}
+function msLeft(a){ return Math.max(0, a.ready - nowMs()); }
+function gminLeft(a){ return msLeft(a) / 1000 * GM_PER_SEC; }
+function toast(msg, bad){
+  var t = el("div", "toast" + (bad ? " bad" : ""), esc(msg));
+  $("toasts").appendChild(t);
+  setTimeout(function(){ t.remove(); }, 2600);
+}
+function yieldPct(){ return S && S.yieldPct != null ? S.yieldPct : 100; }
+function cap(k){ return CAP[S.houses[k].lvl - 1]; }
+function free(k){ return cap(k) - S.houses[k].slots.length; }
+function stateOf(a){ return !a.fed ? "hungry" : (nowMs() >= a.ready ? "ready" : "growing"); }
+function counts(k){
+  var r = 0, h = 0;
+  S.houses[k].slots.forEach(function(a){ var st = stateOf(a); if(st === "ready") r++; if(st === "hungry") h++; });
+  return {ready:r, hungry:h};
+}
+function qprog(q){ return q.k === "lvl" ? S.lvl : (S.c[q.k] || 0); }
+function todayKey(){ var d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
+var qview = 0;
+
+/* ===================== окна ===================== */
+var live = [];
+function makeWin(title, cls){
+  var scrim = el("div", "scrim");
+  var win = el("div", "win" + (cls ? " " + cls : ""));
+  var hd = el("div", "win-hd");
+  hd.appendChild(el("h2", null, esc(title)));
+  var x = el("button", "x", "Закрыть");
+  hd.appendChild(x);
+  var bd = el("div", "win-bd");
+  win.appendChild(hd); win.appendChild(bd); scrim.appendChild(win);
+  x.onclick = function(){ closeWin(scrim); };
+  scrim.addEventListener("click", function(e){ if(e.target === scrim) closeWin(scrim); });
+  $("modals").appendChild(scrim);
+  return {scrim:scrim, win:win, body:bd};
+}
+function closeWin(scrim){
+  scrim.remove();
+  live = live.filter(function(l){ return document.body.contains(l.scrim); });
+  panels = panels.filter(function(l){ return document.body.contains(l.scrim); });
+}
+function closeAll(){ $("modals").innerHTML = ""; live = []; panels = []; }
+function footer(win, buttons){
+  var ft = el("div", "win-ft");
+  buttons.forEach(function(b){
+    var btn = el("button", "btn" + (b.cls ? " " + b.cls : ""), esc(b.label));
+    btn.onclick = b.on;
+    if(b.dis) btn.disabled = true;
+    ft.appendChild(btn);
+  });
+  win.win.appendChild(ft);
+  return ft;
+}
+
+/* ---------- модалка «Задание выполнено» ---------- */
+function showQuestDone(q){
+  var w = makeWin("Задания", "sm");
+  var box = el("div", "reward-box");
+  box.appendChild(el("div", null, "Задание «" + esc(q.t) + "» выполнено. Ваша награда"));
+  box.appendChild(el("div", "im", q.rw.em));
+  box.appendChild(el("b", null, esc(q.rw.nm) + (q.rw.n ? " — " + q.rw.n : "")));
+  w.body.appendChild(box);
+  footer(w, [{label:"Закрыть", on:function(){ closeWin(w.scrim); }}]);
+}
+
+/* ---------- интерьер постройки ---------- */
+function openHouse(k){
+  var H = HOUSES[k];
+  var w = makeWin(H.n + " — " + HOUSE_TITLES[S.houses[k].lvl - 1]);
+  var body = w.body;
+  function draw(){
+    body.innerHTML = "";
+    var h = S.houses[k], c = counts(k);
+    var hd = el("div", "house-hd");
+    hd.appendChild(el("div", null,
+      "<b>Мест:</b> <span class='num'>" + h.slots.length + " / " + cap(k) + "</span> &nbsp; " +
+      "<b>На складе:</b> <span class='num'>" + fmt(S.prods[k].n) + "</span> " + H.prod.em +
+      " (" + fmt(S.prods[k].val) + " 🪙)"));
+    var acts = el("div", "slot-acts");
+    acts.style.display = "flex"; acts.style.gap = "5px"; acts.style.flexWrap = "wrap";
+    var bFeed = el("button", "mini", "Покормить всех");
+    bFeed.onclick = function(){ act("feedAll", {house:k}); };
+    var bHarv = el("button", "mini go", "Собрать всё" + (c.ready ? " (" + c.ready + ")" : ""));
+    bHarv.onclick = function(){ act("harvestAll", {house:k}); };
+    var bSell = el("button", "mini", "Сдать продукцию");
+    bSell.onclick = function(){ act("sell", {house:k}); };
+    var bShop = el("button", "mini", "🛒 В магазин");
+    bShop.onclick = function(){ openShop(H.kind === "plant" ? "plants" : "animals"); };
+    acts.appendChild(bFeed); acts.appendChild(bHarv); acts.appendChild(bSell); acts.appendChild(bShop);
+    hd.appendChild(acts);
+    body.appendChild(hd);
+
+    var inside = el("div", "inside");
+    h.slots.forEach(function(a){
+      var b = breed(a.breed), st = stateOf(a);
+      var row = el("div", "slot");
+      row.appendChild(el("div", "big", b.em));
+      var who = el("div", "who");
+      who.innerHTML = "<b>" + esc(b.n) + " <span class='seasons'>🏅 осталось " + a.se + "</span></b>" +
+        "<span class='st'>" + (st === "hungry" ? "Голодная — нужен корм"
+          : st === "growing" ? "Созревание: " + gtime(gminLeft(a))
+          : "Готово к сбору · примерно " + Math.round(b.y * (feedById(a.feedId) || FEEDS[0]).ym * yieldPct() / 100) + " " + H.prod.em) + "</span>";
+      row.appendChild(who);
+      var ac = el("div", "acts");
+      if(st === "hungry"){
+        FEEDS.filter(function(f){ return (f.for === "Для животных" || f.for === "Универсальный") && !f.gives; }).forEach(function(f){
+          if(!S.feed[f.id]) return;
+          var btn = el("button", "mini", f.em + " " + S.feed[f.id]);
+          btn.title = f.n;
+          btn.onclick = function(){ act("feed", {house:k, slot:a.id, feed:f.id}); };
+          ac.appendChild(btn);
+        });
+        if(!ac.children.length){
+          var go = el("button", "mini", "Купить корм");
+          go.onclick = function(){ openShop("feed"); };
+          ac.appendChild(go);
+        }
+      } else if(st === "ready"){
+        var hb = el("button", "mini go", "Собрать");
+        hb.onclick = function(){ act("harvest", {house:k, slot:a.id}); };
+        ac.appendChild(hb);
+      } else {
+        var sp = el("span", "st num", gtime(gminLeft(a)));
+        ac.appendChild(sp);
+      }
+      row.appendChild(ac);
+      inside.appendChild(row);
+    });
+    for(var i = h.slots.length; i < cap(k); i++){
+      var fr = el("div", "slot free", "Свободный " + H.slot + " — посади кого-нибудь");
+      fr.onclick = function(){ openShop(H.kind === "plant" ? "plants" : "animals"); };
+      inside.appendChild(fr);
+    }
+    body.appendChild(inside);
+
+    var up = el("div", "row");
+    up.style.marginTop = "8px";
+    if(h.lvl < 4){
+      var cst = UPG_COST[k][h.lvl];
+      up.innerHTML = "<span class='ic'>🔨</span><span class='grow'><b>" + HOUSE_TITLES[h.lvl] + "</b>" +
+        "<small>мест станет " + CAP[h.lvl] + " · " + fmt(cst.s) + " 🪙 или " + priceC(cst.c) + " 💎 · доски ×" + cst.b +
+        " (есть " + S.res.doska + ")</small></span>";
+      var ub = el("button", "mini", "Улучшить");
+      ub.onclick = function(){ act("upgrade", {house:k}); };
+      up.appendChild(ub);
+    } else {
+      up.innerHTML = "<span class='ic'>🏆</span><span class='grow'><b>Элитная ферма</b><small>улучшать больше некуда</small></span>";
+    }
+    body.appendChild(up);
+  }
+  draw();
+  live.push({scrim:w.scrim, fn:draw});
+  panels.push({scrim:w.scrim, fn:draw});
+}
+
+/* ---------- магазин ---------- */
+var shop = {cat:"new", sub:null, page:0, byPrice:false, byLvl:false};
+var SHOP_NAV = [
+  {id:"new", n:"Новинки"},
+  {id:"animals", n:"Животные"},
+  {id:"plants", n:"Растения"},
+  {id:"feed", n:"Корма", subs:["Для животных","Для собаки","Для кота","Универсальный"]},
+  {id:"decor", n:"Декор"},
+  {id:"gifts", n:"Подарки", subs:["В здания","Флаги, ленты","Другое"]},
+  {id:"upg", n:"Улучшения"},
+  {id:"helpers", n:"Помощники"},
+  {id:"boosts", n:"Бонусы"},
+  {id:"res", n:"Ресурсы"}
+];
+function shopGoods(){
+  var g = [];
+  if(shop.cat === "new"){
+    g = BREEDS.filter(function(b){ return b.lvl <= S.lvl + 2; }).sort(function(a, b){ return b.lvl - a.lvl; }).slice(0, 6)
+      .map(function(b){ return {kind:"breed", it:b}; });
+  } else if(shop.cat === "animals"){
+    g = BREEDS.filter(function(b){ return HOUSES[b.h].kind === "animal"; }).map(function(b){ return {kind:"breed", it:b}; });
+  } else if(shop.cat === "plants"){
+    g = BREEDS.filter(function(b){ return HOUSES[b.h].kind === "plant"; }).map(function(b){ return {kind:"breed", it:b}; });
+  } else if(shop.cat === "feed"){
+    g = FEEDS.filter(function(f){ return !shop.sub || f.for === shop.sub; }).map(function(f){ return {kind:"feed", it:f}; });
+  } else if(shop.cat === "decor"){
+    g = DECOR.map(function(d){ return {kind:"decor", it:d}; });
+  } else if(shop.cat === "gifts"){
+    g = GIFTS.filter(function(x){ return !shop.sub || x.sub === shop.sub; }).map(function(x){ return {kind:"gift", it:x}; });
+  } else if(shop.cat === "upg"){
+    g = HKEYS.map(function(k){ return {kind:"upg", it:{id:k}}; });
+  } else if(shop.cat === "helpers"){
+    g = HELPERS.map(function(x){ return {kind:"helper", it:x}; });
+  } else if(shop.cat === "boosts"){
+    g = BOOSTS.map(function(x){ return {kind:"boost", it:x}; });
+  } else if(shop.cat === "res"){
+    g = RES.map(function(x){ return {kind:"res", it:x}; });
+  }
+  if(shop.byLvl) g = g.filter(function(x){ return !x.it.lvl || x.it.lvl <= S.lvl; });
+  if(shop.byPrice) g = g.filter(function(x){
+    if(x.kind === "upg"){ var c = UPG_COST[x.it.id][S.houses[x.it.id].lvl]; return c && (S.silver >= c.s || S.gems >= c.c); }
+    return S.silver >= (x.it.s || 0) && S.gems >= (x.it.c || 0);
+  });
+  return g;
+}
+function openShop(cat, sub){
+  if(cat){ shop.cat = cat; shop.sub = sub || null; shop.page = 0; }
+  var w = makeWin("Магазин");
+  var wrap = el("div", "shop");
+  var nav = el("div", "shop-nav"), main = el("div", "shop-main");
+  wrap.appendChild(nav); wrap.appendChild(main);
+  w.body.appendChild(wrap);
+  footer(w, [
+    {label:"Пополнить счет", cls:"flat", on:function(){ toast("Касса на обеде. Приходите после уборочной.", true); }},
+    {label:"Закрыть", on:function(){ closeWin(w.scrim); }}
+  ]);
+  function draw(){
+    nav.innerHTML = "";
+    SHOP_NAV.forEach(function(c){
+      var b = el("button", null, esc(c.n));
+      b.setAttribute("aria-pressed", shop.cat === c.id && !shop.sub ? "true" : "false");
+      b.onclick = function(){ shop.cat = c.id; shop.sub = null; shop.page = 0; draw(); };
+      nav.appendChild(b);
+      if(c.subs && shop.cat === c.id){
+        c.subs.forEach(function(s){
+          var sb = el("button", "sub", esc(s));
+          sb.setAttribute("aria-pressed", shop.sub === s ? "true" : "false");
+          sb.onclick = function(){ shop.sub = shop.sub === s ? null : s; shop.page = 0; draw(); };
+          nav.appendChild(sb);
+        });
+      }
+    });
+    main.innerHTML = "";
+    var f = el("div", "filters");
+    var l1 = el("label", null, "<input type='checkbox' id='fPrice'" + (shop.byPrice ? " checked" : "") + "> Подходящие по цене");
+    var l2 = el("label", null, "<input type='checkbox' id='fLvl'" + (shop.byLvl ? " checked" : "") + "> Доступные по уровню");
+    f.appendChild(l1); f.appendChild(l2);
+    main.appendChild(f);
+    l1.querySelector("input").onchange = function(e){ shop.byPrice = e.target.checked; shop.page = 0; draw(); };
+    l2.querySelector("input").onchange = function(e){ shop.byLvl = e.target.checked; shop.page = 0; draw(); };
+
+    var goods = shopGoods(), per = 6, pages = Math.max(1, Math.ceil(goods.length / per));
+    if(shop.page >= pages) shop.page = pages - 1;
+    var pg = el("div", "pager");
+    var prev = el("button", null, "◀"), next = el("button", null, "▶");
+    prev.onclick = function(){ if(shop.page > 0){ shop.page--; draw(); } };
+    next.onclick = function(){ if(shop.page < pages - 1){ shop.page++; draw(); } };
+    pg.appendChild(prev);
+    pg.appendChild(el("span", null, "Страница " + (shop.page + 1) + " из " + pages));
+    pg.appendChild(next);
+    main.appendChild(pg);
+
+    var grid = el("div", "goods");
+    goods.slice(shop.page * per, shop.page * per + per).forEach(function(g){
+      grid.appendChild(goodCard(g, draw));
+    });
+    if(!goods.length) grid.appendChild(el("div", null, "<i>Ничего не подходит под фильтры.</i>"));
+    main.appendChild(grid);
+  }
+  draw();
+  panels.push({scrim:w.scrim, fn:draw});
+}
+function goodCard(g, redraw){
+  var it = g.it, card = el("div", "good");
+  var name = it.n, em = it.em, s = it.s || 0, c = it.c || 0, lvlReq = it.lvl || 0;
+  if(g.kind === "upg"){
+    var k = it.id, h = S.houses[k];
+    var cst = UPG_COST[k][h.lvl];
+    name = HOUSES[k].n + ": " + (h.lvl < 4 ? HOUSE_TITLES[h.lvl] : "максимум");
+    em = HOUSES[k].em;
+    s = cst ? cst.s : 0; c = cst ? cst.c : 0;
+  }
+  card.appendChild(el("div", "nm", esc(name)));
+  card.appendChild(el("div", "im", em));
+  var pr = el("div", "prices");
+  pr.appendChild(el("div", "pr" + (s ? "" : " zero"), "<i class='dot s'></i><span class='num'>" + fmt(s) + "</span>"));
+  pr.appendChild(el("div", "pr" + (c ? "" : " zero"), "<i class='dot c'></i><span class='num'>" + priceC(c) + "</span>"));
+  card.appendChild(pr);
+  if(lvlReq > S.lvl) card.appendChild(el("div", "lvl", lvlReq + " ур."));
+  var b = el("button", "pick", g.kind === "upg" ? "Улучшить" : "Подробнее");
+  if(lvlReq > S.lvl) b.disabled = true;
+  b.onclick = function(){
+    if(g.kind === "upg"){ act("upgrade", {house:it.id}); }
+    else openDetail(g, redraw);
+  };
+  card.appendChild(b);
+  return card;
+}
+function openDetail(g, redraw){
+  var it = g.it;
+  var w = makeWin(it.n, "sm");
+  var qty = 1;
+  var d = el("div", "detail");
+  var left = el("div", "left");
+  left.appendChild(el("div", "im", it.em));
+  var spin = el("div", "spin");
+  var minus = el("button", null, "−"), plus = el("button", null, "+");
+  var inp = document.createElement("input");
+  inp.type = "text"; inp.id = "qty-" + it.id; inp.value = "1"; inp.inputMode = "numeric";
+  spin.appendChild(minus); spin.appendChild(inp); spin.appendChild(plus);
+  var single = (g.kind === "decor" || g.kind === "helper");
+  if(!single) left.appendChild(spin);
+  d.appendChild(left);
+
+  var dl = el("dl", "specs");
+  function line(k, v, cls){
+    dl.appendChild(el("dt", null, esc(k) + ":"));
+    dl.appendChild(el("dd", cls || null, v));
+  }
+  line("Цена", "<i class='dot " + (it.c ? "c" : "s") + "'></i> " + (it.c ? priceC(it.c) : fmt(it.s || 0)));
+  line("Название", esc(it.n));
+  if(g.kind === "breed"){
+    line("Созревание", gtime(it.mat));
+    line("Урожайность", it.y);
+    line("Цена единицы", "<i class='dot s'></i> " + it.u);
+    line("Чистая прибыль", "<i class='dot s'></i> " + fmt(it.y * it.u * it.se - it.s));
+    line("Кол-во опыта", it.xp);
+    line("Сезон", it.se);
+    line("Постройка", HOUSES[it.h].n + " (свободно " + free(it.h) + ")");
+  }
+  if(g.kind === "feed" && it.sp) line("Созревание", Math.round(it.sp * 100) + "% от срока");
+  if(g.kind === "feed" && it.ym) line("Урожайность", "+" + Math.round((it.ym - 1) * 100) + "%");
+  if(g.kind === "decor") line("Урожайность", "+" + it.bonus + "%");
+  if(it.lvl) line("Уровень", it.lvl + " ур.");
+  line("Описание", esc(it.d || ""), "desc");
+  d.appendChild(dl);
+  w.body.appendChild(d);
+
+  function setQty(n){
+    qty = Math.max(1, Math.min(99, n || 1));
+    inp.value = String(qty);
+  }
+  minus.onclick = function(){ setQty(qty - 1); };
+  plus.onclick = function(){ setQty(qty + 1); };
+  inp.onchange = function(){ setQty(parseInt(inp.value, 10)); };
+
+  footer(w, [
+    {label:"Купить", cls:"go", on:function(){
+      if(g.kind === "breed") act("plant", {breed:it.id, qty:qty});
+      else act("buy", {kind:g.kind, id:it.id, qty:single ? 1 : qty});
+      closeWin(w.scrim);
+    }},
+    {label:"Закрыть", on:function(){ closeWin(w.scrim); }}
+  ]);
+}
+
+/* ---------- вкладки нижней панели ---------- */
+function openTop(){
+  var w = makeWin("TOP 100 колхозов");
+  var rows = el("div", "rows");
+  rows.appendChild(el("div", "row", "<span class='grow'><small>Загружаем таблицу…</small></span>"));
+  w.body.appendChild(rows);
+  api("/api/top").then(function(r){
+    rows.innerHTML = "";
+    var list = r.top || [];
+    if(!list.length) rows.appendChild(el("div", "row", "<span class='grow'><small>Пока пусто.</small></span>"));
+    list.forEach(function(x, i){
+      var mine = S && x.nick === S.nick && x.farm === S.farm;
+      var row = el("div", "row" + (mine ? " me" : ""));
+      row.innerHTML = "<span class='rank num'>" + (i + 1) + ".</span><span class='ic'>" +
+        (i < 3 ? ["🥇","🥈","🥉"][i] : "🌾") + "</span>" +
+        "<span class='grow'><b>" + esc(x.nick) + "</b><small>колхоз «" + esc(x.farm) + "» · ур. " + x.level + "</small></span>" +
+        "<span class='num'><b>" + fmt(x.score) + "</b></span>";
+      rows.appendChild(row);
+    });
+  }).catch(function(e){
+    rows.innerHTML = "";
+    rows.appendChild(el("div", "row", "<span class='grow'><small>" + esc(e.message) + "</small></span>"));
+  });
+}
+
+function openFriends(){
+  var w = makeWin("Друзья");
+  var body = w.body;
+  function draw(){
+    body.innerHTML = "";
+    var rows = el("div", "rows");
+    FRIENDS.forEach(function(fr, i){
+      var key = todayKey() + ":" + i;
+      var row = el("div", "row");
+      row.innerHTML = "<span class='ic'>🧑‍🌾</span><span class='grow'><b>" + esc(fr.n) + "</b><small>колхоз " + esc(fr.f) + "</small></span>";
+      var help = el("button", "mini go", S.helped[key] ? "Сегодня помог" : "Помочь (2⚡)");
+      if(S.helped[key]) help.disabled = true;
+      help.onclick = function(){
+        act("helpFriend", {friend:i});
+      };
+      row.appendChild(help);
+      var giftIds = Object.keys(S.gifts).filter(function(g){ return S.gifts[g] > 0; });
+      var gb = el("button", "mini", giftIds.length ? "Подарить" : "Нет подарков");
+      gb.disabled = !giftIds.length;
+      gb.onclick = function(){
+        act("gift", {friend:i, id:giftIds[0]});
+      };
+      row.appendChild(gb);
+      rows.appendChild(row);
+    });
+    body.appendChild(rows);
+    body.appendChild(el("p", null, "<small>Подарки покупаются в магазине, раздел «Подарки».</small>"));
+  }
+  draw();
+  panels.push({scrim:w.scrim, fn:draw});
+}
+function openQuests(){
+  var w = makeWin("Задания");
+  var rows = el("div", "rows");
+  QUESTS.forEach(function(q, i){
+    var done = i < S.quest;
+    var row = el("div", "row");
+    var p = Math.min(qprog(q), q.n);
+    row.innerHTML = "<span class='ic'>" + (done ? "✅" : q.rw.em) + "</span>" +
+      "<span class='grow'><b>" + esc(q.t) + "</b><small>" + esc(q.d) + "</small>" +
+      "<small>Награда: " + esc(q.rw.nm) + (q.rw.n ? ". Количество: " + q.rw.n : "") + "</small></span>" +
+      (done ? "<span class='done'>Сдано</span>" : "<span class='num'>" + fmt(p) + " / " + fmt(q.n) + "</span>");
+    rows.appendChild(row);
+  });
+  w.body.appendChild(rows);
+}
+function openBonus(){
+  var w = makeWin("Бонусы");
+  var body = w.body;
+  function draw(){
+    body.innerHTML = "";
+    body.appendChild(el("h3", null, "Ежедневный подарок"));
+    body.appendChild(el("p", null, "<small>Открывай корзинки и получай призы! Заходи каждый день — серия растёт.</small>"));
+    var days = el("div", "days");
+    for(var i = 1; i <= 5; i++) days.appendChild(el("div", "day" + (i <= S.daily.streak ? " on" : ""), i + " д."));
+    body.appendChild(days);
+    var bs = el("div", "baskets");
+    for(var j = 0; j < 16; j++){
+      (function(j){
+        var b = el("button", "bsk" + (S.daily.opened && S.daily.picked === j ? " open" : ""), S.daily.opened && S.daily.picked === j ? "🎉" : "🧺");
+        if(S.daily.opened) b.disabled = true;
+        b.onclick = function(){
+          act("daily", {basket:j});
+        };
+        bs.appendChild(b);
+      })(j);
+    }
+    body.appendChild(bs);
+
+    body.appendChild(el("h3", null, "Мои бонусы"));
+    var rows = el("div", "rows");
+    var any = false;
+    BOOSTS.forEach(function(b){
+      var n = S.items[b.id] || 0;
+      if(!n) return;
+      any = true;
+      var row = el("div", "row");
+      row.innerHTML = "<span class='ic'>" + b.em + "</span><span class='grow'><b>" + esc(b.n) + " ×" + n + "</b><small>" + esc(b.d) + "</small></span>";
+      var use = el("button", "mini go", "Применить");
+      use.onclick = function(){ act("useItem", {id:b.id}); };
+      row.appendChild(use);
+      rows.appendChild(row);
+    });
+    if(!any) rows.appendChild(el("div", "row", "<span class='ic'>🤷</span><span class='grow'><small>Бонусов нет. Купи в магазине, раздел «Бонусы».</small></span>"));
+    body.appendChild(rows);
+  }
+  draw();
+  panels.push({scrim:w.scrim, fn:draw});
+}
+function openStore(){
+  var w = makeWin("Склад");
+  var body = w.body;
+  function draw(){
+    body.innerHTML = "";
+    var rows = el("div", "rows"), total = 0;
+    HKEYS.forEach(function(k){
+      var p = S.prods[k];
+      if(!p.n) return;
+      total += p.val;
+      var row = el("div", "row");
+      row.innerHTML = "<span class='ic'>" + HOUSES[k].prod.em + "</span><span class='grow'><b>" + esc(HOUSES[k].prod.n) +
+        " — " + fmt(p.n) + " ед.</b><small>из постройки «" + esc(HOUSES[k].n) + "»</small></span>" +
+        "<span class='num'><b>" + fmt(p.val) + "</b> 🪙</span>";
+      var b = el("button", "mini go", "Сдать");
+      b.onclick = function(){ act("sell", {house:k}); };
+      row.appendChild(b);
+      rows.appendChild(row);
+    });
+    if(!total) rows.appendChild(el("div", "row", "<span class='ic'>📭</span><span class='grow'><small>Продукции нет. Собери урожай.</small></span>"));
+    body.appendChild(rows);
+    if(total){
+      var all = el("button", "btn go", "Сдать всё — " + fmt(total) + " 🪙");
+      all.style.marginTop = "8px";
+      all.onclick = function(){ act("sellAll", {}); };
+      body.appendChild(all);
+    }
+    body.appendChild(el("h3", null, "Запасы"));
+    var inv = el("div", "rows");
+    FEEDS.forEach(function(f){
+      if(!S.feed[f.id]) return;
+      inv.appendChild(el("div", "row", "<span class='ic'>" + f.em + "</span><span class='grow'><b>" + esc(f.n) + "</b><small>" + esc(f.for) + "</small></span><span class='num'><b>" + S.feed[f.id] + "</b></span>"));
+    });
+    RES.forEach(function(r){
+      if(!S.res[r.id]) return;
+      inv.appendChild(el("div", "row", "<span class='ic'>" + r.em + "</span><span class='grow'><b>" + esc(r.n) + "</b><small>" + esc(r.d) + "</small></span><span class='num'><b>" + S.res[r.id] + "</b></span>"));
+    });
+    Object.keys(S.gifts).forEach(function(gid){
+      if(!S.gifts[gid]) return;
+      GIFTS.forEach(function(g){
+        if(g.id !== gid) return;
+        inv.appendChild(el("div", "row", "<span class='ic'>" + g.em + "</span><span class='grow'><b>" + esc(g.n) + "</b><small>подарок соседям</small></span><span class='num'><b>" + S.gifts[gid] + "</b></span>"));
+      });
+    });
+    if(!inv.children.length) inv.appendChild(el("div", "row", "<span class='ic'>🕸️</span><span class='grow'><small>Пусто. Даже корма нет.</small></span>"));
+    body.appendChild(inv);
+  }
+  draw();
+  panels.push({scrim:w.scrim, fn:draw});
+}
+function openPets(){
+  var w = makeWin("Пёс и кот", "sm");
+  var body = w.body;
+  function draw(){
+    body.innerHTML = "";
+    var rows = el("div", "rows");
+    [["dog","🐕","Пёс","Косточка",120,"+3% к урожайности, пока сыт"],
+     ["cat","🐈","Кот","Рыбка",140,"+5% к урожайности, пока сыт"]].forEach(function(p){
+      var row = el("div", "row");
+      row.innerHTML = "<span class='ic'>" + p[1] + "</span><span class='grow'><b>" + p[2] + " — сытость " + Math.round(S[p[0]]) + "%</b><small>" + p[5] + "</small></span>";
+      var b = el("button", "mini go", p[3] + " · " + p[4] + " 🪙");
+      b.onclick = function(){ act("feedPet", {pet:p[0]}); };
+      row.appendChild(b);
+      rows.appendChild(row);
+    });
+    body.appendChild(rows);
+    body.appendChild(el("p", null, "<small>Общая урожайность двора сейчас: <b>" + yieldPct() + "%</b></small>"));
+  }
+  draw();
+  live.push({scrim:w.scrim, fn:draw});
+  panels.push({scrim:w.scrim, fn:draw});
+}
+
+/* ===================== отрисовка ===================== */
+function setBar(id, txtId, val, max, txt){
+  var pct = Math.max(0, Math.min(100, val / max * 100));
+  $(id).style.width = pct + "%";
+  $(txtId).textContent = txt != null ? txt : (Math.floor(val) + "/" + max);
+}
+function renderHud(){
+  $("nick").textContent = S.nick;
+  $("lvl").textContent = S.lvl;
+  setBar("xpbar", "xptxt", S.xp, maxXp(S.lvl), fmt(S.xp) + "/" + fmt(maxXp(S.lvl)));
+  setBar("dogbar", "dogtxt", S.dog, 100, Math.round(S.dog) + "%");
+  setBar("catbar", "cattxt", S.cat, 100, Math.round(S.cat) + "%");
+  setBar("enbar", "entxt", S.energy, maxEn(), Math.floor(S.energy) + "/" + maxEn());
+  $("silver").textContent = fmt(S.silver);
+  $("gems").textContent = fmtC(S.gems);
+  var q = $("quick");
+  q.innerHTML = "";
+  HKEYS.forEach(function(k){
+    var c = counts(k);
+    var b = el("button", null, HOUSES[k].em);
+    b.title = HOUSES[k].n;
+    if(c.ready) b.appendChild(el("span", "badge", String(c.ready)));
+    b.onclick = function(){ openHouse(k); };
+    q.appendChild(b);
+  });
+  var pets = el("button", null, "🐕");
+  pets.title = "Пёс и кот";
+  pets.onclick = openPets;
+  q.appendChild(pets);
+}
+function renderYard(){
+  var barns = $("barns");
+  barns.innerHTML = "";
+  HKEYS.forEach(function(k){
+    var H = HOUSES[k], h = S.houses[k], c = counts(k);
+    var b = el("button", "barn" + (H.roof === "thatch" ? " thatch" : ""));
+    var pen = h.slots.map(function(a){
+      var st = stateOf(a);
+      return "<i class='" + (st === "hungry" ? "hungry" : "") + "'>" + breed(a.breed).em + "</i>";
+    }).join("");
+    b.innerHTML = "<div class='roof'></div><div class='wall'><span class='nm'>" + esc(H.n) + "</span>" +
+      "<div class='pen'>" + (pen || "<span class='cap'>пусто</span>") + "</div>" +
+      "<span class='cap'>" + h.slots.length + "/" + cap(k) + " · " + HOUSE_TITLES[h.lvl - 1] + "</span></div>";
+    if(c.ready) b.appendChild(el("span", "tag ready", String(c.ready)));
+    else if(c.hungry) b.appendChild(el("span", "tag need", "!"));
+    b.onclick = function(){ openHouse(k); };
+    barns.appendChild(b);
+  });
+  var dr = $("decorRow");
+  dr.innerHTML = S.decor.map(function(id){
+    var em = "";
+    DECOR.forEach(function(d){ if(d.id === id) em = d.em; });
+    return "<span title='декор'>" + em + "</span>";
+  }).join("") || "<span style='font-size:12px;color:#3b2614'>Двор пустой. Загляни в «Декор».</span>";
+}
+function renderQuestStrip(){
+  var s = $("qstrip");
+  s.innerHTML = "";
+  if(qview > QUESTS.length - 1) qview = QUESTS.length - 1;
+  if(qview < 0) qview = 0;
+  var q = QUESTS[qview], done = qview < S.quest;
+  var ic = el("div", "ic", done ? "✅" : q.rw.em);
+  var body = el("div", "body");
+  body.innerHTML = "<b>" + esc(q.t) + "</b><small>" + esc(q.d) + "</small>" +
+    "<small class='rw'>Награда: " + esc(q.rw.nm) + (q.rw.n ? ". Количество: " + q.rw.n : "") +
+    (done ? " — <span class='done'>выполнено</span>" : " · <span class='num'>" + fmt(Math.min(qprog(q), q.n)) + "/" + fmt(q.n) + "</span>") + "</small>";
+  var pg = el("div", "pg");
+  var up = el("button", null, "▲"), dn = el("button", null, "▼");
+  up.onclick = function(){ qview = Math.max(0, qview - 1); renderQuestStrip(); };
+  dn.onclick = function(){ qview = Math.min(QUESTS.length - 1, qview + 1); renderQuestStrip(); };
+  pg.appendChild(up); pg.appendChild(dn);
+  s.appendChild(ic); s.appendChild(body); s.appendChild(pg);
+}
+function renderTabs(){
+  var t = $("tabs");
+  if(t.children.length) return;
+  [["TOP 100", openTop], ["Друзья", openFriends], ["Задания", openQuests], ["Бонусы", openBonus],
+   ["Склад", openStore], ["Магазин", function(){ openShop(); }]].forEach(function(p){
+    var b = el("button", null, p[0]);
+    b.onclick = function(){ closeAll(); p[1](); };
+    t.appendChild(b);
+  });
+}
+function after(){
+  if(!S) return;
+  renderHud(); renderYard(); renderQuestStrip();
+  panels = panels.filter(function(l){ return document.body.contains(l.scrim); });
+  panels.forEach(function(l){ l.fn(); });
+}
+
+/* ===================== вход и регистрация ===================== */
+function authScreen(mode, prefill){
+  closeAll();
+  var w = makeWin(mode === "register" ? "Регистрация" : mode === "reset" ? "Новый пароль" : "Вход", "sm");
+  w.win.querySelector(".x").remove();          // без аккаунта играть не выйдет — закрывать нечего
+  var body = w.body;
+  var note = el("div", "row");
+  note.style.marginBottom = "8px";
+  body.appendChild(note);
+
+  function field(id, label, type, value){
+    var wrap = el("label", null, "<b style='display:block;font-size:13px'>" + esc(label) + "</b>");
+    wrap.style.display = "block";
+    wrap.style.marginBottom = "7px";
+    var i = document.createElement("input");
+    i.id = id; i.type = type; i.value = value || "";
+    i.style.cssText = "width:100%;padding:7px;border:2px solid var(--wood-dk);border-radius:6px;background:#fff8e6;font:inherit";
+    if(type === "email") i.autocomplete = "email";
+    if(type === "password") i.autocomplete = mode === "login" ? "current-password" : "new-password";
+    wrap.appendChild(i);
+    body.appendChild(wrap);
+    return i;
+  }
+  var email, nick, pass, token;
+  if(mode === "reset"){
+    note.innerHTML = "<span class='ic'>🔑</span><span class='grow'><small>Придумайте новый пароль — не короче восьми знаков.</small></span>";
+    pass = field("f-pass", "Новый пароль", "password");
+    token = (prefill && prefill.token) || "";
+  } else {
+    note.innerHTML = mode === "register"
+      ? "<span class='ic'>🌾</span><span class='grow'><small>Заведём колхоз. На почту придёт ссылка — без неё в игру не пустят.</small></span>"
+      : "<span class='ic'>🚪</span><span class='grow'><small>Входите — хозяйство ждёт там же, где вы его оставили.</small></span>";
+    email = field("f-email", "Почта", "email", (prefill && prefill.email) || "");
+    if(mode === "register") nick = field("f-nick", "Имя председателя", "text", "");
+    pass = field("f-pass", "Пароль", "password");
+  }
+  var msg = el("div", null, "");
+  msg.style.cssText = "font-size:13px;font-weight:700;min-height:18px";
+  body.appendChild(msg);
+  function say(t, bad){ msg.textContent = t; msg.style.color = bad ? "#bf3b2c" : "#25611a"; }
+
+  var buttons = [];
+  if(mode === "login"){
+    buttons.push({label:"Войти", cls:"go", on:submit});
+    buttons.push({label:"Регистрация", cls:"flat", on:function(){ authScreen("register", {email:email.value}); }});
+  } else if(mode === "register"){
+    buttons.push({label:"Завести колхоз", cls:"go", on:submit});
+    buttons.push({label:"У меня есть аккаунт", cls:"flat", on:function(){ authScreen("login", {email:email.value}); }});
+  } else {
+    buttons.push({label:"Сохранить пароль", cls:"go", on:submit});
+  }
+  footer(w, buttons);
+  if(mode === "login"){
+    var extra = el("p", null, "");
+    var forgot = el("button", "btn flat", "Забыли пароль?");
+    forgot.style.marginTop = "6px";
+    forgot.onclick = function(){
+      if(!email.value) return say("Сначала впишите почту.", true);
+      api("/api/auth/forgot", {email:email.value})
+        .then(function(r){ say(r.message); })
+        .catch(function(e){ say(e.message, true); });
+    };
+    extra.appendChild(forgot);
+    body.appendChild(extra);
+  }
+  function submit(){
+    say("Секунду…");
+    if(mode === "login"){
+      api("/api/auth/login", {email:email.value, password:pass.value})
+        .then(function(){ closeAll(); boot(); })
+        .catch(function(e){ say(e.message, true); });
+    } else if(mode === "register"){
+      api("/api/auth/register", {email:email.value, password:pass.value, nick:nick.value})
+        .then(function(r){ closeAll(); verifyScreen(email.value, r.message); })
+        .catch(function(e){ say(e.message, true); });
+    } else {
+      api("/api/auth/reset", {token:token, password:pass.value})
+        .then(function(r){ closeAll(); authScreen("login", {}); toast(r.message); })
+        .catch(function(e){ say(e.message, true); });
+    }
+  }
+  body.querySelectorAll("input").forEach(function(i){
+    i.addEventListener("keydown", function(e){ if(e.key === "Enter") submit(); });
+  });
+}
+function verifyScreen(email, message){
+  closeAll();
+  var w = makeWin("Подтвердите почту", "sm");
+  w.win.querySelector(".x").remove();
+  var box = el("div", "reward-box");
+  box.appendChild(el("div", "im", "✉️"));
+  box.appendChild(el("div", null, esc(message || ("Мы отправили ссылку на " + email + ". Откройте её — и колхоз ваш."))));
+  w.body.appendChild(box);
+  footer(w, [
+    {label:"Отправить письмо ещё раз", cls:"flat", on:function(){
+      api("/api/auth/resend", {email:email}).then(function(r){ toast(r.message); }).catch(function(e){ toast(e.message, true); });
+    }},
+    {label:"Я подтвердил", cls:"go", on:function(){ closeAll(); boot(); }}
+  ]);
+}
+
+/* ===================== запуск ===================== */
+var started = false;
+function startGame(){
+  if(started) return;
+  started = true;
+  document.body.classList.remove("booting");
+  renderTabs();
+  $("shopBtn").onclick = function(){ closeAll(); openShop(); };
+  $("questBtn").onclick = function(){ closeAll(); openQuests(); };
+  $("logoutBtn").onclick = function(){
+    api("/api/auth/logout", {}).then(function(){ S = null; started = false; location.reload(); });
+  };
+  $("renameBtn").onclick = function(){
+    var v = prompt("Как назовём колхоз?", S.farm);
+    if(v && v.trim()) act("rename", {name:v.trim()});
+  };
+  var hi = 0;
+  setInterval(function(){ hi = (hi + 1) % HINTS.length; $("hint").textContent = HINTS[hi]; }, 12000);
+  setInterval(function(){
+    if(!S) return;
+    renderHud(); renderYard(); renderQuestStrip();
+    live = live.filter(function(l){ return document.body.contains(l.scrim); });
+    live.forEach(function(l){ l.fn(); });
+  }, 1000);
+  setInterval(function(){ if(S) sync(); }, 20000);   // энергия, питомцы и работа помощников считаются на сервере
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden && S) sync(); });
+}
+function boot(){
+  document.body.classList.add("booting");
+  var params = new URLSearchParams(location.search);
+  if(params.get("reset")){
+    var t = params.get("reset");
+    history.replaceState(null, "", location.pathname);
+    return authScreen("reset", {token:t});
+  }
+  if(params.get("verify")){
+    toast(params.get("verify") === "ok" ? "Почта подтверждена, с новосельем." : "Ссылка не сработала — запросите новую.", params.get("verify") !== "ok");
+    history.replaceState(null, "", location.pathname);
+  }
+  api("/api/auth/me").then(function(r){
+    ME = r.user;
+    if(!ME) return authScreen("login", {});
+    if(!ME.verified) return verifyScreen(ME.email, null);
+    return api("/api/game").then(function(g){
+      closeAll();
+      startGame();
+      applyResult(g);
+      $("renameBtn").textContent = S.farm;
+    });
+  }).catch(function(e){
+    if(e.code === "email_unverified" && ME) return verifyScreen(ME.email, null);
+    toast(e.message, true);
+    authScreen("login", {});
+  });
+}
+boot();
