@@ -91,6 +91,25 @@ function qprog(q){ return q.k === "lvl" ? S.lvl : (S.c[q.k] || 0); }
 function todayKey(){ var d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
 var qview = 0;
 
+/* ---------- спрайты ----------
+   Графика: наборы Kenney Tiny Farm / Tiny Town / Pixel Platformer Farm Expansion, CC0.
+   Часть живности перекрашена из тех же тайлов, постройки склеены из стен и крыш. */
+var SPRITES = {
+  breed: {brama:1, grusha:1, holmgus:1, holmkor:1, kartoha:1, kuchin:1, kukuruza:1, leggorn:1, mirgorod:1, ogurcy:1, podsol:1, rusbel:1, simment:1, trufel:1, tula:1, vietnam:1, vladimir:1, yablon:1},
+  house: {gusi:1, koni:1, korovy:1, kury:1, ogorod:1, sad:1, svini:1, teplica:1},
+  prop: {barrel:1, crate:1, egg:1, farmer:1, fence:1, hay:1, milk:1, sign:1, stone:1, tree:1, vily:1, well:1}
+};
+
+function spr(kind, id, cls){
+  return SPRITES[kind] && SPRITES[kind][id]
+    ? "<img class='sp " + (cls || "") + "' src='img/" + kind + "-" + id + ".png' alt='' draggable='false'>"
+    : null;
+}
+/** Спрайт, если он есть; иначе эмодзи — чтобы ничего не пропадало. */
+function ic(kind, id, em, cls){
+  return spr(kind, id, cls) || "<i class='em " + (cls || "") + "'>" + em + "</i>";
+}
+
 /* ===================== окна ===================== */
 var live = [];
 function makeWin(title, cls){
@@ -167,7 +186,7 @@ function openHouse(k){
     h.slots.forEach(function(a){
       var b = breed(a.breed), st = stateOf(a);
       var row = el("div", "slot");
-      row.appendChild(el("div", "big", b.em));
+      row.appendChild(el("div", "big", ic("breed", b.id, b.em)));
       var who = el("div", "who");
       who.innerHTML = "<b>" + esc(b.n) + " <span class='seasons'>🏅 осталось " + a.se + "</span></b>" +
         "<span class='st'>" + (st === "hungry" ? "Голодная — нужен корм"
@@ -339,7 +358,7 @@ function goodCard(g, redraw){
     s = cst ? cst.s : 0; c = cst ? cst.c : 0;
   }
   card.appendChild(el("div", "nm", esc(name)));
-  card.appendChild(el("div", "im", em));
+  card.appendChild(el("div", "im", g.kind === "breed" ? ic("breed", it.id, em) : g.kind === "upg" ? ic("house", it.id, em) : em));
   var pr = el("div", "prices");
   pr.appendChild(el("div", "pr" + (s ? "" : " zero"), "<i class='dot s'></i><span class='num'>" + fmt(s) + "</span>"));
   pr.appendChild(el("div", "pr" + (c ? "" : " zero"), "<i class='dot c'></i><span class='num'>" + priceC(c) + "</span>"));
@@ -360,7 +379,7 @@ function openDetail(g, redraw){
   var qty = 1;
   var d = el("div", "detail");
   var left = el("div", "left");
-  left.appendChild(el("div", "im", it.em));
+  left.appendChild(el("div", "im", g.kind === "breed" ? ic("breed", it.id, it.em) : it.em));
   var spin = el("div", "spin");
   var minus = el("button", null, "−"), plus = el("button", null, "+");
   var inp = document.createElement("input");
@@ -618,7 +637,7 @@ function renderHud(){
   q.innerHTML = "";
   HKEYS.forEach(function(k){
     var c = counts(k);
-    var b = el("button", null, HOUSES[k].em);
+    var b = el("button", null, ic("house", k, HOUSES[k].em, "mini-house"));
     b.title = HOUSES[k].n;
     if(c.ready) b.appendChild(el("span", "badge", String(c.ready)));
     b.onclick = function(){ openHouse(k); };
@@ -637,9 +656,9 @@ function renderYard(){
     var b = el("button", "barn" + (H.roof === "thatch" ? " thatch" : ""));
     var pen = h.slots.map(function(a){
       var st = stateOf(a);
-      return "<i class='" + (st === "hungry" ? "hungry" : "") + "'>" + breed(a.breed).em + "</i>";
+      return ic("breed", a.breed, breed(a.breed).em, st === "hungry" ? "hungry" : "");
     }).join("");
-    b.innerHTML = "<div class='roof'></div><div class='wall'><span class='nm'>" + esc(H.n) + "</span>" +
+    b.innerHTML = ic("house", k, H.em, "bld") + "<div class='wall'><span class='nm'>" + esc(H.n) + "</span>" +
       "<div class='pen'>" + (pen || "<span class='cap'>пусто</span>") + "</div>" +
       "<span class='cap'>" + h.slots.length + "/" + cap(k) + " · " + HOUSE_TITLES[h.lvl - 1] + "</span></div>";
     if(c.ready) b.appendChild(el("span", "tag ready", String(c.ready)));
@@ -648,10 +667,11 @@ function renderYard(){
     barns.appendChild(b);
   });
   var dr = $("decorRow");
+  var DECOR_SPRITE = {pleten:"fence", skirda:"hay", kolodec:"well", telega:"crate", doska:"sign"};
   dr.innerHTML = S.decor.map(function(id){
     var em = "";
     DECOR.forEach(function(d){ if(d.id === id) em = d.em; });
-    return "<span title='декор'>" + em + "</span>";
+    return "<span title='декор'>" + ic("prop", DECOR_SPRITE[id] || id, em) + "</span>";
   }).join("") || "<span style='font-size:12px;color:#3b2614'>Двор пустой. Загляни в «Декор».</span>";
 }
 function renderQuestStrip(){
