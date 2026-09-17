@@ -5,14 +5,14 @@
 var GM_PER_SEC = 4;
 
 var HOUSES = {
-  kury:   {n:"Курятник",  slot:"насест",  em:"🐔", roof:"thatch", prod:{n:"Яйца",     em:"🥚"}, kind:"animal"},
-  ogorod: {n:"Огород",    slot:"грядка",  em:"🥔", roof:"thatch", prod:{n:"Овощи",    em:"🥕"}, kind:"plant"},
-  gusi:   {n:"Гусятник",  slot:"загон",   em:"🦢", roof:"tile",   prod:{n:"Пух",      em:"🪶"}, kind:"animal"},
-  svini:  {n:"Свинарник", slot:"станок",  em:"🐖", roof:"tile",   prod:{n:"Сало",     em:"🥓"}, kind:"animal"},
-  teplica:{n:"Теплица",   slot:"лоток",   em:"🍄", roof:"tile",   prod:{n:"Тепличное",em:"🥒"}, kind:"plant"},
-  korovy: {n:"Коровник",  slot:"стойло",  em:"🐄", roof:"thatch", prod:{n:"Молоко",   em:"🥛"}, kind:"animal"},
-  sad:    {n:"Сад",       slot:"лунка",   em:"🍎", roof:"thatch", prod:{n:"Фрукты",   em:"🍏"}, kind:"plant"},
-  koni:   {n:"Конюшня",   slot:"денник",  em:"🐴", roof:"tile",   prod:{n:"Навоз",    em:"💩"}, kind:"animal"}
+  kury:   {n:"Курятник",  slot:"насест", free:"Свободный насест",  em:"🐔", roof:"thatch", prod:{n:"Яйца",     em:"🥚"}, kind:"animal"},
+  ogorod: {n:"Огород",    slot:"грядка", free:"Свободная грядка",  em:"🥔", roof:"thatch", prod:{n:"Овощи",    em:"🥕"}, kind:"plant"},
+  gusi:   {n:"Гусятник",  slot:"загон", free:"Свободный загон",   em:"🦢", roof:"tile",   prod:{n:"Пух",      em:"🪶"}, kind:"animal"},
+  svini:  {n:"Свинарник", slot:"станок", free:"Свободный станок",  em:"🐖", roof:"tile",   prod:{n:"Сало",     em:"🥓"}, kind:"animal"},
+  teplica:{n:"Теплица",   slot:"лоток", free:"Свободный лоток",   em:"🍄", roof:"tile",   prod:{n:"Тепличное",em:"🥒"}, kind:"plant"},
+  korovy: {n:"Коровник",  slot:"стойло", free:"Свободное стойло",  em:"🐄", roof:"thatch", prod:{n:"Молоко",   em:"🥛"}, kind:"animal"},
+  sad:    {n:"Сад",       slot:"лунка", free:"Свободная лунка",   em:"🍎", roof:"thatch", prod:{n:"Фрукты",   em:"🍏"}, kind:"plant"},
+  koni:   {n:"Конюшня",   slot:"денник", free:"Свободный денник",  em:"🐴", roof:"tile",   prod:{n:"Навоз",    em:"💩"}, kind:"animal"}
 };
 var HKEYS = Object.keys(HOUSES);
 var CAP = [3,5,8,12];

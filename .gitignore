@@ -4,3 +4,4 @@ var/
 *.db-wal
 *.db-shm
 .env
+docs/screenshots-raw/

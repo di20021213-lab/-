@@ -170,7 +170,7 @@ function openHouse(k){
       " (" + fmt(S.prods[k].val) + " 🪙)"));
     var acts = el("div", "slot-acts");
     acts.style.display = "flex"; acts.style.gap = "5px"; acts.style.flexWrap = "wrap";
-    var bFeed = el("button", "mini", "Покормить всех");
+    var bFeed = el("button", "mini", H.kind === "plant" ? "Полить всё" : "Покормить всех");
     bFeed.onclick = function(){ act("feedAll", {house:k}); };
     var bHarv = el("button", "mini go", "Собрать всё" + (c.ready ? " (" + c.ready + ")" : ""));
     bHarv.onclick = function(){ act("harvestAll", {house:k}); };
@@ -189,7 +189,7 @@ function openHouse(k){
       row.appendChild(el("div", "big", ic("breed", b.id, b.em)));
       var who = el("div", "who");
       who.innerHTML = "<b>" + esc(b.n) + " <span class='seasons'>🏅 осталось " + a.se + "</span></b>" +
-        "<span class='st'>" + (st === "hungry" ? "Голодная — нужен корм"
+        "<span class='st'>" + (st === "hungry" ? (H.kind === "plant" ? "Нужен полив" : "Нужен корм")
           : st === "growing" ? "Созревание: " + gtime(gminLeft(a))
           : "Готово к сбору · примерно " + Math.round(b.y * (feedById(a.feedId) || FEEDS[0]).ym * yieldPct() / 100) + " " + H.prod.em) + "</span>";
       row.appendChild(who);
@@ -203,7 +203,7 @@ function openHouse(k){
           ac.appendChild(btn);
         });
         if(!ac.children.length){
-          var go = el("button", "mini", "Купить корм");
+          var go = el("button", "mini", H.kind === "plant" ? "Купить полив" : "Купить корм");
           go.onclick = function(){ openShop("feed"); };
           ac.appendChild(go);
         }
@@ -219,7 +219,7 @@ function openHouse(k){
       inside.appendChild(row);
     });
     for(var i = h.slots.length; i < cap(k); i++){
-      var fr = el("div", "slot free", "Свободный " + H.slot + " — посади кого-нибудь");
+      var fr = el("div", "slot free", (H.free || "Свободное место") + " — посади кого-нибудь");
       fr.onclick = function(){ openShop(H.kind === "plant" ? "plants" : "animals"); };
       inside.appendChild(fr);
     }

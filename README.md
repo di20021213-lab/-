@@ -135,6 +135,23 @@ offline/         ранняя версия одним файлом, без се�
 | GET | `/api/top` | таблица рекордов |
 | GET | `/api/content` | справочник пород, кормов и построек |
 
+## Как это выглядит
+
+Скриншоты сняты прогоном по всей механике (`node server/test/tour.js`), не постановочные:
+скрипт правда регистрируется, читает ссылку из письма, покупает, кормит, ждёт созревания и собирает.
+
+| | |
+|---|---|
+| ![Регистрация](docs/screenshots/02-registraciya.jpg) Регистрация | ![Подтверждение почты](docs/screenshots/03-podtverdite-pochtu.jpg) Ссылка ушла на почту |
+| ![Двор](docs/screenshots/24-dvor-obzhitoy.jpg) Двор: постройки, живность, задание внизу | ![Магазин](docs/screenshots/05-magazin-zhivotnye.jpg) Магазин с разделами и страницами |
+| ![Карточка породы](docs/screenshots/06-kartochka-porody.jpg) Карточка породы со всеми числами | ![Задание выполнено](docs/screenshots/07-zadanie-vypolneno.jpg) Задание засчитано сервером |
+| ![Голодные](docs/screenshots/09-kuryatnik-golodnye.jpg) Купил — теперь корми | ![Созревание](docs/screenshots/11-kuryatnik-taimer-idet.jpg) Идёт созревание, сезоны на виду |
+| ![Готово](docs/screenshots/12-kuryatnik-gotovo.jpg) Созрело, видно ожидаемый урожай | ![Склад](docs/screenshots/14-sklad.jpg) Склад: сдать по позиции или всё |
+| ![Огород](docs/screenshots/16-ogorod-posazheno.jpg) Огород: посажено, нужен полив | ![Улучшение](docs/screenshots/17-ogorod-posle-uluchsheniya.jpg) Улучшил — мест стало больше |
+| ![Задания](docs/screenshots/18-spisok-zadaniy.jpg) Цепочка заданий с прогрессом | ![Подарок](docs/screenshots/19-ezhednevnyy-podarok.jpg) Ежедневный подарок и серия дней |
+| ![TOP 100](docs/screenshots/22-top-100.jpg) Таблица рекордов из базы | ![Питомцы](docs/screenshots/23-pes-i-kot.jpg) Пёс и кот дают проценты урожайности |
+| ![Телефон](docs/screenshots/25-telefon-dvor.jpg) На телефоне | |
+
 ## Правила игры
 
 1. Купи живность или рассаду — она занимает место в постройке.
