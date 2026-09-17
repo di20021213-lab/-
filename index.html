@@ -1,0 +1,1429 @@
+<title>Червонэ дышло</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=PT+Sans:wght@400;700&display=swap">
+<style>
+:root{
+  --sky:#a9dcf2; --sky2:#d9f0fa;
+  --grass:#6faa3c; --grass-dk:#4d8628;
+  --dirt:#cda56a; --dirt-dk:#ae8449;
+  --wood:#8b5a2b; --wood-dk:#5f3d1c; --wood-lt:#c08b4e;
+  --thatch:#e2b551; --thatch-dk:#c2952f;
+  --tile:#c0473a; --tile-dk:#96322a;
+  --tan:#d8b483; --tan-dk:#b98e5c; --tan-lt:#ecd6b0;
+  --pane:#c79a63; --pane-lt:#e3c496;
+  --ink:#3b2614; --ink-soft:#7a5a38;
+  --red:#bf3b2c; --silver:#e8e8ea; --gem:#49b6e8;
+  --ok:#4e9b35; --warn:#d98324;
+  --sh:0 3px 0 rgba(59,38,20,.35);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--grass-dk);color:var(--ink);
+  font-family:"PT Sans",system-ui,sans-serif;font-size:15px;line-height:1.4;-webkit-text-size-adjust:100%}
+#app{max-width:1040px;margin:0 auto;padding:0 16px 150px}
+h1,h2,h3{font-family:"Russo One","PT Sans",sans-serif;font-weight:400;margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+.num{font-variant-numeric:tabular-nums}
+.hide{display:none!important}
+
+/* ---------- HUD ---------- */
+.hud{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;margin:0 -16px 8px;padding:6px 16px;
+  background:linear-gradient(180deg,#e9d7ab,#d0b381);border-bottom:4px solid var(--wood-dk);
+  display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+.ava{width:38px;height:38px;border-radius:5px;border:3px solid var(--wood-dk);flex:none;
+  background:linear-gradient(160deg,#9bd0ea,#5aa7cd);display:grid;place-items:center;font-size:20px}
+.nickbox{display:flex;flex-direction:column;gap:2px;min-width:96px}
+.nickbox b{font-size:13px;line-height:1.1}
+.nickbox small{color:var(--ink-soft);font-size:11px}
+.meters{display:flex;flex-direction:column;gap:3px;flex:1 1 170px;min-width:150px}
+.mrow{display:flex;align-items:center;gap:5px}
+.mrow>i{font-style:normal;font-size:13px;width:15px;text-align:center;flex:none}
+.bar{position:relative;height:12px;flex:1;border:2px solid var(--wood-dk);border-radius:7px;background:#7a5a37;overflow:hidden}
+.bar span{position:absolute;inset:0;width:0}
+.bar em{position:absolute;inset:0;display:grid;place-items:center;font-style:normal;font-size:9px;font-weight:700;
+  color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.65)}
+.bar.xp span{background:linear-gradient(180deg,#7fd0f2,#2f8fc4)}
+.bar.dog span{background:linear-gradient(180deg,#ff8f8f,#c93a3a)}
+.bar.cat span{background:linear-gradient(180deg,#b79be0,#6b46a8)}
+.bar.en span{background:linear-gradient(180deg,#9ade6a,#4e9b35)}
+.purse{display:flex;gap:5px;flex:none}
+.pill{display:flex;align-items:center;gap:5px;padding:3px 9px;border:2px solid var(--wood-dk);border-radius:20px;
+  background:var(--tan-lt);font-weight:700;font-size:13px}
+.dot{width:14px;height:14px;flex:none;border:2px solid rgba(0,0,0,.28)}
+.dot.s{border-radius:50%;background:radial-gradient(circle at 32% 30%,#fff,#b9bcc4)}
+.dot.c{border-radius:3px;transform:rotate(45deg);background:radial-gradient(circle at 32% 30%,#c9f0ff,var(--gem))}
+.tbtn{padding:6px 11px;border:3px solid var(--wood-dk);border-radius:8px;box-shadow:0 2px 0 var(--wood-dk);
+  background:linear-gradient(180deg,#f6d98a,#e0ab3e);font-family:"Russo One",sans-serif;font-size:12px}
+.tbtn:active{transform:translateY(2px);box-shadow:none}
+.tbtn.alert{animation:nudge 1.8s ease-in-out infinite}
+@keyframes nudge{0%,88%,100%{transform:none}92%{transform:rotate(-3deg)}96%{transform:rotate(3deg)}}
+.quick{display:flex;gap:4px;flex-wrap:wrap}
+.quick button{width:32px;height:32px;border:2px solid var(--wood-dk);border-radius:6px;background:var(--tan-lt);
+  font-size:17px;line-height:1;display:grid;place-items:center;position:relative;padding:0}
+.quick button .badge{position:absolute;top:-6px;right:-6px;min-width:17px;padding:0 3px;border-radius:9px;border:2px solid #fff;
+  background:var(--ok);color:#fff;font-size:10px;font-weight:700;line-height:14px}
+
+/* ---------- арка ---------- */
+.arch{text-align:center;margin:2px 0 8px}
+.arch .board{display:inline-block;padding:5px 42px 7px;border:4px solid var(--wood-dk);border-radius:60px 60px 10px 10px;
+  background:linear-gradient(180deg,var(--wood-lt),var(--wood));box-shadow:var(--sh)}
+.arch .k{font-family:"Russo One",sans-serif;font-size:19px;color:#f6e6c0;letter-spacing:.22em;text-shadow:0 2px 0 rgba(0,0,0,.4)}
+.arch .n{font-family:"Russo One",sans-serif;font-size:15px;color:#f2c14e;text-shadow:0 2px 0 rgba(0,0,0,.45)}
+.arch .n button{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline dotted}
+
+/* ---------- двор ---------- */
+.yard{position:relative;padding:12px;border:5px solid var(--wood-dk);border-radius:12px;overflow:hidden;
+  background:radial-gradient(125% 72% at 50% 80%,var(--dirt) 0 46%,var(--dirt-dk) 47%,transparent 48%),
+             linear-gradient(180deg,var(--sky2) 0 13%,var(--sky) 13% 21%,var(--grass) 21% 100%)}
+.cloud{position:absolute;top:6px;left:-70px;font-size:22px;animation:drift 46s linear infinite}
+.cloud.b{top:24px;animation-duration:70s;animation-delay:-20s}
+@keyframes drift{from{transform:translateX(0)}to{transform:translateX(110vw)}}
+.barns{position:relative;z-index:2;display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px}
+.barn{border:0;background:none;padding:0;position:relative;text-align:center;
+  filter:drop-shadow(0 3px 2px rgba(0,0,0,.28))}
+.barn .roof{width:100%;height:28px;margin-bottom:-1px;clip-path:polygon(50% 0,100% 100%,0 100%);
+  background:linear-gradient(180deg,var(--tile),var(--tile-dk))}
+.barn.thatch .roof{background:linear-gradient(180deg,var(--thatch),var(--thatch-dk))}
+.barn .wall{padding:5px 7px 7px;border:3px solid var(--wood-dk);border-top:0;border-radius:0 0 8px 8px;
+  background:linear-gradient(180deg,#e7cfa4,#cdac74)}
+.barn .nm{display:block;font-family:"Russo One",sans-serif;font-size:12px;margin-bottom:2px}
+.barn .pen{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:2px;min-height:26px;font-size:19px}
+.barn .pen i{font-style:normal;line-height:1}
+.barn .pen i.hungry{filter:grayscale(.7);opacity:.7}
+.barn .cap{font-size:11px;font-weight:700;color:var(--ink-soft)}
+.barn:active{transform:translateY(2px)}
+.tag{position:absolute;top:14px;right:-4px;z-index:3;min-width:21px;padding:1px 5px;border-radius:11px;border:2px solid #fff;
+  font-size:11px;font-weight:700;color:#fff}
+.tag.ready{background:var(--ok);animation:pop 1.3s ease-in-out infinite}
+.tag.need{background:var(--warn)}
+@keyframes pop{50%{transform:scale(1.15)}}
+.yard-foot{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:9px}
+.decor-row{display:flex;flex-wrap:wrap;gap:4px;font-size:23px;line-height:1}
+.chair{position:relative;z-index:2;display:flex;align-items:flex-end;gap:6px;margin-top:8px}
+.chair .face{font-size:32px;line-height:1}
+.bubble{flex:1;padding:6px 11px;background:#fff;border:3px solid var(--wood-dk);border-radius:12px;font-size:13px;position:relative}
+.bubble:before{content:"";position:absolute;left:-11px;bottom:8px;border:7px solid transparent;border-right-color:var(--wood-dk)}
+
+/* ---------- нижняя полоса заданий + вкладки ---------- */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:40;background:linear-gradient(180deg,#d5bb87,#bb9c66);
+  border-top:4px solid var(--wood-dk);padding:5px 8px calc(5px + env(safe-area-inset-bottom,0px))}
+.dock-in{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:5px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tabs button{flex:1 1 auto;padding:5px 8px;border:2px solid var(--wood-dk);border-radius:7px 7px 0 0;background:var(--tan);
+  font-size:12px;font-weight:700}
+.tabs button[aria-pressed="true"]{background:linear-gradient(180deg,#f6d98a,#e0ab3e)}
+.qstrip{display:flex;align-items:center;gap:9px;padding:6px 9px;border:2px solid var(--wood-dk);border-radius:8px;
+  background:var(--tan-lt)}
+.qstrip .ic{width:34px;height:34px;flex:none;border:2px solid var(--wood-dk);border-radius:6px;background:#fff8e6;
+  display:grid;place-items:center;font-size:19px}
+.qstrip .body{flex:1;min-width:0}
+.qstrip b{display:block;font-size:13px;color:#2f6db5;text-decoration:underline}
+.qstrip small{display:block;font-size:11.5px;line-height:1.25}
+.qstrip .rw{font-size:11.5px;font-weight:700}
+.qstrip .pg{display:flex;flex-direction:column;gap:2px}
+.qstrip .pg button{width:22px;height:15px;border:2px solid var(--wood-dk);border-radius:4px;background:var(--tan);
+  font-size:9px;line-height:1;padding:0}
+
+/* ---------- модалки ---------- */
+.scrim{position:fixed;inset:0;z-index:50;background:rgba(30,18,8,.6);display:grid;place-items:center;padding:14px}
+.win{width:min(680px,100%);max-height:86vh;display:flex;flex-direction:column;
+  border:4px solid var(--wood-dk);border-radius:12px;background:var(--pane);box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.win.sm{width:min(430px,100%)}
+.win-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;
+  border-bottom:3px solid var(--wood-dk);border-radius:8px 8px 0 0;background:linear-gradient(180deg,var(--tan-lt),var(--tan))}
+.win-hd h2{font-size:17px}
+.x{padding:3px 10px;border:2px solid var(--wood-dk);border-radius:7px;background:#e0685a;color:#fff;font-weight:700}
+.win-bd{padding:10px;overflow:auto}
+.win-ft{display:flex;justify-content:flex-end;gap:7px;padding:8px 10px;border-top:3px solid var(--wood-dk)}
+.btn{padding:6px 14px;border:2px solid var(--wood-dk);border-radius:7px;background:linear-gradient(180deg,#f6d98a,#e0ab3e);
+  font-weight:700;font-size:13px;box-shadow:0 2px 0 var(--wood-dk)}
+.btn:active{transform:translateY(2px);box-shadow:none}
+.btn.go{background:linear-gradient(180deg,#a6e07a,#5ba233)}
+.btn.flat{background:var(--tan-lt);box-shadow:none}
+.btn[disabled]{background:#c3b193;color:#8a7a60;cursor:not-allowed;box-shadow:none}
+
+/* магазин */
+.shop{display:grid;grid-template-columns:186px 1fr;gap:9px}
+.shop-nav{display:flex;flex-direction:column;gap:3px;max-height:56vh;overflow:auto;padding-right:3px}
+.shop-nav button{text-align:left;padding:5px 9px;border:2px solid var(--wood-dk);border-radius:14px;background:var(--tan-lt);
+  font-size:13px;font-weight:700}
+.shop-nav button.sub{margin-left:14px;border-radius:7px;font-weight:400;font-size:12.5px;background:#f0ddba}
+.shop-nav button[aria-pressed="true"]{background:linear-gradient(180deg,#f6d98a,#e0ab3e)}
+.shop-main{display:flex;flex-direction:column;gap:8px;min-width:0}
+.filters{display:flex;flex-wrap:wrap;gap:12px;padding:5px 9px;border:2px solid var(--wood-dk);border-radius:8px;
+  background:var(--tan-lt);font-size:12.5px}
+.filters label{display:flex;align-items:center;gap:5px}
+.pager{display:flex;align-items:center;justify-content:center;gap:9px;font-size:12.5px;font-weight:700}
+.pager button{padding:1px 9px;border:2px solid var(--wood-dk);border-radius:6px;background:var(--tan-lt)}
+.goods{display:grid;grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:8px}
+.good{padding:7px;border:2px solid var(--wood-dk);border-radius:8px;background:var(--pane-lt);
+  display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
+.good .nm{font-size:12.5px;font-weight:700;min-height:2.4em;display:flex;align-items:center}
+.good .im{width:52px;height:52px;border:2px solid var(--wood-dk);border-radius:7px;background:#fff8e6;
+  display:grid;place-items:center;font-size:27px}
+.good .prices{display:flex;flex-direction:column;gap:2px;width:100%;font-size:12.5px;font-weight:700}
+.pr{display:flex;align-items:center;justify-content:center;gap:5px;padding:1px 6px;border:2px solid var(--wood-dk);
+  border-radius:6px;background:#efdcb8}
+.pr.zero{opacity:.45}
+.good .lvl{font-size:11.5px;font-weight:700;color:var(--red)}
+.good button.pick{width:100%;padding:4px;border:2px solid var(--wood-dk);border-radius:6px;
+  background:linear-gradient(180deg,#a6e07a,#5ba233);font-weight:700;font-size:12.5px}
+.good button.pick[disabled]{background:#c3b193;color:#8a7a60}
+/* карточка товара */
+.detail{display:flex;gap:12px;flex-wrap:wrap}
+.detail .left{display:flex;flex-direction:column;align-items:center;gap:7px}
+.detail .im{width:96px;height:96px;border:3px solid var(--wood-dk);border-radius:8px;background:#fff8e6;
+  display:grid;place-items:center;font-size:52px}
+.spin{display:flex;align-items:center;gap:3px}
+.spin input{width:54px;padding:3px 5px;border:2px solid var(--wood-dk);border-radius:5px;background:#fff8e6;
+  font:inherit;text-align:center}
+.spin button{width:22px;height:22px;border:2px solid var(--wood-dk);border-radius:4px;background:var(--tan-lt);
+  font-size:11px;line-height:1;padding:0}
+.specs{flex:1;min-width:210px;display:grid;grid-template-columns:auto 1fr;gap:3px 10px;align-content:start;font-size:13.5px}
+.specs dt{color:var(--ink-soft);text-align:right}
+.specs dd{margin:0;font-weight:700}
+.specs dd.desc{font-weight:400}
+.specs dd .dot,.pr .dot{display:inline-block;vertical-align:-2px}
+
+/* интерьер постройки */
+.inside{background:repeating-linear-gradient(180deg,#c89357 0 26px,#b8834a 26px 28px);
+  border:3px solid var(--wood-dk);border-radius:8px;padding:8px}
+.slot{display:flex;align-items:center;gap:9px;padding:6px 7px;margin-bottom:6px;border:2px solid var(--wood-dk);
+  border-radius:8px;background:linear-gradient(180deg,#f6e7c2,#e8d2a2)}
+.slot:last-child{margin-bottom:0}
+.slot .big{font-size:30px;line-height:1;flex:none}
+.slot .who{flex:1;min-width:0}
+.slot .who b{display:block;font-size:13.5px}
+.slot .st{font-size:12px;color:var(--ink-soft)}
+.slot .acts{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.slot.free{justify-content:center;font-style:italic;color:#6d5636;background:#e4cfa6}
+.seasons{display:inline-flex;align-items:center;gap:3px;padding:0 5px;border:2px solid var(--wood-dk);border-radius:10px;
+  background:#fff8e6;font-size:11px;font-weight:700}
+.mini{padding:4px 9px;border:2px solid var(--wood-dk);border-radius:6px;background:linear-gradient(180deg,#f6d98a,#e0ab3e);
+  font-weight:700;font-size:12px;white-space:nowrap}
+.mini.go{background:linear-gradient(180deg,#a6e07a,#5ba233)}
+.mini[disabled]{background:#c3b193;color:#8a7a60;cursor:not-allowed}
+.house-hd{display:flex;flex-wrap:wrap;gap:7px;align-items:center;justify-content:space-between;margin-bottom:8px}
+
+/* списки */
+.rows{display:flex;flex-direction:column;gap:6px}
+.row{display:flex;align-items:center;gap:9px;padding:6px 9px;border:2px solid var(--wood-dk);border-radius:8px;
+  background:var(--pane-lt)}
+.row .ic{font-size:21px;flex:none}
+.row .grow{flex:1;min-width:0}
+.row b{display:block;font-size:13.5px}
+.row small{color:var(--ink-soft);font-size:12px}
+.row.me{outline:3px solid var(--red);outline-offset:-3px}
+.done{color:#25611a;font-weight:700}
+.rank{width:26px;text-align:right;font-weight:700;color:var(--ink-soft)}
+
+/* подарок дня */
+.baskets{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:9px}
+.bsk{aspect-ratio:1;border:2px solid var(--wood-dk);border-radius:8px;font-size:25px;display:grid;place-items:center;
+  background:linear-gradient(180deg,#f2dcae,#dcbe85)}
+.bsk[disabled]{cursor:default}
+.bsk.open{background:#cbe6b6}
+.days{display:flex;gap:6px;justify-content:center;margin-top:8px}
+.day{width:33px;height:39px;border:2px solid var(--wood-dk);border-radius:5px;background:#f6e7c2;
+  display:grid;place-items:center;font-weight:700;font-size:12px}
+.day.on{background:var(--red);color:#fff}
+.reward-box{display:flex;flex-direction:column;align-items:center;gap:7px;padding:12px}
+.reward-box .im{width:70px;height:70px;border:3px solid var(--wood-dk);border-radius:8px;background:#5b8fc9;
+  display:grid;place-items:center;font-size:36px}
+
+#toasts{position:fixed;left:50%;bottom:132px;transform:translateX(-50%);z-index:60;width:min(420px,92vw);
+  display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
+.toast{padding:6px 13px;border:3px solid var(--wood-dk);border-radius:9px;background:var(--tan-lt);
+  font-size:13px;font-weight:700;box-shadow:var(--sh);animation:up .25s ease-out;text-align:center}
+.toast.bad{background:#f2c3bb}
+@keyframes up{from{opacity:0;transform:translateY(10px)}}
+@media (max-width:620px){
+  .shop{grid-template-columns:1fr}
+  .shop-nav{flex-direction:row;flex-wrap:wrap;max-height:none}
+  .shop-nav button.sub{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+:focus-visible{outline:3px solid #1f6fb0;outline-offset:2px}
+</style>
+
+<div id="app">
+  <div class="hud">
+    <div class="ava">🧑‍🌾</div>
+    <div class="nickbox"><b id="nick">test123 12345</b><small>ур. <span class="num" id="lvl">1</span></small></div>
+    <div class="meters">
+      <div class="mrow"><i>⭐</i><div class="bar xp"><span id="xpbar"></span><em id="xptxt"></em></div></div>
+      <div class="mrow"><i>🐕</i><div class="bar dog"><span id="dogbar"></span><em id="dogtxt"></em></div></div>
+      <div class="mrow"><i>🐈</i><div class="bar cat"><span id="catbar"></span><em id="cattxt"></em></div></div>
+      <div class="mrow"><i>⚡</i><div class="bar en"><span id="enbar"></span><em id="entxt"></em></div></div>
+    </div>
+    <div class="purse">
+      <span class="pill"><i class="dot s"></i><b class="num" id="silver">500</b></span>
+      <span class="pill"><i class="dot c"></i><b class="num" id="gems">0.00</b></span>
+    </div>
+    <div class="quick" id="quick"></div>
+    <button class="tbtn" id="shopBtn">🛒 Магазин</button>
+    <button class="tbtn alert" id="questBtn">Задание на сегодня</button>
+  </div>
+
+  <div class="arch">
+    <div class="board">
+      <div class="k">К О Л Х О З</div>
+      <div class="n">«<button id="renameBtn" title="Переименовать колхоз">Червонэ дышло</button>»</div>
+    </div>
+  </div>
+
+  <div class="yard">
+    <div class="cloud">☁️</div><div class="cloud b">☁️</div>
+    <div class="barns" id="barns"></div>
+    <div class="yard-foot">
+      <div class="decor-row" id="decorRow"></div>
+      <div class="decor-row">🐕 🐈 🐓</div>
+    </div>
+    <div class="chair">
+      <div class="face">👨‍🌾</div>
+      <div class="bubble" id="hint">Обрати внимание на ЗАДАНИЯ!</div>
+    </div>
+  </div>
+</div>
+
+<div class="dock">
+  <div class="dock-in">
+    <div class="tabs" id="tabs"></div>
+    <div class="qstrip" id="qstrip"></div>
+  </div>
+</div>
+
+<div id="modals"></div>
+<div id="toasts"></div>
+
+<script>
+"use strict";
+/* ===================== справочники ===================== */
+/* Время: 1 реальная секунда = 4 игровые минуты, поэтому «4 ч. 00 мин.» созревания
+   проходят за минуту реального времени. Все длительности ниже — в игровых минутах. */
+var GM_PER_SEC = 4;
+
+var HOUSES = {
+  kury:   {n:"Курятник",  slot:"насест",  em:"🐔", roof:"thatch", prod:{n:"Яйца",     em:"🥚"}, kind:"animal"},
+  ogorod: {n:"Огород",    slot:"грядка",  em:"🥔", roof:"thatch", prod:{n:"Овощи",    em:"🥕"}, kind:"plant"},
+  gusi:   {n:"Гусятник",  slot:"загон",   em:"🦢", roof:"tile",   prod:{n:"Пух",      em:"🪶"}, kind:"animal"},
+  svini:  {n:"Свинарник", slot:"станок",  em:"🐖", roof:"tile",   prod:{n:"Сало",     em:"🥓"}, kind:"animal"},
+  teplica:{n:"Теплица",   slot:"лоток",   em:"🍄", roof:"tile",   prod:{n:"Тепличное",em:"🥒"}, kind:"plant"},
+  korovy: {n:"Коровник",  slot:"стойло",  em:"🐄", roof:"thatch", prod:{n:"Молоко",   em:"🥛"}, kind:"animal"},
+  sad:    {n:"Сад",       slot:"лунка",   em:"🍎", roof:"thatch", prod:{n:"Фрукты",   em:"🍏"}, kind:"plant"},
+  koni:   {n:"Конюшня",   slot:"денник",  em:"🐴", roof:"tile",   prod:{n:"Навоз",    em:"💩"}, kind:"animal"}
+};
+var HKEYS = Object.keys(HOUSES);
+var CAP = [3,5,8,12];
+var HOUSE_TITLES = ["Домик","Большой дом","Ферма","Элитная ферма"];
+
+/* Породы и сорта. «Русская белая» — ровно как в магазине оригинала:
+   150 серебра, 4 ч., урожайность 47, цена единицы 3, сезон 3, опыт 50. */
+var BREEDS = [
+  {id:"rusbel",  h:"kury",   n:"Русская белая",        em:"🐔", s:150,   c:0,   mat:240,  y:47,  u:3,   se:3, xp:50,   lvl:1,  d:"Недорогая несушка, выбор начинающего фермера"},
+  {id:"leggorn", h:"kury",   n:"Леггорн",              em:"🐓", s:640,   c:0,   mat:480,  y:96,  u:4,   se:4, xp:130,  lvl:3,  d:"Белая птица с белым яйцом. Несётся как заведённая."},
+  {id:"kuchin",  h:"kury",   n:"Кучинская юбилейная",  em:"🐔", s:2400,  c:0,   mat:720,  y:150, u:6,   se:5, xp:320,  lvl:6,  d:"Юбилейная порода к юбилею колхоза."},
+  {id:"brama",   h:"kury",   n:"Брама",                em:"🐥", s:0,     c:4,   mat:600,  y:210, u:8,   se:6, xp:500,  lvl:8,  d:"Породистая птица. Берут за кристаллы и хвастаются соседям."},
+  {id:"kartoha", h:"ogorod", n:"Картошка",             em:"🥔", s:60,    c:0,   mat:180,  y:30,  u:3,   se:1, xp:20,   lvl:1,  d:"Второй хлеб. Сажают все, копают всем колхозом."},
+  {id:"kukuruza",h:"ogorod", n:"Кукуруза",             em:"🌽", s:140,   c:0,   mat:300,  y:40,  u:5,   se:1, xp:45,   lvl:2,  d:"Царица полей. Спущена сверху, прижилась."},
+  {id:"podsol",  h:"ogorod", n:"Подсолнух",            em:"🌻", s:320,   c:0,   mat:420,  y:55,  u:8,   se:1, xp:90,   lvl:4,  d:"На семечки и на масло. Лузгают всем правлением."},
+  {id:"ogurcy",  h:"teplica",n:"Огурцы",               em:"🥒", s:400,   c:0,   mat:240,  y:60,  u:9,   se:3, xp:110,  lvl:3,  d:"Ранние, под плёнкой. К майским будут."},
+  {id:"trufel",  h:"teplica",n:"Трюфеля",              em:"🍄", s:2500,  c:0,   mat:900,  y:12,  u:260, se:2, xp:600,  lvl:6,  d:"Барская прихоть. Растут в темноте, стоят как трактор."},
+  {id:"tula",    h:"gusi",   n:"Тульский бойцовый",    em:"🦢", s:900,   c:0,   mat:360,  y:70,  u:9,   se:3, xp:120,  lvl:4,  d:"Характер скверный, пух отменный."},
+  {id:"holmgus", h:"gusi",   n:"Холмогорский гусь",    em:"🦆", s:3200,  c:0,   mat:720,  y:140, u:12,  se:4, xp:380,  lvl:7,  d:"Крупная птица с шишкой на клюве."},
+  {id:"vietnam", h:"svini",  n:"Вьетнамская вислобрюхая",em:"🐖",s:1800, c:0,   mat:600,  y:60,  u:20,  se:3, xp:260,  lvl:5,  d:"Ест что дают, жиреет на глазах."},
+  {id:"mirgorod",h:"svini",  n:"Миргородская",         em:"🐷", s:6400,  c:0,   mat:1080, y:110, u:28,  se:4, xp:700,  lvl:9,  d:"Рябая, сальная, гордость свинарника."},
+  {id:"yablon",  h:"sad",    n:"Яблоня",               em:"🍎", s:1200,  c:0,   mat:720,  y:80,  u:14,  se:8, xp:300,  lvl:5,  d:"Восемь сезонов яблок с одной лунки."},
+  {id:"grusha",  h:"sad",    n:"Груша",                em:"🍐", s:2000,  c:0,   mat:900,  y:70,  u:22,  se:8, xp:480,  lvl:7,  d:"Та самая, которую нельзя было кушать."},
+  {id:"holmkor", h:"korovy", n:"Холмогорская",         em:"🐄", s:9000,  c:0,   mat:720,  y:90,  u:45,  se:5, xp:900,  lvl:10, d:"Даёт молоко вёдрами, ест соответственно."},
+  {id:"simment", h:"korovy", n:"Симментальская",       em:"🐮", s:24000, c:0,   mat:1440, y:160, u:60,  se:6, xp:2000, lvl:13, d:"Молочно-мясная. Показатели по обоим планам."},
+  {id:"vladimir",h:"koni",   n:"Владимирский тяжеловоз",em:"🐴",s:32000, c:0,   mat:1440, y:120, u:55,  se:5, xp:2400, lvl:14, d:"Трактор, который ест сено и не ломается."}
+];
+var FEEDS = [
+  {id:"low",    n:"Корм низкого сорта",         em:"🟥", s:90,   c:0, sp:1.0,  ym:1.0,  for:"Для животных", d:"Дёшево и сердито. Созревание в полный срок."},
+  {id:"mid",    n:"Корм среднего сорта",        em:"🟩", s:430,  c:0, sp:0.65, ym:1.1,  for:"Для животных", d:"Созревание на треть быстрее, урожайность +10%."},
+  {id:"high",   n:"Корм высокого сорта",        em:"🟦", s:2500, c:0, sp:0.4,  ym:1.25, for:"Для животных", d:"Созревание в 2,5 раза быстрее, урожайность +25%."},
+  {id:"elite",  n:"Корм элитного сорта",        em:"🟪", s:9000, c:0, sp:0.25, ym:1.5,  for:"Для животных", d:"Элита. Вчетверо быстрее, урожайность +50%."},
+  {id:"instant",n:"Набор моментальных подкормок",em:"🫙", s:0,   c:4, inst:true, for:"Для животных", d:"Мгновенно доводит подопечного до готовности."},
+  {id:"lowset", n:"Набор корма низкого сорта",  em:"🪣", s:0,    c:1, gives:{low:10}, for:"Для животных", d:"Десять пачек корма низкого сорта одним ведром."},
+  {id:"bone",   n:"Косточка",                   em:"🦴", s:120,  c:0, pet:"dog", for:"Для собаки",   d:"Сытый пёс сторожит двор: +3% к урожайности."},
+  {id:"fish",   n:"Рыбка",                      em:"🐟", s:140,  c:0, pet:"cat", for:"Для кота",     d:"Сытый кот ловит мышей в амбаре: +5% к урожайности."},
+  {id:"univer", n:"Комбикорм универсальный",    em:"🧃", s:700,  c:0, sp:0.5, ym:1.15, for:"Универсальный", d:"Годится и скотине, и грядке."}
+];
+var DECOR = [
+  {id:"pleten", n:"Плетень",           em:"🪵", s:200,   c:0, bonus:1, d:"Плетень по периметру. Соседи одобряют."},
+  {id:"skirda", n:"Скирда сена",       em:"🌾", s:400,   c:0, bonus:1, d:"Стоит во дворе, создаёт настроение."},
+  {id:"telega", n:"Телега",            em:"🛒", s:650,   c:0, bonus:2, d:"Оглобли красить не обязательно, но можно."},
+  {id:"kolodec",n:"Колодец",           em:"🪣", s:900,   c:0, bonus:2, d:"Вода своя, ходить к реке не надо."},
+  {id:"fluger", n:"Флюгер-петух",      em:"🐓", s:1400,  c:0, bonus:3, d:"Показывает ветер и статус хозяина."},
+  {id:"klumba", n:"Клумба",            em:"🌷", s:0,     c:1, bonus:3, d:"Цветы у правления. Чисто для красоты."},
+  {id:"doska",  n:"Доска почёта",      em:"🖼️", s:3000,  c:0, bonus:5, d:"Портреты передовиков. +5% к урожайности."},
+  {id:"traktor",n:"Трактор «Беларусь»",em:"🚜", s:15000, c:0, bonus:8, d:"Стоит во дворе. Иногда даже заводится."}
+];
+var GIFTS = [
+  {id:"vily",    n:"Вилы",             em:"🍴", s:1500, c:0, sub:"В здания",    d:"Подарок в здание соседу."},
+  {id:"kormushka",n:"Кормушка с зерном",em:"🥣", s:0,   c:2, sub:"В здания",    d:"Соседская живность скажет спасибо."},
+  {id:"poilka", n:"Поилка",            em:"🚰", s:0,    c:1, sub:"В здания",    d:"Вода всегда свежая."},
+  {id:"gramota",n:"Почётная грамота",  em:"📜", s:0,    c:4, sub:"Флаги, ленты",d:"За успехи в социалистическом соревновании."},
+  {id:"vympel", n:"Переходящий вымпел",em:"🚩", s:0,    c:3, sub:"Флаги, ленты",d:"Переходит от колхоза к колхозу."},
+  {id:"grabli", n:"Грабли",            em:"🧹", s:3000, c:0, sub:"Другое",      d:"На них наступает каждый второй."},
+  {id:"lopata", n:"Лопата",            em:"🥄", s:0,    c:1, sub:"Другое",      d:"Универсальный инструмент колхозника."}
+];
+var HELPERS = [
+  {id:"batrak",  n:"Батрак Гриша",   em:"🧑‍🌾", s:0, c:6, d:"Сам собирает готовый урожай раз в минуту. Работает молча."},
+  {id:"pastushok",n:"Пастушок Ваня", em:"👦",  s:0, c:4, d:"Сам кормит голодную живность, пока есть корм низкого сорта."}
+];
+var BOOSTS = [
+  {id:"udar",  n:"Ударное производство", em:"🔨", s:0, c:3, d:"Три минуты всё созревает вдвое быстрее."},
+  {id:"kvas",  n:"Бочка кваса",          em:"🍺", s:0, c:2, d:"Энергия сразу до полной."},
+  {id:"vymp",  n:"Красный вымпел",       em:"🚩", s:0, c:5, d:"+25% к урожайности на 5 минут."}
+];
+var RES = [
+  {id:"doska",  n:"Доски",   em:"🪵", s:300, c:0, d:"Идут на улучшение построек."},
+  {id:"gvozdi", n:"Гвозди",  em:"📌", s:150, c:0, d:"Без них доски — просто дрова."},
+  {id:"soloma", n:"Солома",  em:"🌾", s:80,  c:0, d:"На крышу и на подстилку."}
+];
+var UPG_COST = {
+  kury:   [null,{s:2600,c:6,b:10},{s:6500,c:12,b:25},{s:15000,c:19,b:60}],
+  ogorod: [null,{s:1800,c:6,b:8}, {s:5000,c:12,b:20},{s:12000,c:19,b:50}],
+  teplica:[null,{s:9000,c:6,b:14},{s:26000,c:12,b:32},{s:60000,c:19,b:75}],
+  gusi:   [null,{s:26000,c:6,b:18},{s:65000,c:12,b:40},{s:150000,c:19,b:90}],
+  svini:  [null,{s:40000,c:6,b:20},{s:110000,c:12,b:45},{s:260000,c:19,b:100}],
+  sad:    [null,{s:12000,c:6,b:16},{s:34000,c:12,b:36},{s:80000,c:19,b:80}],
+  korovy: [null,{s:90000,c:6,b:26},{s:240000,c:12,b:55},{s:520000,c:19,b:120}],
+  koni:   [null,{s:150000,c:6,b:30},{s:400000,c:12,b:65},{s:900000,c:19,b:140}]
+};
+var QUESTS = [
+  {t:"Купи цыпленка",   d:"Приобрети в магазине цыпленка и посади на насест в курятнике.", k:"buy_kury",       n:1,   rw:{t:"item", id:"udar",  n:1, nm:"Ударное производство", em:"🔨"}},
+  {t:"Покорми Русскую белую", d:"Купи в магазине корм и покорми курицу породы «Русская белая».", k:"fed",    n:1,   rw:{t:"feed", id:"low",   n:5, nm:"Корм низкого сорта",  em:"🟥"}},
+  {t:"Собери яйца",     d:"У тебя снеслась курица, зайди в курятник и собери яйца.",        k:"harvest_kury",  n:1,   rw:{t:"feed", id:"mid",   n:5, nm:"Корм среднего сорта", em:"🟩"}},
+  {t:"Сдай продукцию",  d:"Отвези яйца на склад и продай их. Серебро само себя не заработает.", k:"sold_silver", n:100, rw:{t:"silver", n:250, nm:"Серебро", em:"🪙"}},
+  {t:"Посади картошку", d:"Купи картошку в магазине и посади её на грядку в огороде.",      k:"buy_ogorod",    n:2,   rw:{t:"xp",   n:120, nm:"Опыт", em:"⭐"}},
+  {t:"Накорми собаку",  d:"Купи косточку и брось псу. Сытый пёс прибавляет урожайности.",   k:"fed_dog",       n:1,   rw:{t:"silver", n:400, nm:"Серебро", em:"🪙"}},
+  {t:"Первый урожай с грядки", d:"Собери урожай картошки с огорода.",                       k:"harvest_ogorod",n:2,   rw:{t:"feed", id:"high", n:2, nm:"Корм высокого сорта", em:"🟦"}},
+  {t:"Расширение курятника", d:"Улучши курятник до второго уровня — на насесте станет тесно.", k:"upg",        n:1,   rw:{t:"gems", n:2, nm:"Кристаллы", em:"💎"}},
+  {t:"Трюфеля!",        d:"Собери первый урожай трюфелей.",                                 k:"harvest_trufel",n:1,   rw:{t:"silver", n:100, nm:"Серебро", em:"🍄"}},
+  {t:"Червонэ дышло",   d:"Собери 500 единиц продукции и забери переходящий вымпел колхоза.", k:"harvest_total",n:500, rw:{t:"gems", n:5, nm:"Кристаллы", em:"🚩"}}
+];
+var HINTS = [
+  "Обрати внимание на ЗАДАНИЯ!",
+  "Сначала покорми, потом жди созревания, потом собирай.",
+  "Сезон — это сколько урожаев подопечный ещё даст. Кончились — уходит со двора.",
+  "Хороший корм дороже, зато созревание быстрее и урожайность выше.",
+  "Продукция лежит на складе мёртвым грузом — сдавай её.",
+  "Сытые пёс и кот прибавляют процент к урожайности всему двору.",
+  "Улучшил постройку — стало больше мест.",
+  "Кристаллы капают за уровни. Касса на обеде."
+];
+var FRIENDS = [
+  {n:"Кум Микола",     f:"«Красный пахарь»"},
+  {n:"Тётя Клава",     f:"«Путь Ильича»"},
+  {n:"Агроном Саныч",  f:"«Рассвет»"},
+  {n:"Дед Опанас",     f:"«Зелений гай»"},
+  {n:"Валька с фермы", f:"«Светлый путь»"},
+  {n:"Шурин из райцентра", f:"«Прогресс»"}
+];
+var RIVALS = [
+  ["Кум Микола","«Красный пахарь»",41200],["Зоотехник Люба","«Победа»",38700],
+  ["Бригадир Гнат","«Большевик»",34100],["Механизатор Стёпа","«Дружба»",29800],
+  ["Доярка Оксана","«Маяк»",25500],["Завхоз Аркадий","«Восход»",21300],
+  ["Тракторист Жора","«Новый быт»",17900],["Учётчица Рая","«Колос»",14200],
+  ["Сторож Митрич","«Тихий Дон»",9800],["Практикант Вова","«Юность»",4600],
+  ["Дед Опанас","«Зелений гай»",2100],["Валька с фермы","«Светлый путь»",900]
+];
+var WHEEL = [
+  {t:"silver", n:300,  nm:"300 серебра",            em:"🪙"},
+  {t:"silver", n:1000, nm:"1000 серебра",           em:"🪙"},
+  {t:"feed",   id:"low",  n:5, nm:"Корм низкого сорта ×5",  em:"🟥"},
+  {t:"feed",   id:"mid",  n:3, nm:"Корм среднего сорта ×3", em:"🟩"},
+  {t:"feed",   id:"high", n:1, nm:"Корм высокого сорта ×1", em:"🟦"},
+  {t:"xp",     n:150,  nm:"150 опыта",              em:"⭐"},
+  {t:"gems",   n:1,    nm:"1 кристалл",             em:"💎"},
+  {t:"res",    id:"doska", n:5, nm:"Доски ×5",      em:"🪵"},
+  {t:"breed",  id:"rusbel", nm:"Русская белая в подарок", em:"🐔"},
+  {t:"silver", n:50,   nm:"50 серебра (не повезло)",em:"🪙"}
+];
+
+/* ===================== состояние ===================== */
+var SAVE = "chervone-dyshlo-v2";
+var uid = 1;
+function nowMs(){ return Date.now(); }
+
+function fresh(){
+  var s = {
+    nick:"Председатель", farm:"Червонэ дышло",
+    silver:500, gems:0, xp:0, lvl:1, energy:33, enAt:nowMs(),
+    dog:60, cat:60, petAt:nowMs(),
+    feed:{}, res:{}, items:{}, gifts:{},
+    houses:{}, prods:{}, decor:[], helpers:[],
+    c:{}, quest:0, qview:0,
+    daily:{date:null, streak:0, opened:false, picked:-1},
+    helped:{}, boostUntil:0, vympUntil:0, helpAt:0, lastSeen:nowMs()
+  };
+  FEEDS.forEach(function(f){ s.feed[f.id] = 0; });
+  RES.forEach(function(r){ s.res[r.id] = 0; });
+  HKEYS.forEach(function(k){ s.houses[k] = {lvl:1, slots:[]}; s.prods[k] = {n:0, val:0}; });
+  s.feed.low = 3;
+  s.houses.kury.slots = [{id:uid++, breed:"rusbel", se:3, fed:true, ready:nowMs() - 1000, feedId:"low"}];
+  return s;
+}
+var S = fresh();
+
+function load(){
+  try{
+    var raw = localStorage.getItem(SAVE);
+    if(!raw) return;
+    var d = JSON.parse(raw);
+    if(!d || !d.houses || d.silver == null) return;
+    S = Object.assign(fresh(), d);
+    HKEYS.forEach(function(k){
+      if(!S.houses[k]) S.houses[k] = {lvl:1, slots:[]};
+      if(!S.prods[k]) S.prods[k] = {n:0, val:0};
+      S.houses[k].slots.forEach(function(a){ if(a.id >= uid) uid = a.id + 1; });
+    });
+    FEEDS.forEach(function(f){ if(S.feed[f.id] == null) S.feed[f.id] = 0; });
+    RES.forEach(function(r){ if(S.res[r.id] == null) S.res[r.id] = 0; });
+  }catch(e){ /* приватное окно — играем без сохранения */ }
+}
+function save(){
+  try{ S.lastSeen = nowMs(); localStorage.setItem(SAVE, JSON.stringify(S)); }catch(e){}
+}
+
+/* ===================== утилиты ===================== */
+function $(id){ return document.getElementById(id); }
+function el(tag, cls, html){
+  var e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(html != null) e.innerHTML = html;
+  return e;
+}
+function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+function fmt(n){ return Math.floor(n).toLocaleString("ru-RU"); }
+function fmtC(n){ return (Math.round(n * 100) / 100).toFixed(2); }
+function priceC(n){ return (Math.round(n * 10) / 10).toFixed(1); }
+function breed(id){ for(var i = 0; i < BREEDS.length; i++) if(BREEDS[i].id === id) return BREEDS[i]; return null; }
+function feedById(id){ for(var i = 0; i < FEEDS.length; i++) if(FEEDS[i].id === id) return FEEDS[i]; return null; }
+function maxXp(l){ return 100 + (l - 1) * 140; }
+function maxEn(){ return 100; }
+function gtime(min){
+  min = Math.max(0, Math.round(min));
+  if(min >= 1440){ var d = Math.floor(min / 1440), h = Math.round((min - d * 1440) / 60); return d + " д. " + h + " ч."; }
+  if(min >= 60){ var hh = Math.floor(min / 60), mm = min - hh * 60; return hh + " ч. " + (mm < 10 ? "0" + mm : mm) + " мин."; }
+  return min + " мин.";
+}
+function msLeft(a){ return Math.max(0, a.ready - nowMs()); }
+function gminLeft(a){ return msLeft(a) / 1000 * GM_PER_SEC; }
+function toast(msg, bad){
+  var t = el("div", "toast" + (bad ? " bad" : ""), esc(msg));
+  $("toasts").appendChild(t);
+  setTimeout(function(){ t.remove(); }, 2600);
+}
+function bump(k, by){ S.c[k] = (S.c[k] || 0) + (by == null ? 1 : by); }
+function addXp(n){
+  S.xp += n;
+  while(S.xp >= maxXp(S.lvl)){
+    S.xp -= maxXp(S.lvl); S.lvl++; S.gems += 1; S.energy = maxEn();
+    toast("Уровень " + S.lvl + "! Энергия полная, кристалл в кассу.");
+  }
+}
+function yieldPct(){
+  var p = 100;
+  if(S.dog > 0) p += 3;
+  if(S.cat > 0) p += 5;
+  S.decor.forEach(function(id){ DECOR.forEach(function(d){ if(d.id === id) p += d.bonus; }); });
+  if(nowMs() < S.vympUntil) p += 25;
+  return p;
+}
+function tickEnergy(){
+  var g = Math.floor((nowMs() - S.enAt) / 15000);
+  if(g > 0){ S.energy = Math.min(maxEn(), S.energy + g); S.enAt += g * 15000; }
+  if(S.energy >= maxEn()) S.enAt = nowMs();
+}
+function tickPets(){
+  var g = Math.floor((nowMs() - S.petAt) / 60000);
+  if(g > 0){ S.dog = Math.max(0, S.dog - g * 2); S.cat = Math.max(0, S.cat - g * 2); S.petAt += g * 60000; }
+}
+function spendEnergy(n){
+  tickEnergy();
+  if(S.energy < n){ toast("Энергия кончилась. Передохни или выпей квасу.", true); return false; }
+  S.energy -= n; return true;
+}
+function pay(s, c){
+  if(s && S.silver < s){ toast("Не хватает серебра.", true); return false; }
+  if(c && S.gems < c){ toast("Не хватает кристаллов. Касса на обеде.", true); return false; }
+  S.silver -= s || 0; S.gems -= c || 0; return true;
+}
+function cap(k){ return CAP[S.houses[k].lvl - 1]; }
+function free(k){ return cap(k) - S.houses[k].slots.length; }
+function stateOf(a){ return !a.fed ? "hungry" : (nowMs() >= a.ready ? "ready" : "growing"); }
+function counts(k){
+  var r = 0, h = 0;
+  S.houses[k].slots.forEach(function(a){ var st = stateOf(a); if(st === "ready") r++; if(st === "hungry") h++; });
+  return {ready:r, hungry:h};
+}
+
+/* ===================== задания ===================== */
+function qprog(q){ return q.k === "lvl" ? S.lvl : (S.c[q.k] || 0); }
+function checkQuests(){
+  while(S.quest < QUESTS.length){
+    var q = QUESTS[S.quest];
+    if(qprog(q) < q.n) break;
+    grant(q.rw);
+    S.quest++;
+    if(S.qview < S.quest) S.qview = S.quest;
+    showQuestDone(q);
+  }
+}
+function grant(rw){
+  if(rw.t === "silver") S.silver += rw.n;
+  else if(rw.t === "gems") S.gems += rw.n;
+  else if(rw.t === "xp") addXp(rw.n);
+  else if(rw.t === "feed") S.feed[rw.id] += rw.n;
+  else if(rw.t === "res") S.res[rw.id] += rw.n;
+  else if(rw.t === "item") S.items[rw.id] = (S.items[rw.id] || 0) + rw.n;
+  else if(rw.t === "breed"){
+    var b = breed(rw.id);
+    if(b && free(b.h) > 0) S.houses[b.h].slots.push({id:uid++, breed:b.id, se:b.se, fed:false, ready:0, feedId:"low"});
+    else S.silver += 300;
+  }
+}
+
+/* ===================== действия ===================== */
+function plant(b, qty){
+  var k = b.h, kind = HOUSES[k].kind;
+  var n = Math.max(1, Math.min(qty || 1, free(k)));
+  if(free(k) < 1){ toast(HOUSES[k].n + ": свободных " + HOUSES[k].slot + "ов нет. Нужно улучшение.", true); return false; }
+  if(S.lvl < b.lvl){ toast("Доступно с " + b.lvl + " уровня.", true); return false; }
+  if(!pay(b.s * n, b.c * n)) return false;
+  for(var i = 0; i < n; i++) S.houses[k].slots.push({id:uid++, breed:b.id, se:b.se, fed:false, ready:0, feedId:"low"});
+  bump("buy_" + k, n);
+  addXp(Math.round(b.xp / 10) * n);
+  toast(b.n + (kind === "plant" ? " — на " + HOUSES[k].slot + "у." : " — куплена. Не забудь покормить."));
+  after();
+  return true;
+}
+function doFeed(k, id, fid){
+  var a = null;
+  S.houses[k].slots.forEach(function(x){ if(x.id === id) a = x; });
+  if(!a || a.fed) return;
+  var f = feedById(fid);
+  if(!S.feed[fid]){ toast(f.n + " кончился. На базар.", true); return; }
+  if(!spendEnergy(1)) return;
+  S.feed[fid]--;
+  a.fed = true; a.feedId = fid;
+  var b = breed(a.breed);
+  if(f.inst) a.ready = nowMs();
+  else {
+    var boost = nowMs() < S.boostUntil ? 0.5 : 1;
+    a.ready = nowMs() + b.mat / GM_PER_SEC * 1000 * f.sp * boost;
+  }
+  bump("fed"); addXp(2);
+  after();
+}
+function harvest(k, id){
+  var a = null, i = -1;
+  S.houses[k].slots.forEach(function(x, ix){ if(x.id === id){ a = x; i = ix; } });
+  if(!a || stateOf(a) !== "ready") return;
+  if(!spendEnergy(1)) return;
+  var b = breed(a.breed), f = feedById(a.feedId) || FEEDS[0];
+  var units = Math.round(b.y * (f.ym || 1) * yieldPct() / 100);
+  S.prods[k].n += units;
+  S.prods[k].val += units * b.u;
+  a.se--; a.fed = false; a.ready = 0;
+  bump("harvest_" + k); bump("harvest_" + b.id); bump("harvest_total", units);
+  addXp(b.xp);
+  if(a.se <= 0){
+    S.houses[k].slots.splice(i, 1);
+    toast(b.n + ": сезоны кончились, " + (HOUSES[k].kind === "plant" ? "грядка освободилась" : "ушла со двора") + ". Собрано " + units + " " + HOUSES[k].prod.em);
+  } else {
+    toast("+" + units + " " + HOUSES[k].prod.em + " (осталось сезонов: " + a.se + ")");
+  }
+  after();
+}
+function harvestAll(k){
+  var ready = S.houses[k].slots.filter(function(a){ return stateOf(a) === "ready"; });
+  if(!ready.length){ toast("Собирать нечего.", true); return; }
+  ready.forEach(function(a){ tickEnergy(); if(S.energy >= 1) harvestQuiet(k, a); });
+  after();
+}
+function harvestQuiet(k, a){
+  if(stateOf(a) !== "ready" || S.energy < 1) return;
+  S.energy--;
+  var b = breed(a.breed), f = feedById(a.feedId) || FEEDS[0];
+  var units = Math.round(b.y * (f.ym || 1) * yieldPct() / 100);
+  S.prods[k].n += units; S.prods[k].val += units * b.u;
+  a.se--; a.fed = false; a.ready = 0;
+  bump("harvest_" + k); bump("harvest_" + b.id); bump("harvest_total", units);
+  addXp(b.xp);
+  if(a.se <= 0){
+    var i = S.houses[k].slots.indexOf(a);
+    if(i >= 0) S.houses[k].slots.splice(i, 1);
+  }
+}
+function feedAll(k){
+  var hungry = S.houses[k].slots.filter(function(a){ return !a.fed; });
+  if(!hungry.length){ toast("Все сыты.", true); return; }
+  var order = ["elite","high","mid","univer","low"];
+  var n = 0;
+  hungry.forEach(function(a){
+    var fid = null;
+    order.forEach(function(id){ if(!fid && S.feed[id] > 0) fid = id; });
+    if(!fid) return;
+    tickEnergy();
+    if(S.energy < 1) return;
+    S.energy--; S.feed[fid]--;
+    a.fed = true; a.feedId = fid;
+    var b = breed(a.breed), f = feedById(fid);
+    var boost = nowMs() < S.boostUntil ? 0.5 : 1;
+    a.ready = f.inst ? nowMs() : nowMs() + b.mat / GM_PER_SEC * 1000 * f.sp * boost;
+    bump("fed"); addXp(2); n++;
+  });
+  toast(n ? "Покормлено: " + n : "Корма нет. На базар.", !n);
+  after();
+}
+function sellHouse(k){
+  var p = S.prods[k];
+  if(!p.n){ toast("Склад по этой позиции пуст.", true); return; }
+  S.silver += p.val; bump("sold_silver", p.val); addXp(Math.floor(p.val / 60));
+  toast("Сдано " + fmt(p.n) + " " + HOUSES[k].prod.em + " на " + fmt(p.val) + " серебра.");
+  p.n = 0; p.val = 0;
+  after();
+}
+function sellAll(){
+  var n = 0, v = 0;
+  HKEYS.forEach(function(k){ n += S.prods[k].n; v += S.prods[k].val; S.prods[k].n = 0; S.prods[k].val = 0; });
+  if(!n){ toast("Склад пуст.", true); return; }
+  S.silver += v; bump("sold_silver", v); addXp(Math.floor(v / 60));
+  toast("Сдано " + fmt(n) + " единиц продукции на " + fmt(v) + " серебра.");
+  after();
+}
+function upgrade(k){
+  var h = S.houses[k];
+  if(h.lvl >= 4){ toast("Дальше некуда, это уже элитная ферма.", true); return; }
+  var c = UPG_COST[k][h.lvl];
+  if(S.res.doska < c.b){ toast("Не хватает досок: нужно " + c.b + ", есть " + S.res.doska + ". Купи в «Ресурсах».", true); return; }
+  var bySilver = S.silver >= c.s;
+  if(!bySilver && S.gems < c.c){ toast("Нужно " + fmt(c.s) + " серебра или " + priceC(c.c) + " кристаллов.", true); return; }
+  if(bySilver) S.silver -= c.s; else S.gems -= c.c;
+  S.res.doska -= c.b;
+  h.lvl++;
+  bump("upg"); addXp(120);
+  toast(HOUSES[k].n + " → " + HOUSE_TITLES[h.lvl - 1] + ". Мест: " + cap(k));
+  after();
+}
+function buySimple(item, kind, qty){
+  var n = Math.max(1, qty || 1);
+  if(kind === "feed"){
+    if(!pay(item.s * n, item.c * n)) return;
+    if(item.gives){ for(var g in item.gives) S.feed[g] += item.gives[g] * n; }
+    else S.feed[item.id] += n;
+    toast(item.n + " ×" + n);
+  } else if(kind === "res"){
+    if(!pay(item.s * n, item.c * n)) return;
+    S.res[item.id] += n; toast(item.n + " ×" + n);
+  } else if(kind === "decor"){
+    if(S.decor.indexOf(item.id) >= 0){ toast("Уже стоит во дворе.", true); return; }
+    if(!pay(item.s, item.c)) return;
+    S.decor.push(item.id); addXp(20);
+    toast(item.n + " — во двор. Урожайность теперь " + yieldPct() + "%.");
+  } else if(kind === "gift"){
+    if(!pay(item.s * n, item.c * n)) return;
+    S.gifts[item.id] = (S.gifts[item.id] || 0) + n; addXp(10);
+    toast(item.n + " ×" + n + " — в сумку. Раздашь соседям во вкладке «Друзья».");
+  } else if(kind === "helper"){
+    if(S.helpers.indexOf(item.id) >= 0){ toast("Уже нанят.", true); return; }
+    if(!pay(item.s, item.c)) return;
+    S.helpers.push(item.id);
+    toast(item.n + " нанят. Работает сам.");
+  } else if(kind === "boost"){
+    if(!pay(item.s * n, item.c * n)) return;
+    S.items[item.id] = (S.items[item.id] || 0) + n;
+    toast(item.n + " ×" + n + " — во вкладке «Бонусы».");
+  }
+  after();
+}
+function useItem(id){
+  if(!S.items[id]){ return; }
+  S.items[id]--;
+  if(id === "udar"){ S.boostUntil = nowMs() + 180000; toast("Ударное производство! Три минуты всё созревает вдвое быстрее."); }
+  if(id === "kvas"){ S.energy = maxEn(); S.enAt = nowMs(); toast("Энергия полная."); }
+  if(id === "vymp"){ S.vympUntil = nowMs() + 300000; toast("Красный вымпел поднят: +25% к урожайности на 5 минут."); }
+  after();
+}
+function feedPet(which){
+  var f = which === "dog" ? feedById("bone") : feedById("fish");
+  if(!pay(f.s, 0)) return;
+  if(which === "dog"){ S.dog = 100; bump("fed_dog"); } else { S.cat = 100; bump("fed_cat"); }
+  S.petAt = nowMs();
+  addXp(5);
+  toast((which === "dog" ? "Пёс" : "Кот") + " накормлен. Урожайность " + yieldPct() + "%.");
+  after();
+}
+function todayKey(){ var d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
+function rollDaily(){
+  var t = todayKey();
+  if(S.daily.date !== t){
+    var y = new Date(Date.now() - 86400000);
+    var yk = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate();
+    S.daily.streak = S.daily.date === yk ? Math.min(5, S.daily.streak + 1) : 1;
+    S.daily.date = t; S.daily.opened = false; S.daily.picked = -1;
+  }
+}
+function tickHelpers(){
+  if(S.helpers.indexOf("batrak") >= 0 && nowMs() - S.helpAt > 60000){
+    S.helpAt = nowMs();
+    HKEYS.forEach(function(k){
+      S.houses[k].slots.slice().forEach(function(a){ if(stateOf(a) === "ready" && S.energy > 5) harvestQuiet(k, a); });
+    });
+  }
+  if(S.helpers.indexOf("pastushok") >= 0 && S.feed.low > 0){
+    HKEYS.forEach(function(k){
+      S.houses[k].slots.forEach(function(a){
+        if(!a.fed && S.feed.low > 0 && S.energy > 10){
+          S.feed.low--; S.energy--;
+          a.fed = true; a.feedId = "low";
+          var b = breed(a.breed);
+          a.ready = nowMs() + b.mat / GM_PER_SEC * 1000;
+          bump("fed");
+        }
+      });
+    });
+  }
+}
+
+/* ===================== окна ===================== */
+var live = [];
+function makeWin(title, cls){
+  var scrim = el("div", "scrim");
+  var win = el("div", "win" + (cls ? " " + cls : ""));
+  var hd = el("div", "win-hd");
+  hd.appendChild(el("h2", null, esc(title)));
+  var x = el("button", "x", "Закрыть");
+  hd.appendChild(x);
+  var bd = el("div", "win-bd");
+  win.appendChild(hd); win.appendChild(bd); scrim.appendChild(win);
+  x.onclick = function(){ closeWin(scrim); };
+  scrim.addEventListener("click", function(e){ if(e.target === scrim) closeWin(scrim); });
+  $("modals").appendChild(scrim);
+  return {scrim:scrim, win:win, body:bd};
+}
+function closeWin(scrim){
+  scrim.remove();
+  live = live.filter(function(l){ return document.body.contains(l.scrim); });
+}
+function closeAll(){ $("modals").innerHTML = ""; live = []; }
+function footer(win, buttons){
+  var ft = el("div", "win-ft");
+  buttons.forEach(function(b){
+    var btn = el("button", "btn" + (b.cls ? " " + b.cls : ""), esc(b.label));
+    btn.onclick = b.on;
+    if(b.dis) btn.disabled = true;
+    ft.appendChild(btn);
+  });
+  win.win.appendChild(ft);
+  return ft;
+}
+
+/* ---------- модалка «Задание выполнено» ---------- */
+function showQuestDone(q){
+  var w = makeWin("Задания", "sm");
+  var box = el("div", "reward-box");
+  box.appendChild(el("div", null, "Задание «" + esc(q.t) + "» выполнено. Ваша награда"));
+  box.appendChild(el("div", "im", q.rw.em));
+  box.appendChild(el("b", null, esc(q.rw.nm) + (q.rw.n ? " — " + q.rw.n : "")));
+  w.body.appendChild(box);
+  footer(w, [{label:"Закрыть", on:function(){ closeWin(w.scrim); }}]);
+}
+
+/* ---------- интерьер постройки ---------- */
+function openHouse(k){
+  var H = HOUSES[k];
+  var w = makeWin(H.n + " — " + HOUSE_TITLES[S.houses[k].lvl - 1]);
+  var body = w.body;
+  function draw(){
+    body.innerHTML = "";
+    var h = S.houses[k], c = counts(k);
+    var hd = el("div", "house-hd");
+    hd.appendChild(el("div", null,
+      "<b>Мест:</b> <span class='num'>" + h.slots.length + " / " + cap(k) + "</span> &nbsp; " +
+      "<b>На складе:</b> <span class='num'>" + fmt(S.prods[k].n) + "</span> " + H.prod.em +
+      " (" + fmt(S.prods[k].val) + " 🪙)"));
+    var acts = el("div", "slot-acts");
+    acts.style.display = "flex"; acts.style.gap = "5px"; acts.style.flexWrap = "wrap";
+    var bFeed = el("button", "mini", "Покормить всех");
+    bFeed.onclick = function(){ feedAll(k); draw(); };
+    var bHarv = el("button", "mini go", "Собрать всё" + (c.ready ? " (" + c.ready + ")" : ""));
+    bHarv.onclick = function(){ harvestAll(k); draw(); };
+    var bSell = el("button", "mini", "Сдать продукцию");
+    bSell.onclick = function(){ sellHouse(k); draw(); };
+    var bShop = el("button", "mini", "🛒 В магазин");
+    bShop.onclick = function(){ openShop(H.kind === "plant" ? "plants" : "animals"); };
+    acts.appendChild(bFeed); acts.appendChild(bHarv); acts.appendChild(bSell); acts.appendChild(bShop);
+    hd.appendChild(acts);
+    body.appendChild(hd);
+
+    var inside = el("div", "inside");
+    h.slots.forEach(function(a){
+      var b = breed(a.breed), st = stateOf(a);
+      var row = el("div", "slot");
+      row.appendChild(el("div", "big", b.em));
+      var who = el("div", "who");
+      who.innerHTML = "<b>" + esc(b.n) + " <span class='seasons'>🏅 осталось " + a.se + "</span></b>" +
+        "<span class='st'>" + (st === "hungry" ? "Голодная — нужен корм"
+          : st === "growing" ? "Созревание: " + gtime(gminLeft(a))
+          : "Готово к сбору · примерно " + Math.round(b.y * (feedById(a.feedId) || FEEDS[0]).ym * yieldPct() / 100) + " " + H.prod.em) + "</span>";
+      row.appendChild(who);
+      var ac = el("div", "acts");
+      if(st === "hungry"){
+        FEEDS.filter(function(f){ return (f.for === "Для животных" || f.for === "Универсальный") && !f.gives; }).forEach(function(f){
+          if(!S.feed[f.id]) return;
+          var btn = el("button", "mini", f.em + " " + S.feed[f.id]);
+          btn.title = f.n;
+          btn.onclick = function(){ doFeed(k, a.id, f.id); draw(); };
+          ac.appendChild(btn);
+        });
+        if(!ac.children.length){
+          var go = el("button", "mini", "Купить корм");
+          go.onclick = function(){ openShop("feed"); };
+          ac.appendChild(go);
+        }
+      } else if(st === "ready"){
+        var hb = el("button", "mini go", "Собрать");
+        hb.onclick = function(){ harvest(k, a.id); draw(); };
+        ac.appendChild(hb);
+      } else {
+        var sp = el("span", "st num", gtime(gminLeft(a)));
+        ac.appendChild(sp);
+      }
+      row.appendChild(ac);
+      inside.appendChild(row);
+    });
+    for(var i = h.slots.length; i < cap(k); i++){
+      var fr = el("div", "slot free", "Свободный " + H.slot + " — посади кого-нибудь");
+      fr.onclick = function(){ openShop(H.kind === "plant" ? "plants" : "animals"); };
+      inside.appendChild(fr);
+    }
+    body.appendChild(inside);
+
+    var up = el("div", "row");
+    up.style.marginTop = "8px";
+    if(h.lvl < 4){
+      var cst = UPG_COST[k][h.lvl];
+      up.innerHTML = "<span class='ic'>🔨</span><span class='grow'><b>" + HOUSE_TITLES[h.lvl] + "</b>" +
+        "<small>мест станет " + CAP[h.lvl] + " · " + fmt(cst.s) + " 🪙 или " + priceC(cst.c) + " 💎 · доски ×" + cst.b +
+        " (есть " + S.res.doska + ")</small></span>";
+      var ub = el("button", "mini", "Улучшить");
+      ub.onclick = function(){ upgrade(k); draw(); };
+      up.appendChild(ub);
+    } else {
+      up.innerHTML = "<span class='ic'>🏆</span><span class='grow'><b>Элитная ферма</b><small>улучшать больше некуда</small></span>";
+    }
+    body.appendChild(up);
+  }
+  draw();
+  live.push({scrim:w.scrim, fn:draw});
+}
+
+/* ---------- магазин ---------- */
+var shop = {cat:"new", sub:null, page:0, byPrice:false, byLvl:false};
+var SHOP_NAV = [
+  {id:"new", n:"Новинки"},
+  {id:"animals", n:"Животные"},
+  {id:"plants", n:"Растения"},
+  {id:"feed", n:"Корма", subs:["Для животных","Для собаки","Для кота","Универсальный"]},
+  {id:"decor", n:"Декор"},
+  {id:"gifts", n:"Подарки", subs:["В здания","Флаги, ленты","Другое"]},
+  {id:"upg", n:"Улучшения"},
+  {id:"helpers", n:"Помощники"},
+  {id:"boosts", n:"Бонусы"},
+  {id:"res", n:"Ресурсы"}
+];
+function shopGoods(){
+  var g = [];
+  if(shop.cat === "new"){
+    g = BREEDS.filter(function(b){ return b.lvl <= S.lvl + 2; }).sort(function(a, b){ return b.lvl - a.lvl; }).slice(0, 6)
+      .map(function(b){ return {kind:"breed", it:b}; });
+  } else if(shop.cat === "animals"){
+    g = BREEDS.filter(function(b){ return HOUSES[b.h].kind === "animal"; }).map(function(b){ return {kind:"breed", it:b}; });
+  } else if(shop.cat === "plants"){
+    g = BREEDS.filter(function(b){ return HOUSES[b.h].kind === "plant"; }).map(function(b){ return {kind:"breed", it:b}; });
+  } else if(shop.cat === "feed"){
+    g = FEEDS.filter(function(f){ return !shop.sub || f.for === shop.sub; }).map(function(f){ return {kind:"feed", it:f}; });
+  } else if(shop.cat === "decor"){
+    g = DECOR.map(function(d){ return {kind:"decor", it:d}; });
+  } else if(shop.cat === "gifts"){
+    g = GIFTS.filter(function(x){ return !shop.sub || x.sub === shop.sub; }).map(function(x){ return {kind:"gift", it:x}; });
+  } else if(shop.cat === "upg"){
+    g = HKEYS.map(function(k){ return {kind:"upg", it:{id:k}}; });
+  } else if(shop.cat === "helpers"){
+    g = HELPERS.map(function(x){ return {kind:"helper", it:x}; });
+  } else if(shop.cat === "boosts"){
+    g = BOOSTS.map(function(x){ return {kind:"boost", it:x}; });
+  } else if(shop.cat === "res"){
+    g = RES.map(function(x){ return {kind:"res", it:x}; });
+  }
+  if(shop.byLvl) g = g.filter(function(x){ return !x.it.lvl || x.it.lvl <= S.lvl; });
+  if(shop.byPrice) g = g.filter(function(x){
+    if(x.kind === "upg"){ var c = UPG_COST[x.it.id][S.houses[x.it.id].lvl]; return c && (S.silver >= c.s || S.gems >= c.c); }
+    return S.silver >= (x.it.s || 0) && S.gems >= (x.it.c || 0);
+  });
+  return g;
+}
+function openShop(cat, sub){
+  if(cat){ shop.cat = cat; shop.sub = sub || null; shop.page = 0; }
+  var w = makeWin("Магазин");
+  var wrap = el("div", "shop");
+  var nav = el("div", "shop-nav"), main = el("div", "shop-main");
+  wrap.appendChild(nav); wrap.appendChild(main);
+  w.body.appendChild(wrap);
+  footer(w, [
+    {label:"Пополнить счет", cls:"flat", on:function(){ toast("Касса на обеде. Приходите после уборочной.", true); }},
+    {label:"Закрыть", on:function(){ closeWin(w.scrim); }}
+  ]);
+  function draw(){
+    nav.innerHTML = "";
+    SHOP_NAV.forEach(function(c){
+      var b = el("button", null, esc(c.n));
+      b.setAttribute("aria-pressed", shop.cat === c.id && !shop.sub ? "true" : "false");
+      b.onclick = function(){ shop.cat = c.id; shop.sub = null; shop.page = 0; draw(); };
+      nav.appendChild(b);
+      if(c.subs && shop.cat === c.id){
+        c.subs.forEach(function(s){
+          var sb = el("button", "sub", esc(s));
+          sb.setAttribute("aria-pressed", shop.sub === s ? "true" : "false");
+          sb.onclick = function(){ shop.sub = shop.sub === s ? null : s; shop.page = 0; draw(); };
+          nav.appendChild(sb);
+        });
+      }
+    });
+    main.innerHTML = "";
+    var f = el("div", "filters");
+    var l1 = el("label", null, "<input type='checkbox' id='fPrice'" + (shop.byPrice ? " checked" : "") + "> Подходящие по цене");
+    var l2 = el("label", null, "<input type='checkbox' id='fLvl'" + (shop.byLvl ? " checked" : "") + "> Доступные по уровню");
+    f.appendChild(l1); f.appendChild(l2);
+    main.appendChild(f);
+    l1.querySelector("input").onchange = function(e){ shop.byPrice = e.target.checked; shop.page = 0; draw(); };
+    l2.querySelector("input").onchange = function(e){ shop.byLvl = e.target.checked; shop.page = 0; draw(); };
+
+    var goods = shopGoods(), per = 6, pages = Math.max(1, Math.ceil(goods.length / per));
+    if(shop.page >= pages) shop.page = pages - 1;
+    var pg = el("div", "pager");
+    var prev = el("button", null, "◀"), next = el("button", null, "▶");
+    prev.onclick = function(){ if(shop.page > 0){ shop.page--; draw(); } };
+    next.onclick = function(){ if(shop.page < pages - 1){ shop.page++; draw(); } };
+    pg.appendChild(prev);
+    pg.appendChild(el("span", null, "Страница " + (shop.page + 1) + " из " + pages));
+    pg.appendChild(next);
+    main.appendChild(pg);
+
+    var grid = el("div", "goods");
+    goods.slice(shop.page * per, shop.page * per + per).forEach(function(g){
+      grid.appendChild(goodCard(g, draw));
+    });
+    if(!goods.length) grid.appendChild(el("div", null, "<i>Ничего не подходит под фильтры.</i>"));
+    main.appendChild(grid);
+  }
+  draw();
+}
+function goodCard(g, redraw){
+  var it = g.it, card = el("div", "good");
+  var name = it.n, em = it.em, s = it.s || 0, c = it.c || 0, lvlReq = it.lvl || 0;
+  if(g.kind === "upg"){
+    var k = it.id, h = S.houses[k];
+    var cst = UPG_COST[k][h.lvl];
+    name = HOUSES[k].n + ": " + (h.lvl < 4 ? HOUSE_TITLES[h.lvl] : "максимум");
+    em = HOUSES[k].em;
+    s = cst ? cst.s : 0; c = cst ? cst.c : 0;
+  }
+  card.appendChild(el("div", "nm", esc(name)));
+  card.appendChild(el("div", "im", em));
+  var pr = el("div", "prices");
+  pr.appendChild(el("div", "pr" + (s ? "" : " zero"), "<i class='dot s'></i><span class='num'>" + fmt(s) + "</span>"));
+  pr.appendChild(el("div", "pr" + (c ? "" : " zero"), "<i class='dot c'></i><span class='num'>" + priceC(c) + "</span>"));
+  card.appendChild(pr);
+  if(lvlReq > S.lvl) card.appendChild(el("div", "lvl", lvlReq + " ур."));
+  var b = el("button", "pick", g.kind === "upg" ? "Улучшить" : "Подробнее");
+  if(lvlReq > S.lvl) b.disabled = true;
+  b.onclick = function(){
+    if(g.kind === "upg"){ upgrade(it.id); redraw(); }
+    else openDetail(g, redraw);
+  };
+  card.appendChild(b);
+  return card;
+}
+function openDetail(g, redraw){
+  var it = g.it;
+  var w = makeWin(it.n, "sm");
+  var qty = 1;
+  var d = el("div", "detail");
+  var left = el("div", "left");
+  left.appendChild(el("div", "im", it.em));
+  var spin = el("div", "spin");
+  var minus = el("button", null, "−"), plus = el("button", null, "+");
+  var inp = document.createElement("input");
+  inp.type = "text"; inp.id = "qty-" + it.id; inp.value = "1"; inp.inputMode = "numeric";
+  spin.appendChild(minus); spin.appendChild(inp); spin.appendChild(plus);
+  var single = (g.kind === "decor" || g.kind === "helper");
+  if(!single) left.appendChild(spin);
+  d.appendChild(left);
+
+  var dl = el("dl", "specs");
+  function line(k, v, cls){
+    dl.appendChild(el("dt", null, esc(k) + ":"));
+    dl.appendChild(el("dd", cls || null, v));
+  }
+  line("Цена", "<i class='dot " + (it.c ? "c" : "s") + "'></i> " + (it.c ? priceC(it.c) : fmt(it.s || 0)));
+  line("Название", esc(it.n));
+  if(g.kind === "breed"){
+    line("Созревание", gtime(it.mat));
+    line("Урожайность", it.y);
+    line("Цена единицы", "<i class='dot s'></i> " + it.u);
+    line("Чистая прибыль", "<i class='dot s'></i> " + fmt(it.y * it.u * it.se - it.s));
+    line("Кол-во опыта", it.xp);
+    line("Сезон", it.se);
+    line("Постройка", HOUSES[it.h].n + " (свободно " + free(it.h) + ")");
+  }
+  if(g.kind === "feed" && it.sp) line("Созревание", Math.round(it.sp * 100) + "% от срока");
+  if(g.kind === "feed" && it.ym) line("Урожайность", "+" + Math.round((it.ym - 1) * 100) + "%");
+  if(g.kind === "decor") line("Урожайность", "+" + it.bonus + "%");
+  if(it.lvl) line("Уровень", it.lvl + " ур.");
+  line("Описание", esc(it.d || ""), "desc");
+  d.appendChild(dl);
+  w.body.appendChild(d);
+
+  function setQty(n){
+    qty = Math.max(1, Math.min(99, n || 1));
+    inp.value = String(qty);
+  }
+  minus.onclick = function(){ setQty(qty - 1); };
+  plus.onclick = function(){ setQty(qty + 1); };
+  inp.onchange = function(){ setQty(parseInt(inp.value, 10)); };
+
+  footer(w, [
+    {label:"Купить", cls:"go", on:function(){
+      var ok = true;
+      if(g.kind === "breed") ok = plant(it, qty);
+      else buySimple(it, g.kind, single ? 1 : qty);
+      if(ok !== false) closeWin(w.scrim);
+      if(redraw) redraw();
+    }},
+    {label:"Закрыть", on:function(){ closeWin(w.scrim); }}
+  ]);
+}
+
+/* ---------- вкладки нижней панели ---------- */
+function openTop(){
+  var w = makeWin("TOP 100 колхозов");
+  var me = {n:S.nick, f:"«" + S.farm + "»", sc:S.lvl * 1000 + S.xp, me:true};
+  var list = RIVALS.map(function(r){ return {n:r[0], f:r[1], sc:r[2]}; }).concat([me])
+    .sort(function(a, b){ return b.sc - a.sc; });
+  var rows = el("div", "rows");
+  list.forEach(function(r, i){
+    var row = el("div", "row" + (r.me ? " me" : ""));
+    row.innerHTML = "<span class='rank num'>" + (i + 1) + ".</span><span class='ic'>" + (i < 3 ? ["🥇","🥈","🥉"][i] : "🌾") + "</span>" +
+      "<span class='grow'><b>" + esc(r.n) + "</b><small>колхоз " + esc(r.f) + "</small></span>" +
+      "<span class='num'><b>" + fmt(r.sc) + "</b></span>";
+    rows.appendChild(row);
+  });
+  w.body.appendChild(rows);
+}
+function openFriends(){
+  var w = makeWin("Друзья");
+  var body = w.body;
+  function draw(){
+    body.innerHTML = "";
+    var rows = el("div", "rows");
+    FRIENDS.forEach(function(fr, i){
+      var key = todayKey() + ":" + i;
+      var row = el("div", "row");
+      row.innerHTML = "<span class='ic'>🧑‍🌾</span><span class='grow'><b>" + esc(fr.n) + "</b><small>колхоз " + esc(fr.f) + "</small></span>";
+      var help = el("button", "mini go", S.helped[key] ? "Сегодня помог" : "Помочь (2⚡)");
+      if(S.helped[key]) help.disabled = true;
+      help.onclick = function(){
+        if(S.helped[key]) return;
+        if(!spendEnergy(2)) return;
+        S.helped[key] = 1;
+        var sv = 120 + Math.floor(Math.random() * 200);
+        S.silver += sv; addXp(15);
+        toast("Помог соседу: +" + sv + " серебра, +15 опыта.");
+        after(); draw();
+      };
+      row.appendChild(help);
+      var giftIds = Object.keys(S.gifts).filter(function(g){ return S.gifts[g] > 0; });
+      var gb = el("button", "mini", giftIds.length ? "Подарить" : "Нет подарков");
+      gb.disabled = !giftIds.length;
+      gb.onclick = function(){
+        var gid = giftIds[0];
+        S.gifts[gid]--;
+        addXp(20);
+        toast(fr.n + " получает подарок. Отношения крепнут.");
+        after(); draw();
+      };
+      row.appendChild(gb);
+      rows.appendChild(row);
+    });
+    body.appendChild(rows);
+    body.appendChild(el("p", null, "<small>Подарки покупаются в магазине, раздел «Подарки».</small>"));
+  }
+  draw();
+}
+function openQuests(){
+  var w = makeWin("Задания");
+  var rows = el("div", "rows");
+  QUESTS.forEach(function(q, i){
+    var done = i < S.quest;
+    var row = el("div", "row");
+    var p = Math.min(qprog(q), q.n);
+    row.innerHTML = "<span class='ic'>" + (done ? "✅" : q.rw.em) + "</span>" +
+      "<span class='grow'><b>" + esc(q.t) + "</b><small>" + esc(q.d) + "</small>" +
+      "<small>Награда: " + esc(q.rw.nm) + (q.rw.n ? ". Количество: " + q.rw.n : "") + "</small></span>" +
+      (done ? "<span class='done'>Сдано</span>" : "<span class='num'>" + fmt(p) + " / " + fmt(q.n) + "</span>");
+    rows.appendChild(row);
+  });
+  w.body.appendChild(rows);
+}
+function openBonus(){
+  rollDaily();
+  var w = makeWin("Бонусы");
+  var body = w.body;
+  function draw(){
+    body.innerHTML = "";
+    body.appendChild(el("h3", null, "Ежедневный подарок"));
+    body.appendChild(el("p", null, "<small>Открывай корзинки и получай призы! Заходи каждый день — серия растёт.</small>"));
+    var days = el("div", "days");
+    for(var i = 1; i <= 5; i++) days.appendChild(el("div", "day" + (i <= S.daily.streak ? " on" : ""), i + " д."));
+    body.appendChild(days);
+    var bs = el("div", "baskets");
+    for(var j = 0; j < 16; j++){
+      (function(j){
+        var b = el("button", "bsk" + (S.daily.opened && S.daily.picked === j ? " open" : ""), S.daily.opened && S.daily.picked === j ? "🎉" : "🧺");
+        if(S.daily.opened) b.disabled = true;
+        b.onclick = function(){
+          var pick = WHEEL[Math.floor(Math.random() * WHEEL.length)];
+          var mult = S.daily.streak;
+          var rw = Object.assign({}, pick);
+          if(rw.t === "silver") rw.n = rw.n * mult;
+          S.daily.opened = true; S.daily.picked = j;
+          grant({t:rw.t, id:rw.id, n:rw.n});
+          toast("В корзинке: " + rw.nm + (rw.t === "silver" && mult > 1 ? " ×" + mult + " за серию" : ""));
+          after(); draw();
+        };
+        bs.appendChild(b);
+      })(j);
+    }
+    body.appendChild(bs);
+
+    body.appendChild(el("h3", null, "Мои бонусы"));
+    var rows = el("div", "rows");
+    var any = false;
+    BOOSTS.forEach(function(b){
+      var n = S.items[b.id] || 0;
+      if(!n) return;
+      any = true;
+      var row = el("div", "row");
+      row.innerHTML = "<span class='ic'>" + b.em + "</span><span class='grow'><b>" + esc(b.n) + " ×" + n + "</b><small>" + esc(b.d) + "</small></span>";
+      var use = el("button", "mini go", "Применить");
+      use.onclick = function(){ useItem(b.id); draw(); };
+      row.appendChild(use);
+      rows.appendChild(row);
+    });
+    if(!any) rows.appendChild(el("div", "row", "<span class='ic'>🤷</span><span class='grow'><small>Бонусов нет. Купи в магазине, раздел «Бонусы».</small></span>"));
+    body.appendChild(rows);
+  }
+  draw();
+}
+function openStore(){
+  var w = makeWin("Склад");
+  var body = w.body;
+  function draw(){
+    body.innerHTML = "";
+    var rows = el("div", "rows"), total = 0;
+    HKEYS.forEach(function(k){
+      var p = S.prods[k];
+      if(!p.n) return;
+      total += p.val;
+      var row = el("div", "row");
+      row.innerHTML = "<span class='ic'>" + HOUSES[k].prod.em + "</span><span class='grow'><b>" + esc(HOUSES[k].prod.n) +
+        " — " + fmt(p.n) + " ед.</b><small>из постройки «" + esc(HOUSES[k].n) + "»</small></span>" +
+        "<span class='num'><b>" + fmt(p.val) + "</b> 🪙</span>";
+      var b = el("button", "mini go", "Сдать");
+      b.onclick = function(){ sellHouse(k); draw(); };
+      row.appendChild(b);
+      rows.appendChild(row);
+    });
+    if(!total) rows.appendChild(el("div", "row", "<span class='ic'>📭</span><span class='grow'><small>Продукции нет. Собери урожай.</small></span>"));
+    body.appendChild(rows);
+    if(total){
+      var all = el("button", "btn go", "Сдать всё — " + fmt(total) + " 🪙");
+      all.style.marginTop = "8px";
+      all.onclick = function(){ sellAll(); draw(); };
+      body.appendChild(all);
+    }
+    body.appendChild(el("h3", null, "Запасы"));
+    var inv = el("div", "rows");
+    FEEDS.forEach(function(f){
+      if(!S.feed[f.id]) return;
+      inv.appendChild(el("div", "row", "<span class='ic'>" + f.em + "</span><span class='grow'><b>" + esc(f.n) + "</b><small>" + esc(f.for) + "</small></span><span class='num'><b>" + S.feed[f.id] + "</b></span>"));
+    });
+    RES.forEach(function(r){
+      if(!S.res[r.id]) return;
+      inv.appendChild(el("div", "row", "<span class='ic'>" + r.em + "</span><span class='grow'><b>" + esc(r.n) + "</b><small>" + esc(r.d) + "</small></span><span class='num'><b>" + S.res[r.id] + "</b></span>"));
+    });
+    Object.keys(S.gifts).forEach(function(gid){
+      if(!S.gifts[gid]) return;
+      GIFTS.forEach(function(g){
+        if(g.id !== gid) return;
+        inv.appendChild(el("div", "row", "<span class='ic'>" + g.em + "</span><span class='grow'><b>" + esc(g.n) + "</b><small>подарок соседям</small></span><span class='num'><b>" + S.gifts[gid] + "</b></span>"));
+      });
+    });
+    if(!inv.children.length) inv.appendChild(el("div", "row", "<span class='ic'>🕸️</span><span class='grow'><small>Пусто. Даже корма нет.</small></span>"));
+    body.appendChild(inv);
+  }
+  draw();
+}
+function openPets(){
+  var w = makeWin("Пёс и кот", "sm");
+  var body = w.body;
+  function draw(){
+    tickPets();
+    body.innerHTML = "";
+    var rows = el("div", "rows");
+    [["dog","🐕","Пёс","Косточка",120,"+3% к урожайности, пока сыт"],
+     ["cat","🐈","Кот","Рыбка",140,"+5% к урожайности, пока сыт"]].forEach(function(p){
+      var row = el("div", "row");
+      row.innerHTML = "<span class='ic'>" + p[1] + "</span><span class='grow'><b>" + p[2] + " — сытость " + Math.round(S[p[0]]) + "%</b><small>" + p[5] + "</small></span>";
+      var b = el("button", "mini go", p[3] + " · " + p[4] + " 🪙");
+      b.onclick = function(){ feedPet(p[0]); draw(); };
+      row.appendChild(b);
+      rows.appendChild(row);
+    });
+    body.appendChild(rows);
+    body.appendChild(el("p", null, "<small>Общая урожайность двора сейчас: <b>" + yieldPct() + "%</b></small>"));
+  }
+  draw();
+  live.push({scrim:w.scrim, fn:draw});
+}
+
+/* ===================== отрисовка ===================== */
+function setBar(id, txtId, val, max, txt){
+  var pct = Math.max(0, Math.min(100, val / max * 100));
+  $(id).style.width = pct + "%";
+  $(txtId).textContent = txt != null ? txt : (Math.floor(val) + "/" + max);
+}
+function renderHud(){
+  $("nick").textContent = S.nick;
+  $("lvl").textContent = S.lvl;
+  setBar("xpbar", "xptxt", S.xp, maxXp(S.lvl), fmt(S.xp) + "/" + fmt(maxXp(S.lvl)));
+  setBar("dogbar", "dogtxt", S.dog, 100, Math.round(S.dog) + "%");
+  setBar("catbar", "cattxt", S.cat, 100, Math.round(S.cat) + "%");
+  setBar("enbar", "entxt", S.energy, maxEn(), Math.floor(S.energy) + "/" + maxEn());
+  $("silver").textContent = fmt(S.silver);
+  $("gems").textContent = fmtC(S.gems);
+  var q = $("quick");
+  q.innerHTML = "";
+  HKEYS.forEach(function(k){
+    var c = counts(k);
+    var b = el("button", null, HOUSES[k].em);
+    b.title = HOUSES[k].n;
+    if(c.ready) b.appendChild(el("span", "badge", String(c.ready)));
+    b.onclick = function(){ openHouse(k); };
+    q.appendChild(b);
+  });
+  var pets = el("button", null, "🐕");
+  pets.title = "Пёс и кот";
+  pets.onclick = openPets;
+  q.appendChild(pets);
+}
+function renderYard(){
+  var barns = $("barns");
+  barns.innerHTML = "";
+  HKEYS.forEach(function(k){
+    var H = HOUSES[k], h = S.houses[k], c = counts(k);
+    var b = el("button", "barn" + (H.roof === "thatch" ? " thatch" : ""));
+    var pen = h.slots.map(function(a){
+      var st = stateOf(a);
+      return "<i class='" + (st === "hungry" ? "hungry" : "") + "'>" + breed(a.breed).em + "</i>";
+    }).join("");
+    b.innerHTML = "<div class='roof'></div><div class='wall'><span class='nm'>" + esc(H.n) + "</span>" +
+      "<div class='pen'>" + (pen || "<span class='cap'>пусто</span>") + "</div>" +
+      "<span class='cap'>" + h.slots.length + "/" + cap(k) + " · " + HOUSE_TITLES[h.lvl - 1] + "</span></div>";
+    if(c.ready) b.appendChild(el("span", "tag ready", String(c.ready)));
+    else if(c.hungry) b.appendChild(el("span", "tag need", "!"));
+    b.onclick = function(){ openHouse(k); };
+    barns.appendChild(b);
+  });
+  var dr = $("decorRow");
+  dr.innerHTML = S.decor.map(function(id){
+    var em = "";
+    DECOR.forEach(function(d){ if(d.id === id) em = d.em; });
+    return "<span title='декор'>" + em + "</span>";
+  }).join("") || "<span style='font-size:12px;color:#3b2614'>Двор пустой. Загляни в «Декор».</span>";
+}
+function renderQuestStrip(){
+  var s = $("qstrip");
+  s.innerHTML = "";
+  if(S.qview > QUESTS.length - 1) S.qview = QUESTS.length - 1;
+  if(S.qview < 0) S.qview = 0;
+  var q = QUESTS[S.qview], done = S.qview < S.quest;
+  var ic = el("div", "ic", done ? "✅" : q.rw.em);
+  var body = el("div", "body");
+  body.innerHTML = "<b>" + esc(q.t) + "</b><small>" + esc(q.d) + "</small>" +
+    "<small class='rw'>Награда: " + esc(q.rw.nm) + (q.rw.n ? ". Количество: " + q.rw.n : "") +
+    (done ? " — <span class='done'>выполнено</span>" : " · <span class='num'>" + fmt(Math.min(qprog(q), q.n)) + "/" + fmt(q.n) + "</span>") + "</small>";
+  var pg = el("div", "pg");
+  var up = el("button", null, "▲"), dn = el("button", null, "▼");
+  up.onclick = function(){ S.qview = Math.max(0, S.qview - 1); renderQuestStrip(); };
+  dn.onclick = function(){ S.qview = Math.min(QUESTS.length - 1, S.qview + 1); renderQuestStrip(); };
+  pg.appendChild(up); pg.appendChild(dn);
+  s.appendChild(ic); s.appendChild(body); s.appendChild(pg);
+}
+function renderTabs(){
+  var t = $("tabs");
+  if(t.children.length) return;
+  [["TOP 100", openTop], ["Друзья", openFriends], ["Задания", openQuests], ["Бонусы", openBonus],
+   ["Склад", openStore], ["Магазин", function(){ openShop(); }]].forEach(function(p){
+    var b = el("button", null, p[0]);
+    b.onclick = function(){ closeAll(); p[1](); };
+    t.appendChild(b);
+  });
+}
+function after(){
+  checkQuests();
+  renderHud(); renderYard(); renderQuestStrip();
+  save();
+}
+
+/* ===================== запуск ===================== */
+function start(){
+  load();
+  rollDaily();
+  tickEnergy(); tickPets();
+  renderTabs();
+  after();
+  $("shopBtn").onclick = function(){ closeAll(); openShop(); };
+  $("questBtn").onclick = function(){ closeAll(); openQuests(); };
+  $("renameBtn").onclick = function(){
+    var v = prompt("Как назовём колхоз?", S.farm);
+    if(v && v.trim()){ S.farm = v.trim().slice(0, 24); $("renameBtn").textContent = S.farm; save(); }
+  };
+  $("renameBtn").textContent = S.farm;
+  var hi = 0;
+  setInterval(function(){ hi = (hi + 1) % HINTS.length; $("hint").textContent = HINTS[hi]; }, 12000);
+  setInterval(function(){
+    tickEnergy(); tickPets(); tickHelpers(); checkQuests();
+    renderHud(); renderYard(); renderQuestStrip();
+    live = live.filter(function(l){ return document.body.contains(l.scrim); });
+    live.forEach(function(l){ l.fn(); });
+  }, 1000);
+  setInterval(save, 5000);
+  window.addEventListener("beforeunload", save);
+}
+try{
+  if(window.claude && window.claude.hot){
+    window.claude.hot.snapshot(function(){ return {S:S}; });
+    if(window.claude.hot.ready){ window.claude.hot.ready(function(data){ if(data && data.S) S = data.S; start(); }); }
+    else start();
+  } else start();
+}catch(e){ start(); }
+</script>
