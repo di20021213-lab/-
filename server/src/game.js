@@ -77,6 +77,8 @@ function loadState(farmId){
   db.prepare("SELECT key, value FROM counters WHERE farm_id = ?").all(farmId).forEach(c => { st.c[c.key] = c.value; });
   db.prepare("SELECT friend_idx, day FROM friend_help WHERE farm_id = ? AND day = ?").all(farmId, todayKey())
     .forEach(h => { st.helped[h.day + ":" + h.friend_idx] = 1; });
+  st.contracts = db.prepare("SELECT house, need, silver, xp, gems, created_at FROM contracts WHERE farm_id = ? ORDER BY id")
+    .all(farmId).map(c => ({house:c.house, need:c.need, silver:c.silver, xp:c.xp, gems:c.gems, at:c.created_at}));
   return st;
 }
 
@@ -128,6 +130,12 @@ const saveState = db.transaction(function(st){
     "INSERT INTO counters(farm_id, key, value) VALUES(?,?,?) " +
     "ON CONFLICT(farm_id, key) DO UPDATE SET value = excluded.value");
   Object.keys(st.c).forEach(k => upC.run(st.id, k, st.c[k] | 0));
+
+  /* Заказов всего три, поэтому проще переписать их целиком, чем сверять построчно. */
+  db.prepare("DELETE FROM contracts WHERE farm_id = ?").run(st.id);
+  const insC = db.prepare(
+    "INSERT INTO contracts(farm_id, house, need, silver, xp, gems, created_at) VALUES(?,?,?,?,?,?,?)");
+  (st.contracts || []).forEach(c => insC.run(st.id, c.house, c.need, c.silver, c.xp, c.gems | 0, c.at || t));
 });
 
 /* ------------------------------------------------------------------ правила */

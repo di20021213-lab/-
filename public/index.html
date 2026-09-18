@@ -75,11 +75,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 
 /* ---------- двор ---------- */
 .yard{position:relative;padding:10px 10px 30px;border:5px solid var(--wood-dk);border-radius:12px;overflow:hidden;
-  background:radial-gradient(120% 55% at 50% 98%,#c9b071 0 26%,transparent 62%),
-             linear-gradient(180deg,#dff1fb 0 8%,#b6e0f2 16%,#cfe6ad 21%,#9dc768 26%,#84b152 46%,#6f9c44 100%)}
-.cloud{position:absolute;top:6px;left:-70px;font-size:22px;animation:drift 46s linear infinite}
-.cloud.b{top:24px;animation-duration:70s;animation-delay:-20s}
-@keyframes drift{from{transform:translateX(0)}to{transform:translateX(110vw)}}
+  background:#7ba14e url(img/iso/bg-yard.jpg) center bottom/cover no-repeat}
 .iso{position:relative;width:100%;aspect-ratio:16/10;z-index:2}
 .bld{position:absolute;transform:translate(-50%,-100%);border:0;background:none;padding:0;cursor:pointer}
 .bld img.sp,.deco img.sp{width:100%;height:auto;max-width:none;display:block}
@@ -91,6 +87,7 @@ button{font:inherit;color:inherit;cursor:pointer}
   font-size:11px;font-weight:700;line-height:1.35}
 .bld .chip b{font-family:"Russo One",sans-serif;font-weight:400}
 .deco{position:absolute;transform:translate(-50%,-100%);pointer-events:none}
+.deco.path img.sp{opacity:.85}
 .tag{position:absolute;top:-11px;left:50%;transform:translateX(-50%);z-index:3;min-width:21px;
   padding:1px 6px;border-radius:11px;border:2px solid #fff;font-size:11px;font-weight:700;color:#fff}
 .tag.ready{background:var(--ok);animation:pop 1.3s ease-in-out infinite}
@@ -229,7 +226,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .row .ic{font-size:21px;flex:none}
 .row .grow{flex:1;min-width:0}
 .row b{display:block;font-size:13.5px}
-.row small{color:var(--ink-soft);font-size:12px}
+.row small{display:block;color:var(--ink-soft);font-size:12px}
 .row.me{outline:3px solid var(--red);outline-offset:-3px}
 .done{color:#25611a;font-weight:700}
 .rank{width:26px;text-align:right;font-weight:700;color:var(--ink-soft)}
@@ -350,7 +347,6 @@ body.booting #app, body.booting .dock{visibility:hidden}
   </div>
 
   <div class="yard">
-    <div class="cloud">☁️</div><div class="cloud b">☁️</div>
     <div class="iso" id="barns"></div>
     <div class="chair">
       <div class="face"><img class="sp" src="img/prop-farmer.png" alt="" draggable="false"></div>

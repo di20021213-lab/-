@@ -160,6 +160,20 @@ CREATE TABLE IF NOT EXISTS friend_help (
   PRIMARY KEY (farm_id, friend_idx, day)
 );
 
+-- План сдачи государству: три заказа на продукцию, дают серебро и почти весь опыт.
+CREATE TABLE IF NOT EXISTS contracts (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  farm_id   INTEGER NOT NULL REFERENCES farms(id) ON DELETE CASCADE,
+  house     TEXT    NOT NULL,
+  need      INTEGER NOT NULL,
+  silver    INTEGER NOT NULL,
+  xp        INTEGER NOT NULL,
+  gems      INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  CHECK (need > 0)
+);
+CREATE INDEX IF NOT EXISTS ix_contracts_farm ON contracts(farm_id);
+
 -- Журнал действий: и отладка, и материал для ловли накрутчиков.
 CREATE TABLE IF NOT EXISTS events (
   id       INTEGER PRIMARY KEY AUTOINCREMENT,

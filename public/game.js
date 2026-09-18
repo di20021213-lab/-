@@ -65,7 +65,7 @@ function fmtC(n){ return (Math.round(n * 100) / 100).toFixed(2); }
 function priceC(n){ return (Math.round(n * 10) / 10).toFixed(1); }
 function breed(id){ for(var i = 0; i < BREEDS.length; i++) if(BREEDS[i].id === id) return BREEDS[i]; return null; }
 function feedById(id){ for(var i = 0; i < FEEDS.length; i++) if(FEEDS[i].id === id) return FEEDS[i]; return null; }
-function maxXp(l){ return 100 + (l - 1) * 140; }
+function maxXp(l){ return Math.round(150 * Math.pow(l, 1.55)); }
 function maxEn(){ return 100; }
 function gtime(min){
   min = Math.max(0, Math.round(min));
@@ -198,7 +198,8 @@ function openHouse(k){
     hd.appendChild(el("div", null,
       "<b>Мест:</b> <span class='num'>" + h.slots.length + " / " + cap(k) + "</span> &nbsp; " +
       "<b>На складе:</b> <span class='num'>" + fmt(S.prods[k].n) + "</span> " + H.prod.em +
-      " (" + fmt(S.prods[k].val) + " 🪙)"));
+      " на " + fmt(S.prods[k].val) + " 🪙" +
+      (S.prods[k].n ? " <small>(по " + (S.prods[k].val / S.prods[k].n).toFixed(1) + " за штуку)</small>" : "")));
     var acts = el("div", "slot-acts");
     acts.style.display = "flex"; acts.style.gap = "5px"; acts.style.flexWrap = "wrap";
     var bFeed = el("button", "mini", H.kind === "plant" ? "Полить всё" : "Покормить всех");
@@ -443,6 +444,11 @@ function openDetail(g, redraw){
     line("Чистая прибыль", "<i class='dot s'></i> " + fmt(it.y * it.u * it.se - it.s));
     line("Кол-во опыта", it.xp);
     line("Сезон", it.se);
+    var feed = feedById("low");
+    var perCycle = it.y * it.u - feed.s;
+    line("Прибыль за цикл", "<i class='dot s'></i> " + fmt(perCycle) + " <small>(за вычетом корма)</small>");
+    line("Окупится за", Math.max(1, Math.ceil(it.s / Math.max(1, perCycle))) + " " +
+         (Math.ceil(it.s / Math.max(1, perCycle)) === 1 ? "цикл" : "цикла"));
     line("Постройка", HOUSES[it.h].n + " (свободно " + free(it.h) + ")");
   }
   if(g.kind === "feed" && it.sp) line("Созревание", Math.round(it.sp * 100) + "% от срока");
@@ -615,6 +621,47 @@ function openBonus(){
   panels.push({scrim:w.scrim, fn:draw});
 }
 
+/** План сдачи: три заказа, куда уходит продукция. Здесь же виден весь смысл
+    цепочки «покормил — собрал — сдал»: за сдачу платят вдвое против рынка. */
+function openContracts(){
+  var w = makeWin("Госзаказ");
+  var body = w.body;
+  function draw(){
+    body.innerHTML = "";
+    body.appendChild(el("p", null,
+      "<small>Заготконтора принимает продукцию заметно дороже рынка и даёт опыт. " +
+      "Сдал заказ — на его место приходит новый.</small>"));
+    var rows = el("div", "rows");
+    (S.contracts || []).forEach(function(c, i){
+      var H = HOUSES[c.house], have = S.prods[c.house].n, ready = have >= c.need;
+      var row = el("div", "row");
+      row.innerHTML =
+        "<span class='ic'>" + ic("breed", firstBreedOf(c.house), H.prod.em) + "</span>" +
+        "<span class='grow'><b>" + esc(H.prod.n) + " — " + fmt(c.need) + " ед.</b>" +
+        "<small>на складе <span class='num'" + (ready ? " style='color:#25611a;font-weight:700'" : "") + ">" +
+        fmt(have) + "</span> из " + fmt(c.need) + "</small>" +
+        "<small class='rw'>Награда: " + fmt(c.silver) + " серебра, " + c.xp + " опыта" +
+        (c.gems ? ", кристалл" : "") + "</small></span>";
+      var b = el("button", "mini" + (ready ? " go" : ""), ready ? "Сдать" : "Мало");
+      b.disabled = !ready;
+      b.onclick = function(){ act("contract", {slot:i}); };
+      row.appendChild(b);
+      rows.appendChild(row);
+    });
+    if(!(S.contracts || []).length) rows.appendChild(el("div", "row", "<span class='grow'><small>Заказов пока нет.</small></span>"));
+    body.appendChild(rows);
+  }
+  draw();
+  w.refresh = draw;
+  closeBar(w);
+  panels.push({scrim:w.scrim, fn:draw});
+}
+/** Первая порода постройки — нужна только для картинки в списке заказов. */
+function firstBreedOf(house){
+  for(var i = 0; i < BREEDS.length; i++) if(BREEDS[i].h === house) return BREEDS[i].id;
+  return "";
+}
+
 function openStore(){
   var w = makeWin("Склад");
   var body = w.body;
@@ -741,24 +788,26 @@ function renderHud(){
    плюс ширина спрайта в долях ширины сцены. Глубина считается от y, поэтому
    дальние постройки не лезут поверх ближних. */
 var YARD = {
-  korovy:  {x:26, y:40, w:29},
-  koni:    {x:72, y:37, w:28},
-  svini:   {x:48, y:57, w:30},
-  kury:    {x:13, y:63, w:21},
-  gusi:    {x:80, y:56, w:19},
-  teplica: {x:26, y:82, w:26},
-  ogorod:  {x:58, y:84, w:25},
-  sad:     {x:91, y:88, w:19}
+  /* Чем дальше постройка, тем она мельче: раньше было наоборот и двор выглядел
+     вывернутым наизнанку. Задний ряд — 17-20% ширины сцены, передний — до 30%. */
+  koni:    {x:27, y:34, w:19},
+  korovy:  {x:57, y:36, w:20},
+  gusi:    {x:83, y:39, w:15},
+  kury:    {x:14, y:61, w:19},
+  svini:   {x:45, y:63, w:26},
+  teplica: {x:84, y:64, w:21},
+  ogorod:  {x:28, y:85, w:28},
+  sad:     {x:70, y:86, w:23}
 };
 var DECOR_SPOT = {
-  fluger:  {x:92, y:34, w:11},
-  traktor: {x:6,  y:40, w:8},
-  skirda:  {x:57, y:36, w:9},
-  pleten:  {x:34, y:31, w:22},
-  telega:  {x:41, y:74, w:9},
-  kolodec: {x:63, y:70, w:8},
-  klumba:  {x:16, y:90, w:9},
-  doska:   {x:72, y:95, w:13}
+  pleten:  {x:9,  y:57, w:14},
+  traktor: {x:6,  y:41, w:6},
+  fluger:  {x:94, y:52, w:8},
+  skirda:  {x:66, y:50, w:8},
+  kolodec: {x:22, y:74, w:8},
+  telega:  {x:55, y:79, w:10},
+  klumba:  {x:8,  y:88, w:9},
+  doska:   {x:95, y:82, w:12}
 };
 function renderYard(){
   var scene = $("barns");
@@ -820,7 +869,8 @@ function renderTabs(){
   var t = $("tabs");
   if(t.children.length) return;
   [["TOP 100", openTop, "top"], ["Друзья", openFriends, "friends"], ["Задания", openQuests, "quests"],
-   ["Бонусы", openBonus, "bonus"], ["Склад", openStore, "store"], ["Магазин", function(){ openShop(); }, "shop"]]
+   ["Госзаказ", openContracts, "wheat"], ["Бонусы", openBonus, "bonus"], ["Склад", openStore, "store"],
+   ["Магазин", function(){ openShop(); }, "shop"]]
   .forEach(function(p){
     var b = el("button", null, (uiIc(p[2], "tab") || "") + "<span>" + p[0] + "</span>");
     b.onclick = function(){ closeAll(); p[1](); };

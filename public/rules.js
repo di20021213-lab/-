@@ -17,7 +17,7 @@ var GM_PER_SEC = C.GM_PER_SEC, HOUSES = C.HOUSES, HKEYS = C.HKEYS, CAP = C.CAP,
 var byId = function(list, id){ for(var i = 0; i < list.length; i++) if(list[i].id === id) return list[i]; return null; };
 var breedOf = function(id){ return byId(BREEDS, id); };
 var feedOf = function(id){ return byId(FEEDS, id); };
-var maxXp = function(l){ return 100 + (l - 1) * 140; };
+var maxXp = function(l){ return Math.round(150 * Math.pow(l, 1.55)); };
 var MAX_ENERGY = 100;
 var ENERGY_STEP = 15000;   // секунда на единицу энергии: 15 с
 var PET_STEP = 60000;
@@ -91,6 +91,42 @@ function checkQuests(st){
   return done;
 }
 
+/* ------------------------------------------------------- госзаказ (план сдачи)
+   Продукцию нужно куда-то девать, иначе она копится мёртвым грузом. Заказ
+   забирает её со склада и платит заметно выше рынка, а заодно даёт почти весь
+   опыт — так прокачка идёт от дела, а не от числа нажатий. */
+function houseEconomy(h){
+  var list = BREEDS.filter(function(b){ return b.h === h; });
+  return {
+    price: Math.min.apply(null, list.map(function(b){ return b.u; })),
+    base:  Math.min.apply(null, list.map(function(b){ return b.y; }))
+  };
+}
+function genContract(st, taken){
+  var pool = HKEYS.filter(function(k){ return st.houses[k].slots.length > 0; });
+  if(!pool.length) pool = ["kury"];
+  /* Три одинаковых заказа подряд — скучно: если есть из чего выбрать,
+     не повторяем постройку, которая уже висит в списке. */
+  var fresh = pool.filter(function(k){ return (taken || []).indexOf(k) < 0; });
+  if(fresh.length) pool = fresh;
+  var h = pool[Math.floor(Math.random() * pool.length)];
+  var e = houseEconomy(h);
+  var need = Math.max(5, Math.round(e.base * (1 + st.lvl * 0.25) * (0.8 + Math.random() * 0.8)));
+  return {
+    house: h, need: need,
+    silver: Math.round(need * e.price * 2.1),
+    xp: Math.max(3, Math.round(need * e.price / 12)),
+    gems: Math.random() < 0.18 ? 1 : 0,
+    at: now()
+  };
+}
+function rollContracts(st){
+  if(!st.contracts) st.contracts = [];
+  while(st.contracts.length < 3){
+    st.contracts.push(genContract(st, st.contracts.map(function(c){ return c.house; })));
+  }
+}
+
 /* ------------------------------------------------------------------ действия */
 const ACTIONS = {
   plant(st, p){
@@ -103,7 +139,7 @@ const ACTIONS = {
     charge(st, b.s * n, b.c * n);
     for(let i = 0; i < n; i++) st.houses[b.h].slots.push({id:null, breed:b.id, se:b.se, fed:false, ready:0, feedId:"low"});
     bump(st, "buy_" + b.h, n);
-    addXp(st, Math.round(b.xp / 10) * n);
+    addXp(st, Math.max(1, Math.round(b.xp / 8)) * n);
     return {msg:b.n + " ×" + n + " — на месте."};
   },
   feed(st, p){
@@ -117,7 +153,7 @@ const ACTIONS = {
     st.feed[f.id]--;
     a.fed = true; a.feedId = f.id;
     a.ready = now() + matureMs(st, breedOf(a.breed), f);
-    bump(st, "fed"); addXp(st, 2);
+    bump(st, "fed"); addXp(st, 1);
     return {msg:"Покормлено."};
   },
   feedAll(st, p){
@@ -134,7 +170,7 @@ const ACTIONS = {
       st.energy--; st.feed[fid]--;
       a.fed = true; a.feedId = fid;
       a.ready = now() + matureMs(st, breedOf(a.breed), f);
-      bump(st, "fed"); addXp(st, 2); n++;
+      bump(st, "fed"); addXp(st, 1); n++;
     });
     if(!n) throw fail("Кормить некого или корма нет.");
     return {msg:"Покормлено: " + n};
@@ -183,10 +219,19 @@ const ACTIONS = {
     if(h.lvl >= 4) throw fail("Дальше некуда, это уже элитная ферма.");
     const c = UPG_COST[k][h.lvl];
     if((st.res.doska || 0) < c.b) throw fail("Не хватает досок: нужно " + c.b + ".");
+    if(c.p && st.prods[k].n < c.p){
+      throw fail("Нужно сдать на стройку " + c.p + " " + HOUSES[k].prod.n.toLowerCase() +
+                 ", на складе " + st.prods[k].n + ".");
+    }
     const bySilver = st.silver >= c.s;
     if(!bySilver && st.gems < c.c) throw fail("Нужно " + c.s + " серебра или " + c.c + " кристаллов.");
     if(bySilver) st.silver -= c.s; else st.gems -= c.c;
     st.res.doska -= c.b;
+    if(c.p){
+      var pr = st.prods[k];
+      pr.val = Math.round(pr.val * (1 - c.p / Math.max(1, pr.n)));
+      pr.n -= c.p;
+    }
     h.lvl++;
     bump(st, "upg"); addXp(st, 120);
     return {msg:HOUSES[k].n + " → " + HOUSE_TITLES[h.lvl - 1] + ". Мест: " + capOf(st, k)};
@@ -285,6 +330,28 @@ const ACTIONS = {
     addXp(st, 20);
     return {msg:FRIENDS[i].n + " получает подарок."};
   },
+  /** Сдать госзаказ: продукция уходит со склада, взамен серебро и опыт. */
+  contract(st, p){
+    rollContracts(st);
+    var i = parseInt(p.slot, 10);
+    var c = st.contracts[i];
+    if(!c) throw fail("Такого заказа нет.");
+    var pr = st.prods[c.house];
+    if(pr.n < c.need){
+      throw fail("Не хватает: нужно " + c.need + " " + HOUSES[c.house].prod.n.toLowerCase() +
+                 ", на складе " + pr.n + ".");
+    }
+    pr.val = Math.round(pr.val * (1 - c.need / Math.max(1, pr.n)));
+    pr.n -= c.need;
+    st.silver += c.silver;
+    st.gems += c.gems;
+    addXp(st, c.xp);
+    bump(st, "contracts");
+    bump(st, "contract_silver", c.silver);
+    st.contracts.splice(i, 1);
+    rollContracts(st);
+    return {msg:"Заказ принят: +" + c.silver + " серебра" + (c.gems ? " и кристалл" : "") + ", +" + c.xp + " опыта"};
+  },
   rename(st, p){
     const v = String(p.name || "").trim().slice(0, 24);
     if(v.length < 2) throw fail("Слишком короткое название.");
@@ -336,7 +403,7 @@ function runHelpers(st){
 
 /** Прогон времени перед действием: энергия, питомцы, сутки подарка, помощники. */
 function tick(st){
-  tickEnergy(st); tickPets(st); rollDaily(st); runHelpers(st);
+  tickEnergy(st); tickPets(st); rollDaily(st); runHelpers(st); rollContracts(st);
 }
 function publicState(st){
   return {
@@ -351,6 +418,7 @@ function publicState(st){
     }, {}),
     prods:st.prods, decor:st.decor, helpers:st.helpers, c:st.c, quest:st.quest,
     daily:st.daily, helped:st.helped, boostUntil:st.boostUntil, vympUntil:st.vympUntil,
+    contracts:st.contracts || [],
     yieldPct:yieldPct(st), serverTime:now()
   };
 }
@@ -362,6 +430,7 @@ var RULES = {
   capOf:capOf, freeOf:freeOf, slotState:slotState, addXp:addXp, bump:bump,
   matureMs:matureMs, fail:fail, needEnergy:needEnergy, charge:charge, grant:grant,
   checkQuests:checkQuests, reap:reap, rollDaily:rollDaily, runHelpers:runHelpers,
+  rollContracts:rollContracts, genContract:genContract, houseEconomy:houseEconomy,
   ACTIONS:ACTIONS, publicState:publicState
 };
 if(typeof module !== "undefined" && module.exports) module.exports = RULES;

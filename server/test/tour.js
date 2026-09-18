@@ -113,6 +113,14 @@ let n = 0;
     // ---------- 4. склад и сдача продукции ----------
     await p.locator('.tabs button', { hasText: 'Склад' }).click();
     await shot('sklad');
+    await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
+
+    // госзаказ — куда девать накопленное: платят вдвое против рынка
+    await p.locator('.tabs button', { hasText: 'Госзаказ' }).click();
+    await shot('goszakaz', 300);
+    await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
+
+    await p.locator('.tabs button', { hasText: 'Склад' }).click();
     await p.locator('.btn.go', { hasText: 'Сдать всё' }).click();
     await p.waitForTimeout(700);
     await closeTop();
