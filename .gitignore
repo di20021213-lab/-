@@ -6,3 +6,4 @@ var/
 .env
 docs/screenshots-raw/
 dist/
+build/

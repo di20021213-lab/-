@@ -4,7 +4,10 @@
 const fs = require("fs");
 const path = require("path");
 
-const FILE = process.env.ENV_FILE || path.join(__dirname, "..", "..", ".env");
+/* Рядом с собранным exe исходников нет, поэтому .env ищем возле него самого. */
+const BASE = process.env.KOLHOZ_HOME ||
+  (global.__SEA ? path.dirname(process.execPath) : path.join(__dirname, "..", ".."));
+const FILE = process.env.ENV_FILE || path.join(BASE, ".env");
 try{
   const text = fs.readFileSync(FILE, "utf8");
   text.split(/\r?\n/).forEach(line => {

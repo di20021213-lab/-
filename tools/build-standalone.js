@@ -33,17 +33,23 @@ html = html.replace(/<script src="[^"]+"><\/script>\s*/g, "");
 html = html.replace(/src="(img\/[^"]+)"/g, (m, p) => images[p] ? 'src="' + images[p] + '"' : m);
 
 // шрифты из сети оставляем, но помечаем: без интернета подставится системный
-const bundle = [
-  "<script>window.IMG = " + JSON.stringify(images) + ";</script>",
-  "<script>\n" + read("content.js") + "\n</script>",
-  "<script>\n" + read("rules.js") + "\n</script>",
-  "<script>\n" + read("offline.js") + "\n</script>",
-  "<script>\n" + read("game.js") + "\n</script>"
-].join("\n");
+/** Две сборки: offline играет сама по себе, online ходит на сервер. */
+function bundle(offline){
+  const parts = [
+    "<script>window.IMG = " + JSON.stringify(images) + ";</script>",
+    "<script>\n" + read("content.js") + "\n</script>",
+    "<script>\n" + read("rules.js") + "\n</script>"
+  ];
+  if(offline) parts.push("<script>\n" + read("offline.js") + "\n</script>");
+  parts.push("<script>\n" + read("game.js") + "\n</script>");
+  return html.trimEnd() + "\n\n" + parts.join("\n") + "\n";
+}
 
 fs.mkdirSync(OUT, {recursive:true});
-const file = path.join(OUT, "index.html");
-fs.writeFileSync(file, html.trimEnd() + "\n\n" + bundle + "\n");
-const size = fs.statSync(file).size;
-console.log("собрано: " + file);
-console.log("картинок: " + Object.keys(images).length + ", размер файла: " + (size / 1048576).toFixed(2) + " МБ");
+for(const [name, offline] of [["index.html", true], ["client.html", false]]){
+  const file = path.join(OUT, name);
+  fs.writeFileSync(file, bundle(offline));
+  console.log((offline ? "без сервера: " : "для сервера: ") + file +
+              " — " + (fs.statSync(file).size / 1048576).toFixed(2) + " МБ");
+}
+console.log("картинок внутри: " + Object.keys(images).length);

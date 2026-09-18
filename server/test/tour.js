@@ -62,8 +62,8 @@ let n = 0;
     await shot('dvor-start', 700);
 
     // ---------- сервер-side выдача средств, чтобы показать поздние механики ----------
-    const Database = require(path.join(ROOT, 'node_modules', 'better-sqlite3'));
-    const db = new Database(DB);
+    const { DatabaseSync } = require('node:sqlite');
+    const db = new DatabaseSync(DB);
     const farm = db.prepare('SELECT f.id FROM farms f JOIN users u ON u.id=f.user_id WHERE u.email=?').get(email);
     db.prepare('UPDATE farms SET silver=250000, gems=25, level=10 WHERE id=?').run(farm.id);
     db.prepare("INSERT INTO inventory(farm_id,kind,item_id,qty) VALUES(?,'res','doska',60) " +

@@ -23,7 +23,12 @@ const COOKIE = "dyshlo_sid";
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({limit:"32kb"}));
-app.use(express.static(path.join(__dirname, "..", "..", "public"), {extensions:["html"]}));
+if(global.__CLIENT_HTML){
+  /* Собранный exe отдаёт клиента одной страницей: картинки внутри неё. */
+  app.get("/", (req, res) => res.type("html").send(global.__CLIENT_HTML));
+} else {
+  app.use(express.static(path.join(__dirname, "..", "..", "public"), {extensions:["html"]}));
+}
 
 /* ------------------------------------------------------------------ мелочи */
 function cookies(req){
@@ -201,7 +206,8 @@ function lanAddresses(){
   }));
   return out;
 }
-if(require.main === module){
+/* В собранном exe точка входа своя, поэтому запускаемся и по признаку сборки. */
+if(require.main === module || global.__SEA){
   app.listen(PORT, HOST, () => {
     console.log("");
     console.log("  Колхоз «Червонэ дышло» запущен.");

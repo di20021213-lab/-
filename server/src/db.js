@@ -1,21 +1,47 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const Database = require("better-sqlite3");
+const {DatabaseSync} = require("node:sqlite");
 
 const ROOT = path.join(__dirname, "..", "..");
-const DB_PATH = process.env.DB_PATH || path.join(ROOT, "var", "kolhoz.db");
+/* В собранном exe рядом с файлом нет исходников, поэтому база ложится
+   возле самого исполняемого файла, а схема зашита в сборку. */
+const BASE = process.env.KOLHOZ_HOME || (global.__SEA ? path.dirname(process.execPath) : ROOT);
+const DB_PATH = process.env.DB_PATH || path.join(BASE, "var", "kolhoz.db");
 const SCHEMA_PATH = path.join(ROOT, "server", "db", "schema.sql");
 
 fs.mkdirSync(path.dirname(DB_PATH), {recursive:true});
 
-const db = new Database(DB_PATH);
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
-db.pragma("busy_timeout = 5000");
+/* Встроенный в Node SQLite вместо нативного модуля: так проект собирается
+   в один исполняемый файл, а ставить ничего не нужно. */
+const db = new DatabaseSync(DB_PATH);
+db.exec("PRAGMA journal_mode = WAL");
+db.exec("PRAGMA foreign_keys = ON");
+db.exec("PRAGMA busy_timeout = 5000");
+
+/* У встроенного SQLite нет обёртки транзакций, поэтому своя — с поддержкой
+   вложенности через точки сохранения: perform() внутри себя зовёт saveState(). */
+let depth = 0;
+db.transaction = function(fn){
+  return function(){
+    const sp = "sp" + depth;
+    db.exec(depth === 0 ? "BEGIN" : "SAVEPOINT " + sp);
+    depth++;
+    try{
+      const out = fn.apply(this, arguments);
+      depth--;
+      db.exec(depth === 0 ? "COMMIT" : "RELEASE " + sp);
+      return out;
+    }catch(e){
+      depth--;
+      db.exec(depth === 0 ? "ROLLBACK" : "ROLLBACK TO " + sp);
+      throw e;
+    }
+  };
+};
 
 function migrate(){
-  db.exec(fs.readFileSync(SCHEMA_PATH, "utf8"));
+  db.exec(global.__SCHEMA_SQL || fs.readFileSync(SCHEMA_PATH, "utf8"));
   return db.prepare("SELECT value FROM schema_meta WHERE key = 'version'").get().value;
 }
 const now = () => Date.now();

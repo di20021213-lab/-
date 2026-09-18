@@ -157,8 +157,8 @@ const ok = (name) => console.log("  ✓ " + name);
     ok("выход из аккаунта гасит сессию");
 
     /* данные действительно в базе, а не в памяти процесса */
-    const Database = require("better-sqlite3");
-    const db = new Database(DB_PATH, {readonly:true});
+    const {DatabaseSync} = require("node:sqlite");
+    const db = new DatabaseSync(DB_PATH, {readOnly:true});
     const u = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
     assert.ok(u && u.email_verified_at, "пользователь не сохранён");
     assert.ok(!u.password_hash.includes("kolhoz12345"), "пароль хранится открытым текстом");
