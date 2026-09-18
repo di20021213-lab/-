@@ -28,6 +28,9 @@ collect("img", "img/");
 
 let html = read("index.html");
 html = html.replace(/<script src="[^"]+"><\/script>\s*/g, "");
+// картинки, прописанные прямо в разметке, тоже заменяем на встроенные —
+// иначе в одном файле они просто не находятся
+html = html.replace(/src="(img\/[^"]+)"/g, (m, p) => images[p] ? 'src="' + images[p] + '"' : m);
 
 // шрифты из сети оставляем, но помечаем: без интернета подставится системный
 const bundle = [

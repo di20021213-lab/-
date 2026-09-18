@@ -109,6 +109,13 @@ var ISO = {
   prop: {"bush":1, "doska":1, "fence":1, "fluger":1, "grass":1, "hay":1, "klumba":1, "kolodec":1, "path":1, "pleten":1, "scare":1, "skirda":1, "table":1, "telega":1, "traktor":1, "tree":1}
 };
 
+var UI = {"barn":1, "bonus":1, "butterfly":1, "fertilizer":1, "friends":1, "gusi":1, "koni":1, "korovy":1, "kury":1, "ogorod":1, "pets":1, "piggy":1, "quests":1, "sad":1, "shop":1, "silver":1, "store":1, "svini":1, "teplica":1, "top":1, "wheat":1};
+
+/** Иконка раздела (game-icons.net). Нет такой — вернём null, вызывающий подставит своё. */
+function uiIc(key, cls){
+  return UI[key] ? "<img class='ui-ic " + (cls || "") + "' src='" + url("img/ui/" + key + ".svg") + "' alt=''>" : null;
+}
+
 /** Рисованный спрайт из набора ODDBLOT, если он есть для этой сущности. */
 function isoSrc(kind, id){
   return ISO[kind] && ISO[kind][id] ? "img/iso/" + kind + "-" + id + ".png" : null;
@@ -685,6 +692,21 @@ function openPets(){
   panels.push({scrim:w.scrim, fn:draw});
 }
 
+/** Окно «Об игре»: лицензии требуют указания авторов, и это честное место для этого. */
+function openAbout(){
+  var w = makeWin("Об игре", "sm");
+  w.body.innerHTML =
+    "<p><b>Колхоз «Червонэ дышло»</b> — браузерная ферма по мотивам соцсетевых игр начала 2010-х. " +
+    "Механика и устройство интерфейса собраны по скриншотам оригинала, код и графика свои.</p>" +
+    "<h3>Графика</h3>" +
+    "<p>Двор, постройки и культуры — набор <b>The Great Farm</b> студии <b>ODDBLOT</b>.<br>" +
+    "Пиксельная живность и интерьеры — наборы <b>Kenney</b> (kenney.nl), CC0.<br>" +
+    "Иконки разделов — <b>Delapouite</b>, <b>Lorc</b> и <b>Skoll</b> с сайта " +
+    "<a href='https://game-icons.net' target='_blank' rel='noopener'>game-icons.net</a>, лицензия CC BY 3.0.</p>" +
+    "<h3>Шрифты</h3><p>Russo One и PT Sans, Google Fonts.</p>";
+  closeBar(w);
+}
+
 /* ===================== отрисовка ===================== */
 function setBar(id, txtId, val, max, txt){
   var pct = Math.max(0, Math.min(100, val / max * 100));
@@ -704,13 +726,13 @@ function renderHud(){
   q.innerHTML = "";
   HKEYS.forEach(function(k){
     var c = counts(k);
-    var b = el("button", null, ic("house", k, HOUSES[k].em, "mini-house"));
+    var b = el("button", null, uiIc(k) || ic("house", k, HOUSES[k].em, "mini-house"));
     b.title = HOUSES[k].n;
     if(c.ready) b.appendChild(el("span", "badge", String(c.ready)));
     b.onclick = function(){ openHouse(k); };
     q.appendChild(b);
   });
-  var pets = el("button", null, "🐕");
+  var pets = el("button", null, uiIc("pets") || "🐕");
   pets.title = "Пёс и кот";
   pets.onclick = openPets;
   q.appendChild(pets);
@@ -797,9 +819,10 @@ function renderQuestStrip(){
 function renderTabs(){
   var t = $("tabs");
   if(t.children.length) return;
-  [["TOP 100", openTop], ["Друзья", openFriends], ["Задания", openQuests], ["Бонусы", openBonus],
-   ["Склад", openStore], ["Магазин", function(){ openShop(); }]].forEach(function(p){
-    var b = el("button", null, p[0]);
+  [["TOP 100", openTop, "top"], ["Друзья", openFriends, "friends"], ["Задания", openQuests, "quests"],
+   ["Бонусы", openBonus, "bonus"], ["Склад", openStore, "store"], ["Магазин", function(){ openShop(); }, "shop"]]
+  .forEach(function(p){
+    var b = el("button", null, (uiIc(p[2], "tab") || "") + "<span>" + p[0] + "</span>");
     b.onclick = function(){ closeAll(); p[1](); };
     t.appendChild(b);
   });
@@ -921,6 +944,7 @@ function startGame(){
   renderTabs();
   $("shopBtn").onclick = function(){ closeAll(); openShop(); };
   $("questBtn").onclick = function(){ closeAll(); openQuests(); };
+  $("aboutBtn").onclick = function(){ closeAll(); openAbout(); };
   $("logoutBtn").onclick = function(){
     api("/api/auth/logout", {}).then(function(){ S = null; started = false; location.reload(); });
   };
