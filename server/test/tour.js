@@ -36,7 +36,7 @@ let n = 0;
     console.log('  ' + path.basename(file));
   };
   const closeTop = async () => {   // закрыть верхнюю модалку, если это окно награды
-    const x = p.locator('.scrim .win.sm .x, .scrim .win.sm .btn').last();
+    const x = p.locator('.scrim .win.sm .win-ft .btn').last();
     if (await x.count()) { await x.click().catch(() => {}); await p.waitForTimeout(200); }
   };
 
@@ -108,7 +108,7 @@ let n = 0;
     await p.waitForTimeout(700);
     await closeTop();
     await shot('kuryatnik-posle-sbora');
-    await p.locator('.win-hd .x').last().click();
+    await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
 
     // ---------- 4. склад и сдача продукции ----------
     await p.locator('.tabs button', { hasText: 'Склад' }).click();
@@ -117,7 +117,7 @@ let n = 0;
     await p.waitForTimeout(700);
     await closeTop();
     await shot('sklad-posle-sdachi');
-    await p.locator('.win-hd .x').last().click();
+    await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
 
     // ---------- 5. огород ----------
     await p.locator('#shopBtn').click();
@@ -137,12 +137,12 @@ let n = 0;
     await p.waitForTimeout(700);
     await closeTop();
     await shot('ogorod-posle-uluchsheniya');
-    await p.locator('.win-hd .x').last().click();
+    await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
 
     // ---------- 7. задания, бонусы, соседи, рекорды, питомцы ----------
     await p.locator('.tabs button', { hasText: 'Задания' }).click();
     await shot('spisok-zadaniy');
-    await p.locator('.win-hd .x').last().click();
+    await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
 
     await p.locator('.tabs button', { hasText: 'Бонусы' }).click();
     await shot('ezhednevnyy-podarok');
@@ -150,19 +150,19 @@ let n = 0;
     await p.waitForTimeout(700);
     await closeTop();
     await shot('podarok-otkryt');
-    await p.locator('.win-hd .x').last().click();
+    await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
 
     await p.locator('.tabs button', { hasText: 'Друзья' }).click();
     await shot('sosedi');
-    await p.locator('.win-hd .x').last().click();
+    await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
 
     await p.locator('.tabs button', { hasText: 'TOP 100' }).click();
     await shot('top-100', 800);
-    await p.locator('.win-hd .x').last().click();
+    await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
 
     await p.locator('.quick button').last().click();
     await shot('pes-i-kot');
-    await p.locator('.win-hd .x').last().click();
+    await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
 
     await shot('dvor-obzhitoy', 600);
 

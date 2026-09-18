@@ -138,10 +138,17 @@ function makeWin(title, cls){
   hd.appendChild(x);
   var bd = el("div", "win-bd");
   win.appendChild(hd); win.appendChild(bd); scrim.appendChild(win);
-  x.onclick = function(){ closeWin(scrim); };
+  var w = {scrim:scrim, win:win, body:bd, refresh:null};
+  x.title = "Обновить";
+  x.onclick = function(){ if(w.refresh) w.refresh(); else closeWin(scrim); };
   scrim.addEventListener("click", function(e){ if(e.target === scrim) closeWin(scrim); });
   $("modals").appendChild(scrim);
-  return {scrim:scrim, win:win, body:bd};
+  return w;
+}
+/** Подвал с «Закрыть» — в оригинале окна закрываются снизу, а не крестиком. */
+function closeBar(w){
+  if(!w.win.querySelector(".win-ft")) footer(w, [{label:"Закрыть", on:function(){ closeWin(w.scrim); }}]);
+  return w;
 }
 function closeWin(scrim){
   scrim.remove();
@@ -258,6 +265,8 @@ function openHouse(k){
     body.appendChild(up);
   }
   draw();
+  w.refresh = draw;
+  closeBar(w);
   live.push({scrim:w.scrim, fn:draw});
   panels.push({scrim:w.scrim, fn:draw});
 }
@@ -362,6 +371,8 @@ function openShop(cat, sub){
     main.appendChild(grid);
   }
   draw();
+  w.refresh = draw;
+  closeBar(w);
   panels.push({scrim:w.scrim, fn:draw});
 }
 function goodCard(g, redraw){
@@ -459,6 +470,8 @@ function openTop(){
   var rows = el("div", "rows");
   rows.appendChild(el("div", "row", "<span class='grow'><small>Загружаем таблицу…</small></span>"));
   w.body.appendChild(rows);
+  closeBar(w);
+  w.refresh = function(){ closeWin(w.scrim); openTop(); };
   api("/api/top").then(function(r){
     rows.innerHTML = "";
     var list = r.top || [];
@@ -507,11 +520,14 @@ function openFriends(){
     body.appendChild(el("p", null, "<small>Подарки покупаются в магазине, раздел «Подарки».</small>"));
   }
   draw();
+  w.refresh = draw;
+  closeBar(w);
   panels.push({scrim:w.scrim, fn:draw});
 }
 function openQuests(){
   var w = makeWin("Задания");
   var rows = el("div", "rows");
+  w.refresh = null;
   QUESTS.forEach(function(q, i){
     var done = i < S.quest;
     var row = el("div", "row");
@@ -523,50 +539,75 @@ function openQuests(){
     rows.appendChild(row);
   });
   w.body.appendChild(rows);
+  closeBar(w);
 }
 function openBonus(){
   var w = makeWin("Бонусы");
   var body = w.body;
   function draw(){
     body.innerHTML = "";
-    body.appendChild(el("h3", null, "Ежедневный подарок"));
-    body.appendChild(el("p", null, "<small>Открывай корзинки и получай призы! Заходи каждый день — серия растёт.</small>"));
+
+    var head = el("div", "ribbon-wrap");
+    head.innerHTML = ic("breed", "podsol", "🌾", "wheat left") +
+      "<div class='ribbon'><span>Ежедневный подарок!</span></div>" +
+      ic("breed", "podsol", "🌾", "wheat right");
+    body.appendChild(head);
+    body.appendChild(el("div", "daily-note", "Подарков доступно сегодня: " + (S.daily.opened ? 0 : 1) + "."));
+
     var days = el("div", "days");
-    for(var i = 1; i <= 5; i++) days.appendChild(el("div", "day" + (i <= S.daily.streak ? " on" : ""), i + " д."));
+    for(var i = 1; i <= 5; i++){
+      if(i > 1) days.appendChild(el("div", "day-arrow", "➜"));
+      var on = i <= S.daily.streak;
+      days.appendChild(el("div", "day" + (on ? " on" : ""), "<b>" + i + "</b><span>День</span>"));
+    }
     body.appendChild(days);
+
+    var row = el("div", "daily-row");
+    var scroll = el("div", "scroll",
+      "<b>НАГРАДА</b><p>Открывай корзинки и получай призы! Заходи каждый день и испытай удачу — " +
+      "можешь найти корма, полезных животных, серебро и опыт. Чем чаще заходишь, тем больше призов.</p>");
+    row.appendChild(scroll);
+
+    var board = el("div", "board");
     var bs = el("div", "baskets");
     for(var j = 0; j < 16; j++){
       (function(j){
-        var b = el("button", "bsk" + (S.daily.opened && S.daily.picked === j ? " open" : ""), S.daily.opened && S.daily.picked === j ? "🎉" : "🧺");
+        var opened = S.daily.opened && S.daily.picked === j;
+        var b = el("button", "bsk" + (opened ? " open" : ""),
+                   opened ? "<span class='pick'>🎉</span>" : ic("prop", "telega", "🧺"));
         if(S.daily.opened) b.disabled = true;
-        b.onclick = function(){
-          act("daily", {basket:j});
-        };
+        b.onclick = function(){ act("daily", {basket:j}); };
         bs.appendChild(b);
       })(j);
     }
-    body.appendChild(bs);
+    board.appendChild(bs);
+    row.appendChild(board);
+    body.appendChild(row);
 
     body.appendChild(el("h3", null, "Мои бонусы"));
-    var rows = el("div", "rows");
-    var any = false;
+    var rows = el("div", "rows"), any = false;
     BOOSTS.forEach(function(b){
       var n = S.items[b.id] || 0;
       if(!n) return;
       any = true;
-      var row = el("div", "row");
-      row.innerHTML = "<span class='ic'>" + b.em + "</span><span class='grow'><b>" + esc(b.n) + " ×" + n + "</b><small>" + esc(b.d) + "</small></span>";
+      var r = el("div", "row");
+      r.innerHTML = "<span class='ic'>" + b.em + "</span><span class='grow'><b>" + esc(b.n) + " ×" + n +
+                    "</b><small>" + esc(b.d) + "</small></span>";
       var use = el("button", "mini go", "Применить");
       use.onclick = function(){ act("useItem", {id:b.id}); };
-      row.appendChild(use);
-      rows.appendChild(row);
+      r.appendChild(use);
+      rows.appendChild(r);
     });
     if(!any) rows.appendChild(el("div", "row", "<span class='ic'>🤷</span><span class='grow'><small>Бонусов нет. Купи в магазине, раздел «Бонусы».</small></span>"));
     body.appendChild(rows);
   }
   draw();
+  w.refresh = draw;
+  closeBar(w);
+  live.push({scrim:w.scrim, fn:draw});
   panels.push({scrim:w.scrim, fn:draw});
 }
+
 function openStore(){
   var w = makeWin("Склад");
   var body = w.body;
@@ -615,6 +656,8 @@ function openStore(){
     body.appendChild(inv);
   }
   draw();
+  w.refresh = draw;
+  closeBar(w);
   panels.push({scrim:w.scrim, fn:draw});
 }
 function openPets(){
@@ -636,6 +679,8 @@ function openPets(){
     body.appendChild(el("p", null, "<small>Общая урожайность двора сейчас: <b>" + yieldPct() + "%</b></small>"));
   }
   draw();
+  w.refresh = draw;
+  closeBar(w);
   live.push({scrim:w.scrim, fn:draw});
   panels.push({scrim:w.scrim, fn:draw});
 }

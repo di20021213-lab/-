@@ -125,18 +125,28 @@ button{font:inherit;color:inherit;cursor:pointer}
 
 /* ---------- модалки ---------- */
 .scrim{position:fixed;inset:0;z-index:50;background:rgba(30,18,8,.6);display:grid;place-items:center;padding:14px}
-.win{width:min(680px,100%);max-height:86vh;display:flex;flex-direction:column;
-  border:4px solid var(--wood-dk);border-radius:12px;background:var(--pane);box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.win{width:min(700px,100%);max-height:86vh;display:flex;flex-direction:column;position:relative;
+  border:4px solid var(--wood-dk);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.45),inset 0 0 0 3px rgba(255,255,255,.18);
+  background:linear-gradient(180deg,#e0bd88,#caa068)}
 .win.sm{width:min(430px,100%)}
-.win-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;
-  border-bottom:3px solid var(--wood-dk);border-radius:8px 8px 0 0;background:linear-gradient(180deg,var(--tan-lt),var(--tan))}
-.win-hd h2{font-size:17px}
-.x{padding:3px 10px;border:2px solid var(--wood-dk);border-radius:7px;background:#e0685a;color:#fff;font-weight:700}
-.win-bd{padding:10px;overflow:auto}
-.win-ft{display:flex;justify-content:flex-end;gap:7px;padding:8px 10px;border-top:3px solid var(--wood-dk)}
-.btn{padding:6px 14px;border:2px solid var(--wood-dk);border-radius:7px;background:linear-gradient(180deg,#f6d98a,#e0ab3e);
-  font-weight:700;font-size:13px;box-shadow:0 2px 0 var(--wood-dk)}
-.btn:active{transform:translateY(2px);box-shadow:none}
+/* Шапка как в оригинале: деревянная планка, название по центру, кружок обновления справа */
+.win-hd{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 46px;
+  border-bottom:3px solid var(--wood-dk);border-radius:9px 9px 0 0;
+  background:linear-gradient(180deg,#f0dcae,#d9b87e 60%,#c79f64)}
+.win-hd h2{font-size:19px;color:#5b3a19;text-shadow:0 1px 0 rgba(255,255,255,.6)}
+.x{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:30px;height:30px;padding:0;
+  border:3px solid var(--wood-dk);border-radius:50%;font-size:0;
+  background:radial-gradient(circle at 35% 30%,#8fd46a,#4e9b35)}
+.x::after{content:"↻";font-size:17px;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.45)}
+.win-bd{margin:10px;padding:11px;overflow:auto;border:3px solid #9d7443;border-radius:10px;
+  background:linear-gradient(180deg,#e9cfa2,#ddbd88);box-shadow:inset 0 2px 6px rgba(90,60,25,.25)}
+.win-ft{display:flex;justify-content:flex-end;gap:7px;padding:9px 12px;border-top:3px solid var(--wood-dk);
+  border-radius:0 0 9px 9px;background:linear-gradient(180deg,#d3ab72,#c09657)}
+.btn{padding:7px 16px;border:3px solid var(--wood-dk);border-radius:9px;
+  background:linear-gradient(180deg,#fbe8ad,#eec468 45%,#dda93c);
+  font-weight:700;font-size:13px;color:#4e3213;
+  box-shadow:0 3px 0 rgba(95,61,28,.85),inset 0 1px 0 rgba(255,255,255,.65)}
+.btn:active{transform:translateY(3px);box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
 .btn.go{background:linear-gradient(180deg,#a6e07a,#5ba233)}
 .btn.flat{background:var(--tan-lt);box-shadow:none}
 .btn[disabled]{background:#c3b193;color:#8a7a60;cursor:not-allowed;box-shadow:none}
@@ -144,8 +154,10 @@ button{font:inherit;color:inherit;cursor:pointer}
 /* магазин */
 .shop{display:grid;grid-template-columns:186px 1fr;gap:9px}
 .shop-nav{display:flex;flex-direction:column;gap:3px;max-height:56vh;overflow:auto;padding-right:3px}
-.shop-nav button{text-align:left;padding:5px 9px;border:2px solid var(--wood-dk);border-radius:14px;background:var(--tan-lt);
-  font-size:13px;font-weight:700}
+.shop-nav button{position:relative;text-align:left;padding:5px 9px 5px 22px;border:2px solid #9d7443;
+  border-radius:14px;background:linear-gradient(180deg,#f7e6bf,#e6cd9c);font-size:13px;font-weight:700;color:#553516}
+.shop-nav button::before{content:"▸";position:absolute;left:8px;color:#8a6a3a}
+.shop-nav button.sub::before{content:"·"}
 .shop-nav button.sub{margin-left:14px;border-radius:7px;font-weight:400;font-size:12.5px;background:#f0ddba}
 .shop-nav button[aria-pressed="true"]{background:linear-gradient(180deg,#f6d98a,#e0ab3e)}
 .shop-main{display:flex;flex-direction:column;gap:8px;min-width:0}
@@ -154,15 +166,20 @@ button{font:inherit;color:inherit;cursor:pointer}
 .filters label{display:flex;align-items:center;gap:5px}
 .pager{display:flex;align-items:center;justify-content:center;gap:9px;font-size:12.5px;font-weight:700}
 .pager button{padding:1px 9px;border:2px solid var(--wood-dk);border-radius:6px;background:var(--tan-lt)}
-.goods{display:grid;grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:8px}
-.good{padding:7px;border:2px solid var(--wood-dk);border-radius:8px;background:var(--pane-lt);
+.goods{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.good{min-width:0}
+.good{padding:8px 7px;border:3px solid #9d7443;border-radius:10px;
+  background:linear-gradient(180deg,#f6e6c1,#e7cfa1);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.7);
   display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
-.good .nm{font-size:12.5px;font-weight:700;min-height:2.4em;display:flex;align-items:center}
-.good .im{width:52px;height:52px;border:2px solid var(--wood-dk);border-radius:7px;background:#fff8e6;
-  display:grid;place-items:center;font-size:27px}
+.good .nm{font-size:12.5px;font-weight:700;min-height:2.4em;display:flex;align-items:center;
+  overflow-wrap:anywhere;hyphens:auto;line-height:1.2;text-align:center}
+.good .im{width:52px;height:52px;border:3px solid #9d7443;border-radius:9px;
+  background:linear-gradient(180deg,#fffaf0,#f2e4c6);display:grid;place-items:center;font-size:27px;
+  box-shadow:inset 0 2px 4px rgba(120,90,40,.18)}
 .good .prices{display:flex;flex-direction:column;gap:2px;width:100%;font-size:12.5px;font-weight:700}
-.pr{display:flex;align-items:center;justify-content:center;gap:5px;padding:1px 6px;border:2px solid var(--wood-dk);
-  border-radius:6px;background:#efdcb8}
+.pr{display:flex;align-items:center;justify-content:center;gap:5px;padding:2px 8px;border:2px solid #9d7443;
+  border-radius:12px;background:linear-gradient(180deg,#f7ead0,#e8d3ab)}
 .pr.zero{opacity:.45}
 .good .lvl{font-size:11.5px;font-weight:700;color:var(--red)}
 .good button.pick{width:100%;padding:4px;border:2px solid var(--wood-dk);border-radius:6px;
@@ -218,15 +235,45 @@ button{font:inherit;color:inherit;cursor:pointer}
 .rank{width:26px;text-align:right;font-weight:700;color:var(--ink-soft)}
 
 /* подарок дня */
-.baskets{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:9px}
-.bsk{aspect-ratio:1;border:2px solid var(--wood-dk);border-radius:8px;font-size:25px;display:grid;place-items:center;
-  background:linear-gradient(180deg,#f2dcae,#dcbe85)}
-.bsk[disabled]{cursor:default}
-.bsk.open{background:#cbe6b6}
-.days{display:flex;gap:6px;justify-content:center;margin-top:8px}
-.day{width:33px;height:39px;border:2px solid var(--wood-dk);border-radius:5px;background:#f6e7c2;
-  display:grid;place-items:center;font-weight:700;font-size:12px}
-.day.on{background:var(--red);color:#fff}
+/* ---------- ежедневный подарок: лента, отрывные дни, свиток и щит ---------- */
+.ribbon-wrap{position:relative;display:flex;align-items:center;justify-content:center;min-height:62px;margin-bottom:4px}
+.ribbon-wrap img.sp.wheat{position:absolute;width:82px;height:auto;
+  filter:saturate(1.5) brightness(1.25) drop-shadow(0 2px 2px rgba(60,40,15,.35))}
+.ribbon-wrap img.sp.wheat.left{left:2%;transform:rotate(-24deg)}
+.ribbon-wrap img.sp.wheat.right{right:2%;transform:scaleX(-1) rotate(-24deg)}
+.ribbon{position:relative;padding:7px 46px;border:3px solid #7e1d18;border-radius:6px;
+  background:linear-gradient(180deg,#e2564a,#c2261f 55%,#9d1c16);
+  box-shadow:0 4px 10px rgba(60,20,10,.35),inset 0 1px 0 rgba(255,255,255,.35);
+  clip-path:polygon(0 0,100% 0,100% 100%,92% 78%,8% 78%,0 100%)}
+.ribbon span{font-family:"Russo One",sans-serif;font-size:19px;color:#fff6e2;letter-spacing:.02em;
+  text-shadow:0 2px 0 rgba(90,15,10,.85)}
+.daily-note{text-align:center;color:#9d1c16;font-weight:700;font-size:13px;margin-bottom:8px}
+.days{display:flex;gap:4px;justify-content:center;align-items:center;margin-bottom:10px}
+.day{width:46px;height:54px;border:2px solid #9d7443;border-radius:3px 3px 6px 6px;
+  background:linear-gradient(180deg,#fdf4dd,#efdcb2);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:1px;box-shadow:0 2px 3px rgba(90,60,25,.25)}
+.day b{font-family:"Russo One",sans-serif;font-size:19px;color:#8a6a3a;line-height:1}
+.day span{font-size:10px;color:#8a6a3a;text-transform:lowercase}
+.day.on{background:linear-gradient(180deg,#e2564a,#b52019);border-color:#7e1d18}
+.day.on b,.day.on span{color:#fff6e2}
+.day-arrow{color:#b08a52;font-size:15px}
+.daily-row{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.scroll{flex:1 1 210px;min-width:190px;padding:12px 14px;border:2px solid #cbb18a;border-radius:4px;
+  background:linear-gradient(180deg,#fffdf4,#f6ecd6);box-shadow:0 3px 8px rgba(90,60,25,.22);
+  text-align:center;font-size:12.5px;line-height:1.45;color:#5b3a19}
+.scroll b{display:block;font-family:"Russo One",sans-serif;font-size:17px;color:#c2261f;margin-bottom:6px}
+.scroll p{margin:0}
+.board{flex:1 1 260px;padding:9px;border:3px solid #7a5230;border-radius:8px;
+  background:repeating-linear-gradient(180deg,#b8834a 0 22px,#ab7942 22px 24px);
+  box-shadow:inset 0 2px 8px rgba(60,35,10,.45)}
+.baskets{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.bsk{aspect-ratio:1;display:grid;place-items:center;padding:3px;border:2px solid #8a6a3a;border-radius:6px;
+  background:linear-gradient(180deg,#f2dcae,#dcbe85);box-shadow:inset 0 1px 0 rgba(255,255,255,.55)}
+.bsk img.sp{width:100%;height:auto;max-width:44px}
+.bsk .pick{font-size:22px}
+.bsk:hover:not([disabled]){background:linear-gradient(180deg,#fbeccb,#e8cf9c)}
+.bsk[disabled]{cursor:default;opacity:.75}
+.bsk.open{background:linear-gradient(180deg,#cbe6b6,#a8d18c);opacity:1}
 .reward-box{display:flex;flex-direction:column;align-items:center;gap:7px;padding:12px}
 .reward-box .im{width:70px;height:70px;border:3px solid var(--wood-dk);border-radius:8px;background:#5b8fc9;
   display:grid;place-items:center;font-size:36px}
