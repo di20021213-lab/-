@@ -100,7 +100,19 @@ var SPRITES = {
   prop: {barrel:1, crate:1, egg:1, farmer:1, fence:1, hay:1, milk:1, sign:1, stone:1, tree:1, vily:1, well:1}
 };
 
+var ISO = {
+  breed: {"grusha":1, "kartoha":1, "kukuruza":1, "ogurcy":1, "podsol":1, "trufel":1, "yablon":1},
+  house: {"gusi":1, "koni":1, "korovy":1, "kury":1, "ogorod":1, "sad":1, "svini":1, "teplica":1},
+  prop: {"bush":1, "doska":1, "fence":1, "fluger":1, "grass":1, "hay":1, "klumba":1, "kolodec":1, "path":1, "pleten":1, "scare":1, "skirda":1, "table":1, "telega":1, "traktor":1, "tree":1}
+};
+
+/** Рисованный спрайт из набора ODDBLOT, если он есть для этой сущности. */
+function isoSrc(kind, id){
+  return ISO[kind] && ISO[kind][id] ? "img/iso/" + kind + "-" + id + ".png" : null;
+}
 function spr(kind, id, cls){
+  var iso = isoSrc(kind, id);
+  if(iso) return "<img class='sp iso " + (cls || "") + "' src='" + iso + "' alt='' draggable='false'>";
   return SPRITES[kind] && SPRITES[kind][id]
     ? "<img class='sp " + (cls || "") + "' src='img/" + kind + "-" + id + ".png' alt='' draggable='false'>"
     : null;
@@ -648,31 +660,66 @@ function renderHud(){
   pets.onclick = openPets;
   q.appendChild(pets);
 }
+/* Раскладка двора: доля ширины и высоты сцены до основания постройки,
+   плюс ширина спрайта в долях ширины сцены. Глубина считается от y, поэтому
+   дальние постройки не лезут поверх ближних. */
+var YARD = {
+  korovy:  {x:26, y:40, w:29},
+  koni:    {x:72, y:37, w:28},
+  svini:   {x:48, y:57, w:30},
+  kury:    {x:13, y:63, w:21},
+  gusi:    {x:80, y:56, w:19},
+  teplica: {x:26, y:82, w:26},
+  ogorod:  {x:58, y:84, w:25},
+  sad:     {x:91, y:88, w:19}
+};
+var DECOR_SPOT = {
+  fluger:  {x:92, y:34, w:11},
+  traktor: {x:6,  y:40, w:8},
+  skirda:  {x:57, y:36, w:9},
+  pleten:  {x:34, y:31, w:22},
+  telega:  {x:41, y:74, w:9},
+  kolodec: {x:63, y:70, w:8},
+  klumba:  {x:16, y:90, w:9},
+  doska:   {x:72, y:95, w:13}
+};
 function renderYard(){
-  var barns = $("barns");
-  barns.innerHTML = "";
+  var scene = $("barns");
+  scene.innerHTML = "";
+  var put = [];
+
   HKEYS.forEach(function(k){
-    var H = HOUSES[k], h = S.houses[k], c = counts(k);
-    var b = el("button", "barn" + (H.roof === "thatch" ? " thatch" : ""));
-    var pen = h.slots.map(function(a){
-      var st = stateOf(a);
-      return ic("breed", a.breed, breed(a.breed).em, st === "hungry" ? "hungry" : "");
-    }).join("");
-    b.innerHTML = ic("house", k, H.em, "bld") + "<div class='wall'><span class='nm'>" + esc(H.n) + "</span>" +
-      "<div class='pen'>" + (pen || "<span class='cap'>пусто</span>") + "</div>" +
-      "<span class='cap'>" + h.slots.length + "/" + cap(k) + " · " + HOUSE_TITLES[h.lvl - 1] + "</span></div>";
+    var H = HOUSES[k], h = S.houses[k], c = counts(k), pos = YARD[k];
+    var b = el("button", "bld");
+    b.style.left = pos.x + "%";
+    b.style.top = pos.y + "%";
+    b.style.width = pos.w + "%";
+    b.style.zIndex = String(100 + Math.round(pos.y));
+    b.title = H.n;
+    b.innerHTML = ic("house", k, H.em) +
+      "<span class='chip'><b class='nm'>" + esc(H.n) + "</b> " +
+      "<span class='num'>" + h.slots.length + "/" + cap(k) + "</span></span>";
     if(c.ready) b.appendChild(el("span", "tag ready", String(c.ready)));
     else if(c.hungry) b.appendChild(el("span", "tag need", "!"));
     b.onclick = function(){ openHouse(k); };
-    barns.appendChild(b);
+    put.push(b);
   });
-  var dr = $("decorRow");
-  var DECOR_SPRITE = {pleten:"fence", skirda:"hay", kolodec:"well", telega:"crate", doska:"sign"};
-  dr.innerHTML = S.decor.map(function(id){
+
+  S.decor.forEach(function(id){
+    var pos = DECOR_SPOT[id];
+    if(!pos) return;
+    var d = el("div", "deco");
+    d.style.left = pos.x + "%";
+    d.style.top = pos.y + "%";
+    d.style.width = pos.w + "%";
+    d.style.zIndex = String(100 + Math.round(pos.y));
     var em = "";
-    DECOR.forEach(function(d){ if(d.id === id) em = d.em; });
-    return "<span title='декор'>" + ic("prop", DECOR_SPRITE[id] || id, em) + "</span>";
-  }).join("") || "<span style='font-size:12px;color:#3b2614'>Двор пустой. Загляни в «Декор».</span>";
+    DECOR.forEach(function(x){ if(x.id === id) em = x.em; });
+    d.innerHTML = ic("prop", id, em);
+    put.push(d);
+  });
+
+  put.forEach(function(n){ scene.appendChild(n); });
 }
 function renderQuestStrip(){
   var s = $("qstrip");

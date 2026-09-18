@@ -74,34 +74,33 @@ button{font:inherit;color:inherit;cursor:pointer}
 .arch .n button{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline dotted}
 
 /* ---------- двор ---------- */
-.yard{position:relative;padding:12px;border:5px solid var(--wood-dk);border-radius:12px;overflow:hidden;
-  background:radial-gradient(125% 72% at 50% 80%,var(--dirt) 0 46%,var(--dirt-dk) 47%,transparent 48%),
-             linear-gradient(180deg,var(--sky2) 0 13%,var(--sky) 13% 21%,var(--grass) 21% 100%)}
+.yard{position:relative;padding:10px 10px 30px;border:5px solid var(--wood-dk);border-radius:12px;overflow:hidden;
+  background:radial-gradient(120% 55% at 50% 98%,#c9b071 0 26%,transparent 62%),
+             linear-gradient(180deg,#dff1fb 0 8%,#b6e0f2 16%,#cfe6ad 21%,#9dc768 26%,#84b152 46%,#6f9c44 100%)}
 .cloud{position:absolute;top:6px;left:-70px;font-size:22px;animation:drift 46s linear infinite}
 .cloud.b{top:24px;animation-duration:70s;animation-delay:-20s}
 @keyframes drift{from{transform:translateX(0)}to{transform:translateX(110vw)}}
-.barns{position:relative;z-index:2;display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px}
-.barn{border:0;background:none;padding:0;position:relative;text-align:center;
-  filter:drop-shadow(0 3px 2px rgba(0,0,0,.28))}
-.barn img.bld{display:block;width:100%;max-width:130px;height:auto;margin:0 auto -3px}
-.barn .wall{padding:5px 7px 7px;border:3px solid var(--wood-dk);border-radius:8px;
-  background:linear-gradient(180deg,#e7cfa4,#cdac74)}
-.barn .nm{display:block;font-family:"Russo One",sans-serif;font-size:12px;margin-bottom:2px}
-.barn .pen{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:1px;min-height:26px}
-.barn .pen img.sp{width:24px;height:24px}
-.barn .pen .hungry{filter:grayscale(.7);opacity:.7}
-.barn .cap{font-size:11px;font-weight:700;color:var(--ink-soft)}
-.barn:active{transform:translateY(2px)}
-.tag{position:absolute;top:10px;right:2px;z-index:3;min-width:21px;padding:1px 5px;border-radius:11px;border:2px solid #fff;
-  font-size:11px;font-weight:700;color:#fff}
+.iso{position:relative;width:100%;aspect-ratio:16/10;z-index:2}
+.bld{position:absolute;transform:translate(-50%,-100%);border:0;background:none;padding:0;cursor:pointer}
+.bld img.sp,.deco img.sp{width:100%;height:auto;max-width:none;display:block}
+.bld img.sp{filter:drop-shadow(0 5px 5px rgba(40,30,15,.30))}
+.bld:hover img.sp{filter:drop-shadow(0 5px 5px rgba(40,30,15,.30)) brightness(1.07)}
+.bld:active{transform:translate(-50%,calc(-100% + 2px))}
+.bld .chip{position:absolute;left:50%;bottom:-15px;transform:translateX(-50%);white-space:nowrap;
+  padding:1px 8px;border:2px solid var(--wood-dk);border-radius:10px;background:rgba(244,227,187,.93);
+  font-size:11px;font-weight:700;line-height:1.35}
+.bld .chip b{font-family:"Russo One",sans-serif;font-weight:400}
+.deco{position:absolute;transform:translate(-50%,-100%);pointer-events:none}
+.tag{position:absolute;top:-11px;left:50%;transform:translateX(-50%);z-index:3;min-width:21px;
+  padding:1px 6px;border-radius:11px;border:2px solid #fff;font-size:11px;font-weight:700;color:#fff}
 .tag.ready{background:var(--ok);animation:pop 1.3s ease-in-out infinite}
+@keyframes pop{50%{transform:translateX(-50%) scale(1.15)}}
 .tag.need{background:var(--warn)}
-@keyframes pop{50%{transform:scale(1.15)}}
-.yard-foot{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:9px}
-.decor-row{display:flex;flex-wrap:wrap;gap:4px;font-size:23px;line-height:1}
-.chair{position:relative;z-index:2;display:flex;align-items:flex-end;gap:6px;margin-top:8px}
+.chair{position:absolute;left:14px;right:14px;bottom:10px;z-index:3;
+  display:flex;align-items:flex-end;gap:6px}
 .chair .face{font-size:32px;line-height:1}
-.bubble{flex:1;padding:6px 11px;background:#fff;border:3px solid var(--wood-dk);border-radius:12px;font-size:13px;position:relative}
+.bubble{flex:1;padding:6px 11px;background:rgba(255,255,255,.94);border:3px solid var(--wood-dk);
+  border-radius:12px;font-size:13px;position:relative;box-shadow:0 3px 8px rgba(40,30,15,.25)}
 .bubble:before{content:"";position:absolute;left:-11px;bottom:8px;border:7px solid transparent;border-right-color:var(--wood-dk)}
 
 /* ---------- нижняя полоса заданий + вкладки ---------- */
@@ -237,6 +236,12 @@ button{font:inherit;color:inherit;cursor:pointer}
   font-size:13px;font-weight:700;box-shadow:var(--sh);animation:up .25s ease-out;text-align:center}
 .toast.bad{background:#f2c3bb}
 @keyframes up{from{opacity:0;transform:translateY(10px)}}
+/* На узком экране названия построек не влезают — оставляем счётчик,
+   название остаётся в подсказке и в окне постройки. */
+@media (max-width:560px){
+  .bld .chip b.nm{display:none}
+  .bld .chip{font-size:10px;padding:0 6px;bottom:-13px}
+}
 @media (max-width:620px){
   .shop{grid-template-columns:1fr}
   .shop-nav{flex-direction:row;flex-wrap:wrap;max-height:none}
@@ -245,6 +250,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 /* ---------- спрайты ----------
    Пиксель-арт нельзя сглаживать при масштабировании, иначе получается каша. */
+img.sp.iso{image-rendering:auto}
 img.sp{image-rendering:pixelated;image-rendering:crisp-edges;vertical-align:middle;
   width:26px;height:26px;object-fit:contain;user-select:none}
 i.em{font-style:normal;line-height:1}
@@ -288,11 +294,7 @@ body.booting #app, body.booting .dock{visibility:hidden}
 
   <div class="yard">
     <div class="cloud">☁️</div><div class="cloud b">☁️</div>
-    <div class="barns" id="barns"></div>
-    <div class="yard-foot">
-      <div class="decor-row" id="decorRow"></div>
-      <div class="decor-row"><img class="sp" src="img/prop-hay.png" alt=""><img class="sp" src="img/prop-fence.png" alt=""><img class="sp" src="img/prop-stone.png" alt=""></div>
-    </div>
+    <div class="iso" id="barns"></div>
     <div class="chair">
       <div class="face"><img class="sp" src="img/prop-farmer.png" alt="" draggable="false"></div>
       <div class="bubble" id="hint">Обрати внимание на ЗАДАНИЯ!</div>

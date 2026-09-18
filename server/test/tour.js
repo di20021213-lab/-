@@ -58,7 +58,7 @@ let n = 0;
     const eml = fs.readFileSync(path.join(MAIL, file), 'utf8').replace(/=\r?\n/g, '').replace(/=3D/g, '=');
     const link = eml.match(/http:\/\/[^\s"<>]*verify\?token=[A-Za-z0-9_-]+/)[0];
     await p.goto(link, { waitUntil: 'networkidle' });
-    await p.waitForSelector('.barn');
+    await p.waitForSelector('.bld');
     await shot('dvor-start', 700);
 
     // ---------- сервер-side выдача средств, чтобы показать поздние механики ----------
@@ -70,7 +70,7 @@ let n = 0;
                'ON CONFLICT(farm_id,kind,item_id) DO UPDATE SET qty=60').run(farm.id);
     db.close();
     await p.reload({ waitUntil: 'networkidle' });
-    await p.waitForSelector('.barn');
+    await p.waitForSelector('.bld');
 
     // ---------- 2. магазин ----------
     await p.locator('#shopBtn').click();
@@ -94,7 +94,7 @@ let n = 0;
     await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
 
     // ---------- 3. цикл: голодные → кормим → созревание → сбор ----------
-    await p.locator('.barn', { hasText: 'Курятник' }).click();
+    await p.locator('.bld', { hasText: 'Курятник' }).click();
     await shot('kuryatnik-golodnye');
     await p.locator('.mini', { hasText: 'Покормить всех' }).click();
     await p.waitForTimeout(600);
@@ -129,7 +129,7 @@ let n = 0;
     await p.waitForTimeout(500);
     await closeTop();
     await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
-    await p.locator('.barn', { hasText: 'Огород' }).click();
+    await p.locator('.bld', { hasText: 'Огород' }).click();
     await shot('ogorod-posazheno');
 
     // ---------- 6. улучшение постройки ----------
@@ -170,7 +170,7 @@ let n = 0;
     await p.setViewportSize({ width: 390, height: 844 });
     await p.waitForTimeout(500);
     await shot('telefon-dvor');
-    await p.locator('.barn', { hasText: 'Курятник' }).click();
+    await p.locator('.bld', { hasText: 'Курятник' }).click();
     await shot('telefon-kuryatnik');
 
     console.log('\nошибки консоли:', errs.length ? errs.join('\n') : 'нет');
