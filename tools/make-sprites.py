@@ -69,6 +69,8 @@ breeds = {
   'holmgus':  recolor(chicken, GREYG),
   'vietnam':  recolor(sheep, PINK),
   'mirgorod': recolor(recolor(sheep, PINK), SPOT),
+  'landras':  recolor(sheep, {WHITE:(250,206,214), GREY1:(232,168,184), GREY2:(206,136,156), GREY3:(178,108,130)}),
+  'krupbel':  recolor(sheep, {WHITE:(252,236,232), GREY1:(232,198,196), GREY2:(206,166,166), GREY3:(176,136,138)}),
   'holmkor':  cow,
   'simment':  recolor(cow, SIMM),
   'vladimir': recolor(cow, BROWN),

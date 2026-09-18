@@ -97,13 +97,14 @@ var qview = 0;
    Графика: наборы Kenney Tiny Farm / Tiny Town / Pixel Platformer Farm Expansion, CC0.
    Часть живности перекрашена из тех же тайлов, постройки склеены из стен и крыш. */
 var SPRITES = {
-  breed: {brama:1, grusha:1, holmgus:1, holmkor:1, kartoha:1, kuchin:1, kukuruza:1, leggorn:1, mirgorod:1, ogurcy:1, podsol:1, rusbel:1, simment:1, trufel:1, tula:1, vietnam:1, vladimir:1, yablon:1},
+  breed: {brama:1, grusha:1, holmgus:1, holmkor:1, kartoha:1, krupbel:1, kuchin:1, kukuruza:1, landras:1, leggorn:1, mirgorod:1, ogurcy:1, podsol:1, rusbel:1, simment:1, trufel:1, tula:1, vietnam:1, vladimir:1, yablon:1},
   house: {gusi:1, koni:1, korovy:1, kury:1, ogorod:1, sad:1, svini:1, teplica:1},
   prop: {barrel:1, crate:1, egg:1, farmer:1, fence:1, hay:1, milk:1, sign:1, stone:1, tree:1, vily:1, well:1}
 };
 
 var ISO = {
-  breed: {"grusha":1, "kartoha":1, "kukuruza":1, "ogurcy":1, "podsol":1, "trufel":1, "yablon":1},
+  breed: {"baklazh":1, "brokkoli":1, "chili":1, "grusha":1, "kapusta":1, "kartoha":1, "kukuruza":1, "luk":1, "morkov":1, "oblepiha":1, "ogurcy":1, "perec":1, "podsol":1, "pomidor":1, "redis":1, "salat":1, "selderey":1, "shpinat":1, "sliva":1, "trufel":1, "vishnya":1, "yablon":1},
+  feed: {"elite":1, "high":1, "instant":1, "krapiva":1, "low":1, "lowset":1, "mid":1, "navoz":1, "otrubi":1, "torf":1, "univer":1, "zhmyh":1},
   house: {"gusi":1, "koni":1, "korovy":1, "kury":1, "ogorod":1, "sad":1, "svini":1, "teplica":1},
   prop: {"bush":1, "doska":1, "fence":1, "fluger":1, "grass":1, "hay":1, "klumba":1, "kolodec":1, "path":1, "pleten":1, "scare":1, "skirda":1, "table":1, "telega":1, "traktor":1, "tree":1}
 };
@@ -213,7 +214,7 @@ function openHouse(k){
       if(st === "hungry"){
         FEEDS.filter(function(f){ return (f.for === "Для животных" || f.for === "Универсальный") && !f.gives; }).forEach(function(f){
           if(!S.feed[f.id]) return;
-          var btn = el("button", "mini", f.em + " " + S.feed[f.id]);
+          var btn = el("button", "mini", ic("feed", f.id, f.em, "tiny") + " " + S.feed[f.id]);
           btn.title = f.n;
           btn.onclick = function(){ act("feed", {house:k, slot:a.id, feed:f.id}); };
           ac.appendChild(btn);
@@ -374,7 +375,10 @@ function goodCard(g, redraw){
     s = cst ? cst.s : 0; c = cst ? cst.c : 0;
   }
   card.appendChild(el("div", "nm", esc(name)));
-  card.appendChild(el("div", "im", g.kind === "breed" ? ic("breed", it.id, em) : g.kind === "upg" ? ic("house", it.id, em) : em));
+  card.appendChild(el("div", "im",
+    g.kind === "breed" ? ic("breed", it.id, em) :
+    g.kind === "upg"   ? ic("house", it.id, em) :
+    g.kind === "feed"  ? ic("feed", it.id, em) : em));
   var pr = el("div", "prices");
   pr.appendChild(el("div", "pr" + (s ? "" : " zero"), "<i class='dot s'></i><span class='num'>" + fmt(s) + "</span>"));
   pr.appendChild(el("div", "pr" + (c ? "" : " zero"), "<i class='dot c'></i><span class='num'>" + priceC(c) + "</span>"));
@@ -395,7 +399,9 @@ function openDetail(g, redraw){
   var qty = 1;
   var d = el("div", "detail");
   var left = el("div", "left");
-  left.appendChild(el("div", "im", g.kind === "breed" ? ic("breed", it.id, it.em) : it.em));
+  left.appendChild(el("div", "im",
+    g.kind === "breed" ? ic("breed", it.id, it.em) :
+    g.kind === "feed"  ? ic("feed", it.id, it.em) : it.em));
   var spin = el("div", "spin");
   var minus = el("button", null, "−"), plus = el("button", null, "+");
   var inp = document.createElement("input");

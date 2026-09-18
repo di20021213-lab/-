@@ -10,7 +10,7 @@
     python3 tools/make-oddblot.py путь/к/Gr8FarmPack
 """
 from PIL import Image
-import colorsys, os, sys
+import colorsys, os, re, sys
 
 SRC = sys.argv[1] if len(sys.argv) > 1 else "Gr8FarmPack"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "public", "img", "iso")
@@ -20,15 +20,18 @@ def load(name):
     return Image.open(os.path.join(SRC, name + ".png")).convert("RGBA")
 
 def plant(crop, stage):
-    """В наборе имена файлов не всегда совпадают с именем папки: «Green bean»
-    лежит как «Greenbean1.png». Поэтому пробуем оба написания."""
-    names = [crop if stage == 0 else "%s%d" % (crop, stage),
-             crop.replace(" ", "") if stage == 0 else "%s%d" % (crop.replace(" ", ""), stage)]
-    for n in names:
-        f = os.path.join(SRC, "Plants", crop, n + ".png")
-        if os.path.exists(f):
-            return Image.open(f).convert("RGBA")
-    raise FileNotFoundError("не нашёл стадию %d у культуры %s" % (stage, crop))
+    """Имена файлов в наборе живут своей жизнью: папка «Bell pepper» хранит
+    BPepper3.png, «Brocollli» — Broccoli3.png, «Eggplant» — Egg3.png. Поэтому
+    ищем не по имени папки, а по номеру стадии в конце имени файла."""
+    folder = os.path.join(SRC, "Plants", crop)
+    files = sorted(f for f in os.listdir(folder) if f.lower().endswith(".png"))
+    if stage:
+        hit = [f for f in files if re.sub(r"\.png$", "", f, flags=re.I).endswith(str(stage))]
+    else:
+        hit = [f for f in files if not re.sub(r"\.png$", "", f, flags=re.I)[-1].isdigit()]
+    if not hit:
+        raise FileNotFoundError("не нашёл стадию %s у культуры %s" % (stage, crop))
+    return Image.open(os.path.join(folder, hit[0])).convert("RGBA")
 
 def trim(im):
     box = im.getbbox()
@@ -55,6 +58,8 @@ def hue_shift(im, deg, sat=1.0, light=1.0, only_reds=True):
             h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
             if only_reds and not (s > 0.18 and (h < 0.07 or h > 0.93)):
                 continue
+            if not only_reds and not (s > 0.10 and 0.05 < h < 0.48):
+                continue   # листва и мякоть; контур и тени не трогаем
             h = (h + d) % 1.0
             l = min(1.0, l * light)
             s = min(1.0, s * sat)
@@ -94,17 +99,62 @@ for i, (nm, x) in enumerate([("Smtree1", 40), ("Smtree2", 330), ("Smtree1", 620)
     sad.alpha_composite(t, (x, 700 - t.height))
 save(fit(sad, W_BIG), "house-sad")
 
+# ---------------------------------------------------------------- спелые овощи
+# В наборе есть лист со зрелыми плодами — он куда понятнее в магазине,
+# чем тёмный куст ботвы. Координаты найдены разбором листа на связные области.
+VEGGIE_SHEET = os.path.join(SRC, "Plants", "SimpleSpriteSheet_Veggies.png")
+VEGGIE = {
+    "perec":   (39, 10, 217, 246),     "brokkoli": (788, 17, 1020, 239),
+    "kapusta": (1557, 13, 1783, 243),  "morkov":   (319, 269, 537, 499),
+    "selderey":(1081, 270, 1287, 498), "kukuruza": (15, 522, 241, 758),
+    "baklazh": (1358, 524, 1510, 756), "ogurcy":   (1578, 530, 1802, 750),
+    "salat":   (396, 786, 620, 1006),  "luk":      (1157, 775, 1371, 1009),
+    "chili":   (449, 1034, 667, 1270), "kartoha":  (697, 1074, 931, 1230),
+    "redis":   (1490, 1063, 1650, 1241),"shpinat": (239, 1305, 417, 1511),
+    "pomidor": (975, 1296, 1193, 1520),"podsol":   (1762, 1291, 1978, 1525),
+}
+def veggie(key):
+    return Image.open(VEGGIE_SHEET).convert("RGBA").crop(VEGGIE[key])
+
+for key, box in VEGGIE.items():
+    save(fit(veggie(key), 200), "breed-" + key)
+# трюфель — та же картофелина, только тёмная: отдельного гриба в наборе нет
+save(fit(hue_shift(veggie("kartoha"), 200, sat=.35, light=.55, only_reds=False), 200), "breed-trufel")
+
 # ---------------------------------------------------------------- культуры
 CROPS = {
-    "kartoha": "Potato", "kukuruza": "Corn", "podsol": "Wheat",
-    "ogurcy": "Green bean", "trufel": "Onion", "yablon": None, "grusha": None,
+    "kartoha": "Potato",   "kukuruza": "Corn",       "podsol": "Wheat",
+    "ogurcy": "Green bean","morkov": "Carrot",
+    "kapusta": "Cabbage",  "redis": "Radish",        "luk": "Onion",
+    "shpinat": "Spinach",  "salat": "Lettuce",       "pomidor": "Tomato",
+    "perec": "Bell pepper","baklazh": "Eggplant",    "brokkoli": "Brocollli",
+    "selderey": "Celery",  "yablon": None,           "grusha": None,
 }
 for key, crop in CROPS.items():
-    if crop:
+    if crop and key not in VEGGIE:
         save(fit(plant(crop, 5), 180), "breed-" + key)
 tree1 = trim(load("Smtree1")); tree2 = trim(load("Smtree2"))
 save(fit(tree1, 180), "breed-yablon")
 save(fit(tree2, 180), "breed-grusha")
+# в наборе всего два дерева, поэтому остальные — те же, но с другой листвой
+save(fit(hue_shift(tree1, -60, sat=1.15, light=.92, only_reds=False), 180), "breed-vishnya")
+save(fit(hue_shift(tree2, 80, sat=.9, light=.85, only_reds=False), 180), "breed-sliva")
+save(fit(hue_shift(tree1, -95, sat=1.1, light=1.05, only_reds=False), 180), "breed-oblepiha")
+
+# ---------------------------------------------------------------- корма
+# Цветные квадратики-эмодзи выглядели дёшево, поэтому кормам — мешки, ящики и вёдра.
+FEED_ART = {
+    "low": "Bale2", "mid": "Smcrate1", "high": "Smcrate2", "elite": "Smcrate3",
+    "instant": "Bucket", "lowset": "Bale1", "krapiva": "Smbush1", "otrubi": "Bucket",
+    "zhmyh": "Smcrate1", "univer": "Table", "navoz": "Dirt2", "torf": "Dirt5",
+}
+for key, nm in FEED_ART.items():
+    im = load(nm)
+    if key == "zhmyh":  im = hue_shift(im, 20, sat=.6, light=.75, only_reds=False)
+    if key == "otrubi": im = hue_shift(im, 40, sat=.5, light=.9,  only_reds=False)
+    if key == "high":   im = hue_shift(im, 150, sat=.5, light=1.0, only_reds=False)
+    if key == "elite":  im = hue_shift(im, 250, sat=.6, light=.95, only_reds=False)
+    save(fit(im, 170), "feed-" + key)
 
 # ---------------------------------------------------------------- двор и декор
 DECOR = {
