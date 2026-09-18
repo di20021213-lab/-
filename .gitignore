@@ -5,3 +5,4 @@ var/
 *.db-shm
 .env
 docs/screenshots-raw/
+dist/

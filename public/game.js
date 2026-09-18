@@ -11,6 +11,8 @@ var panels = [];           // окна, которые перерисовыва�
 function nowMs(){ return Date.now() + SKEW; }
 
 async function api(url, body, method){
+  /* В сборке без сервера запросы обслуживает offline.js по тем же правилам. */
+  if(window.LOCAL_API) return window.LOCAL_API(url, body, method);
   var res = await fetch(url, {
     method: method || (body ? "POST" : "GET"),
     headers: body ? {"Content-Type":"application/json"} : undefined,
@@ -110,11 +112,13 @@ var ISO = {
 function isoSrc(kind, id){
   return ISO[kind] && ISO[kind][id] ? "img/iso/" + kind + "-" + id + ".png" : null;
 }
+/** В офлайн-сборке картинки зашиты в страницу, поэтому путь идёт через таблицу. */
+function url(p){ return (window.IMG && window.IMG[p]) || p; }
 function spr(kind, id, cls){
   var iso = isoSrc(kind, id);
-  if(iso) return "<img class='sp iso " + (cls || "") + "' src='" + iso + "' alt='' draggable='false'>";
+  if(iso) return "<img class='sp iso " + (cls || "") + "' src='" + url(iso) + "' alt='' draggable='false'>";
   return SPRITES[kind] && SPRITES[kind][id]
-    ? "<img class='sp " + (cls || "") + "' src='img/" + kind + "-" + id + ".png' alt='' draggable='false'>"
+    ? "<img class='sp " + (cls || "") + "' src='" + url("img/" + kind + "-" + id + ".png") + "' alt='' draggable='false'>"
     : null;
 }
 /** Спрайт, если он есть; иначе эмодзи — чтобы ничего не пропадало. */
