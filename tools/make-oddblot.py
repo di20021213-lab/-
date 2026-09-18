@@ -9,8 +9,8 @@
 Нужен распакованный архив. Запуск из корня проекта:
     python3 tools/make-oddblot.py путь/к/Gr8FarmPack
 """
-from PIL import Image
-import colorsys, os, re, sys
+from PIL import Image, ImageDraw
+import colorsys, os, random, re, sys
 
 SRC = sys.argv[1] if len(sys.argv) > 1 else "Gr8FarmPack"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "public", "img", "iso")
@@ -119,7 +119,7 @@ def veggie(key):
 for key, box in VEGGIE.items():
     save(fit(veggie(key), 200), "breed-" + key)
 # трюфель — та же картофелина, только тёмная: отдельного гриба в наборе нет
-save(fit(hue_shift(veggie("kartoha"), 200, sat=.35, light=.55, only_reds=False), 200), "breed-trufel")
+save(fit(hue_shift(veggie("kartoha"), -18, sat=.55, light=.45, only_reds=False), 200), "breed-trufel")
 
 # ---------------------------------------------------------------- культуры
 CROPS = {
@@ -134,12 +134,45 @@ for key, crop in CROPS.items():
     if crop and key not in VEGGIE:
         save(fit(plant(crop, 5), 180), "breed-" + key)
 tree1 = trim(load("Smtree1")); tree2 = trim(load("Smtree2"))
-save(fit(tree1, 180), "breed-yablon")
-save(fit(tree2, 180), "breed-grusha")
-# в наборе всего два дерева, поэтому остальные — те же, но с другой листвой
-save(fit(hue_shift(tree1, -60, sat=1.15, light=.92, only_reds=False), 180), "breed-vishnya")
-save(fit(hue_shift(tree2, 80, sat=.9, light=.85, only_reds=False), 180), "breed-sliva")
-save(fit(hue_shift(tree1, -95, sat=1.1, light=1.05, only_reds=False), 180), "breed-oblepiha")
+
+def fruit_tree(base, color, n=10, seed=1, leaf=None, rad_k=13):
+    """В наборе всего два дерева, и оба без плодов — яблоня от груши не отличалась.
+    Развешиваем по кроне плоды нужного цвета, крону при желании подкрашиваем."""
+    im = trim(base).copy()
+    if leaf:
+        im = hue_shift(im, leaf[0], sat=leaf[1], light=leaf[2], only_reds=False)
+    w, h = im.size
+    px = im.load()
+    crown = []
+    for x in range(2, w - 2):
+        for y in range(2, int(h * 0.66)):
+            r, g, b, a = px[x, y]
+            if a > 220 and g > r + 10 and g > b + 10:
+                crown.append((x, y))
+    if not crown:
+        return im
+    rnd = random.Random(seed)
+    spots = []
+    rad = max(3, w // rad_k)
+    for _ in range(400):
+        if len(spots) >= n:
+            break
+        x, y = rnd.choice(crown)
+        if all((x - sx) ** 2 + (y - sy) ** 2 > (rad * 2.4) ** 2 for sx, sy in spots):
+            spots.append((x, y))
+    d = ImageDraw.Draw(im)
+    dark = (60, 40, 45, 255)
+    for x, y in spots:
+        d.ellipse([x - rad, y - rad, x + rad, y + rad], fill=color + (255,), outline=dark, width=max(1, rad // 3))
+        d.ellipse([x - rad // 2, y - rad // 2, x - rad // 6, y - rad // 6],
+                  fill=(255, 255, 255, 90))     # блик, чтобы плод не был плоским пятном
+    return im
+
+save(fit(fruit_tree(tree1, (196, 60, 52), n=11, seed=3), 200), "breed-yablon")
+save(fit(fruit_tree(tree2, (222, 196, 84), n=9, seed=5, leaf=(8, .8, 1.12), rad_k=11), 200), "breed-grusha")
+save(fit(fruit_tree(tree1, (168, 24, 44), n=18, seed=7, leaf=(-8, 1.15, .72), rad_k=20), 200), "breed-vishnya")
+save(fit(fruit_tree(tree2, (104, 72, 150), n=12, seed=11, leaf=(15, .9, .95)), 200), "breed-sliva")
+save(fit(fruit_tree(tree1, (232, 140, 38), n=16, seed=13, leaf=(-35, .7, 1.05)), 200), "breed-oblepiha")
 
 # ---------------------------------------------------------------- корма
 # Цветные квадратики-эмодзи выглядели дёшево, поэтому кормам — мешки, ящики и вёдра.

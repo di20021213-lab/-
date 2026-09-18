@@ -38,7 +38,7 @@ def recolor(img, mapping):
                 px[x, y] = mapping[key] + (c[3],)
     return img
 
-def save(img, name, scale=3):
+def save(img, name, scale=6):
     img = img.resize((img.width * scale, img.height * scale), Image.NEAREST)
     img.save(os.path.join(OUT, name + '.png'))
     return name
@@ -102,25 +102,25 @@ def house(roof_cols):
     im.paste(tile(TOWN,72), (0,16)); im.paste(tile(TOWN,86), (16,16)); im.paste(tile(TOWN,72), (32,16))
     return im
 for k, cols in ROOFS.items():
-    save(house(cols), 'house-' + k, scale=2)
+    save(house(cols), 'house-' + k, scale=4)
 
 # огород: грядки с всходами
 plot = Image.new('RGBA',(48,32),(0,0,0,0))
 for i,n in enumerate((49,50,49)): plot.paste(tile(FARM,n),(i*16,0))
 for i,n in enumerate((61,62,61)): plot.paste(tile(FARM,n),(i*16,16))
-save(plot,'house-ogorod',scale=2)
+save(plot,'house-ogorod',scale=4)
 
 # теплица: рамы из фермерского расширения
 gh = Image.new('RGBA',(54,36),(0,0,0,0))
 for i,n in enumerate((68,69,71)): gh.paste(tile(PP,n),(i*18,0))
 for i,n in enumerate((84,85,87)): gh.paste(tile(PP,n),(i*18,18))
-save(gh.resize((48,32),Image.NEAREST),'house-teplica',scale=2)
+save(gh.resize((48,32),Image.NEAREST),'house-teplica',scale=4)
 
 # сад: деревья на траве
 sad = Image.new('RGBA',(48,32),(0,0,0,0))
 for i,n in enumerate((27,4,27)):
     t=tile(TOWN,n); sad.paste(t,(i*16,6),t)
-save(sad,'house-sad',scale=2)
+save(sad,'house-sad',scale=4)
 
 # ----- мелочи двора и продукция -----
 props = {'egg':(FARM,125),'milk':(FARM,123),'hay':(FARM,96),'well':(FARM,73),
