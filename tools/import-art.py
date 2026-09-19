@@ -12,6 +12,7 @@
 Запуск из корня проекта:
     python3 tools/import-art.py картинка.png rusbel
     python3 tools/import-art.py картинка.png rusbel --keep-shadow
+    python3 tools/import-art.py картинка.png rusbel --flip      # смотрит влево
 """
 from PIL import Image, ImageDraw, ImageFilter
 from collections import deque
@@ -97,9 +98,11 @@ def shadow(im):
     return sh
 
 
-def prepare(path, keep_shadow=False):
+def prepare(path, keep_shadow=False, flip=False):
     im = Image.open(path)
     im = cut_background(im)
+    if flip:
+        im = im.transpose(Image.FLIP_LEFT_RIGHT)   # во дворе все смотрят вправо
     if not keep_shadow:
         im = drop_ground(im)
     box = im.getbbox()
@@ -115,7 +118,7 @@ if __name__ == "__main__":
     if len(args) < 2:
         raise SystemExit(__doc__)
     src, key = args[0], args[1]
-    im = prepare(src, keep_shadow="--keep-shadow" in sys.argv)
+    im = prepare(src, keep_shadow="--keep-shadow" in sys.argv, flip="--flip" in sys.argv)
     os.makedirs(OUT, exist_ok=True)
     dst = os.path.join(OUT, "breed-" + key + ".png")
     im.save(dst, optimize=True)
