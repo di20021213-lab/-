@@ -88,6 +88,11 @@ button{font:inherit;color:inherit;cursor:pointer}
 .bld .chip b{font-family:"Russo One",sans-serif;font-weight:400}
 .deco{position:absolute;transform:translate(-50%,-100%);pointer-events:none}
 .deco.path img.sp{opacity:.85}
+/* Живность во дворе слегка покачивается — двор перестаёт быть декорацией. */
+.deco.walk img.sp{filter:drop-shadow(0 3px 3px rgba(40,30,15,.28))}
+.deco.walk{animation:idle 3.4s ease-in-out infinite}
+.deco.walk:nth-of-type(even){animation-duration:4.1s;animation-delay:-1.2s}
+@keyframes idle{0%,100%{transform:translate(-50%,-100%)}50%{transform:translate(-48%,-101%)}}
 .tag{position:absolute;top:-11px;left:50%;transform:translateX(-50%);z-index:3;min-width:21px;
   padding:1px 6px;border-radius:11px;border:2px solid #fff;font-size:11px;font-weight:700;color:#fff}
 .tag.ready{background:var(--ok);animation:pop 1.3s ease-in-out infinite}
@@ -306,7 +311,7 @@ i.em{font-style:normal;line-height:1}
 .slot .big img.sp{width:38px;height:38px}
 .good .im img.sp{width:44px;height:44px}
 .good .im{width:60px;height:60px}
-.good .im img.sp.iso{width:56px;height:56px}
+.good .im img.sp.iso{width:62px;height:62px}
 .detail .im img.sp{width:82px;height:82px}
 .decor-row img.sp{width:28px;height:28px}
 .chair .face img.sp{width:38px;height:38px}

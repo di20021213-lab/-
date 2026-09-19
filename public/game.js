@@ -112,7 +112,11 @@ var SPRITES = {
 };
 
 var ISO = {
-  breed: {"baklazh":1, "brokkoli":1, "chili":1, "grusha":1, "kapusta":1, "kartoha":1, "kukuruza":1, "luk":1, "morkov":1, "oblepiha":1, "ogurcy":1, "perec":1, "podsol":1, "pomidor":1, "redis":1, "salat":1, "selderey":1, "shpinat":1, "sliva":1, "trufel":1, "vishnya":1, "yablon":1},
+  /* Растения — из набора ODDBLOT, живность нарисована tools/make-animals.py:
+     в наборе животных нет, а пиксельные спрайты Kenney давали четырёх
+     одинаковых кур и гуся, неотличимого от курицы. */
+  breed: {"baklazh":1, "brokkoli":1, "chili":1, "grusha":1, "kapusta":1, "kartoha":1, "kukuruza":1, "luk":1, "morkov":1, "oblepiha":1, "ogurcy":1, "perec":1, "podsol":1, "pomidor":1, "redis":1, "salat":1, "selderey":1, "shpinat":1, "sliva":1, "trufel":1, "vishnya":1, "yablon":1,
+          "rusbel":1, "leggorn":1, "kuchin":1, "brama":1, "tula":1, "holmgus":1, "vietnam":1, "mirgorod":1, "landras":1, "krupbel":1, "holmkor":1, "simment":1, "vladimir":1},
   feed: {"elite":1, "high":1, "instant":1, "krapiva":1, "low":1, "lowset":1, "mid":1, "navoz":1, "otrubi":1, "torf":1, "univer":1, "zhmyh":1},
   house: {"gusi":1, "koni":1, "korovy":1, "kury":1, "ogorod":1, "sad":1, "svini":1, "teplica":1},
   prop: {"bush":1, "doska":1, "fence":1, "fluger":1, "grass":1, "hay":1, "klumba":1, "kolodec":1, "path":1, "pleten":1, "scare":1, "skirda":1, "table":1, "telega":1, "traktor":1, "tree":1},
@@ -872,6 +876,17 @@ var YARD = {
   ogorod:  {x:28, y:85, w:28},
   sad:     {x:70, y:86, w:23}
 };
+/* Выгул: живность стоит перед своей постройкой, поэтому смещения считаются
+   от её ширины, а не в процентах сцены — постройки разного размера.
+   У растений выгула нет. */
+var WALK = {kury:1, gusi:1, svini:1, korovy:1, koni:1};
+function walkSpot(pos, i){
+  return {
+    x: pos.x + pos.w * (i === 0 ? -0.46 : 0.40),
+    y: pos.y + (i === 0 ? 3.5 : 6),
+    w: Math.max(6, Math.min(10, pos.w * 0.42))
+  };
+}
 var DECOR_SPOT = {
   pleten:  {x:9,  y:57, w:14},
   traktor: {x:6,  y:41, w:6},
@@ -902,6 +917,27 @@ function renderYard(){
     else if(c.hungry) b.appendChild(el("span", "tag need", "!"));
     b.onclick = function(){ openHouse(k); };
     put.push(b);
+  });
+
+  /* Живность во дворе: у занятой постройки пасётся пара подопечных. Во дворе
+     оригинала куры и гуси ходят сами по себе, и без них двор выглядит нежилым. */
+  HKEYS.forEach(function(k){
+    var slots = S.houses[k].slots, pos = YARD[k];
+    if(!slots.length || !WALK[k]) return;
+    var ids = [];
+    slots.forEach(function(a){ if(ids.indexOf(a.breed) < 0) ids.push(a.breed); });
+    ids.slice(0, 2).forEach(function(id, i){
+      if(!ISO.breed[id]) return;                 // у растений во дворе делать нечего
+      var sp = walkSpot(pos, i);
+      var w = el("div", "deco walk");
+      w.style.left = sp.x + "%";
+      w.style.top = sp.y + "%";
+      w.style.width = sp.w + "%";
+      w.style.zIndex = String(100 + Math.round(sp.y));
+      w.innerHTML = ic("breed", id, "");
+      w.title = breed(id) ? breed(id).n : "";
+      put.push(w);
+    });
   });
 
   S.decor.forEach(function(id){
