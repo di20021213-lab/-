@@ -106,7 +106,10 @@ var ISO = {
   breed: {"baklazh":1, "brokkoli":1, "chili":1, "grusha":1, "kapusta":1, "kartoha":1, "kukuruza":1, "luk":1, "morkov":1, "oblepiha":1, "ogurcy":1, "perec":1, "podsol":1, "pomidor":1, "redis":1, "salat":1, "selderey":1, "shpinat":1, "sliva":1, "trufel":1, "vishnya":1, "yablon":1},
   feed: {"elite":1, "high":1, "instant":1, "krapiva":1, "low":1, "lowset":1, "mid":1, "navoz":1, "otrubi":1, "torf":1, "univer":1, "zhmyh":1},
   house: {"gusi":1, "koni":1, "korovy":1, "kury":1, "ogorod":1, "sad":1, "svini":1, "teplica":1},
-  prop: {"bush":1, "doska":1, "fence":1, "fluger":1, "grass":1, "hay":1, "klumba":1, "kolodec":1, "path":1, "pleten":1, "scare":1, "skirda":1, "table":1, "telega":1, "traktor":1, "tree":1}
+  prop: {"bush":1, "doska":1, "fence":1, "fluger":1, "grass":1, "hay":1, "klumba":1, "kolodec":1, "path":1, "pleten":1, "scare":1, "skirda":1, "table":1, "telega":1, "traktor":1, "tree":1},
+  /* Ресурсы держим отдельной группой: «доска» в декоре — это доска почёта,
+     а в ресурсах — стопка досок. Одинаковые id, разные картинки. */
+  res: {"doska":1, "gvozdi":1, "soloma":1}
 };
 
 var UI = {"barn":1, "bonus":1, "butterfly":1, "fertilizer":1, "friends":1, "gusi":1, "koni":1, "korovy":1, "kury":1, "ogorod":1, "pets":1, "piggy":1, "quests":1, "sad":1, "shop":1, "silver":1, "store":1, "svini":1, "teplica":1, "top":1, "wheat":1};
@@ -261,9 +264,12 @@ function openHouse(k){
     up.style.marginTop = "8px";
     if(h.lvl < 4){
       var cst = UPG_COST[k][h.lvl];
+      var needProd = cst.p
+        ? " · " + H.prod.n.toLowerCase() + " ×" + cst.p + " (есть " + fmt(S.prods[k].n) + ")"
+        : "";
       up.innerHTML = "<span class='ic'>🔨</span><span class='grow'><b>" + HOUSE_TITLES[h.lvl] + "</b>" +
         "<small>мест станет " + CAP[h.lvl] + " · " + fmt(cst.s) + " 🪙 или " + priceC(cst.c) + " 💎 · доски ×" + cst.b +
-        " (есть " + S.res.doska + ")</small></span>";
+        " (есть " + S.res.doska + ")" + needProd + "</small></span>";
       var ub = el("button", "mini", "Улучшить");
       ub.onclick = function(){ act("upgrade", {house:k}); };
       up.appendChild(ub);
@@ -397,11 +403,18 @@ function goodCard(g, redraw){
   card.appendChild(el("div", "im",
     g.kind === "breed" ? ic("breed", it.id, em) :
     g.kind === "upg"   ? ic("house", it.id, em) :
-    g.kind === "feed"  ? ic("feed", it.id, em) : em));
+    g.kind === "feed"  ? ic("feed", it.id, em) :
+    g.kind === "decor" ? ic("prop", it.id, em) :
+    g.kind === "res"   ? ic("res", it.id, em) : em));
   var pr = el("div", "prices");
   pr.appendChild(el("div", "pr" + (s ? "" : " zero"), "<i class='dot s'></i><span class='num'>" + fmt(s) + "</span>"));
   pr.appendChild(el("div", "pr" + (c ? "" : " zero"), "<i class='dot c'></i><span class='num'>" + priceC(c) + "</span>"));
   card.appendChild(pr);
+  if(g.kind === "upg" && cst){
+    var needs = "доски ×" + cst.b + (cst.p ? ", " + HOUSES[it.id].prod.n.toLowerCase() + " ×" + cst.p : "");
+    var enough = (S.res.doska || 0) >= cst.b && (!cst.p || S.prods[it.id].n >= cst.p);
+    card.appendChild(el("div", "need" + (enough ? " ok" : ""), esc(needs)));
+  }
   if(lvlReq > S.lvl) card.appendChild(el("div", "lvl", lvlReq + " ур."));
   var b = el("button", "pick", g.kind === "upg" ? "Улучшить" : "Подробнее");
   if(lvlReq > S.lvl) b.disabled = true;
@@ -420,7 +433,9 @@ function openDetail(g, redraw){
   var left = el("div", "left");
   left.appendChild(el("div", "im",
     g.kind === "breed" ? ic("breed", it.id, it.em) :
-    g.kind === "feed"  ? ic("feed", it.id, it.em) : it.em));
+    g.kind === "feed"  ? ic("feed", it.id, it.em) :
+    g.kind === "decor" ? ic("prop", it.id, it.em) :
+    g.kind === "res"   ? ic("res", it.id, it.em) : it.em));
   var spin = el("div", "spin");
   var minus = el("button", null, "−"), plus = el("button", null, "+");
   var inp = document.createElement("input");

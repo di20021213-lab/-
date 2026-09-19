@@ -430,6 +430,117 @@ def wattle(w=520, h=230, seed=6):
     return im
 
 
+def well(w=460, h=520):
+    """Колодец: в наборе вместо него ручная колонка, а в колхозе ожидается
+    сруб с воротом и двускатной крышей."""
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    cx = w // 2
+    top, bot = int(h * 0.58), int(h * 0.92)
+    half = int(w * 0.30)
+    # сруб: передняя стенка брёвнами, верх — овал воды
+    d.polygon([(cx - half, top), (cx + half, top), (cx + half, bot - 24), (cx - half, bot - 24)],
+              fill=(150, 112, 70), outline=INK, width=7)
+    for i in range(1, 5):
+        y = top + (bot - 24 - top) * i / 5
+        d.line([(cx - half + 5, y), (cx + half - 5, y)], fill=(112, 84, 52), width=5)
+    d.ellipse([cx - half, top - 26, cx + half, top + 26], fill=(122, 92, 58), outline=INK, width=7)
+    d.ellipse([cx - half + 16, top - 15, cx + half - 16, top + 15], fill=(86, 128, 140))
+    # столбы, ворот и крыша
+    for sx in (cx - half + 12, cx + half - 12):
+        d.line([(sx, top - 6), (sx, int(h * 0.20))], fill=INK, width=16)
+        d.line([(sx, top - 6), (sx, int(h * 0.20))], fill=(132, 100, 64), width=10)
+    d.line([(cx - half + 12, int(h * 0.30)), (cx + half - 12, int(h * 0.30))], fill=INK, width=17)
+    d.line([(cx - half + 12, int(h * 0.30)), (cx + half - 12, int(h * 0.30))], fill=(168, 132, 86), width=11)
+    d.line([(cx + half - 4, int(h * 0.30)), (cx + half + 22, int(h * 0.36))], fill=INK, width=9)  # ручка
+    roof = [(cx - half - 26, int(h * 0.22)), (cx, int(h * 0.05)), (cx + half + 26, int(h * 0.22))]
+    d.polygon(roof + [(cx + half + 26, int(h * 0.27)), (cx, int(h * 0.10)), (cx - half - 26, int(h * 0.27))],
+              fill=(176, 84, 60), outline=INK, width=7)
+    for i in range(1, 6):                       # черепица
+        y = int(h * 0.07) + i * int(h * 0.028)
+        dx = int(half * 0.55 * i / 5) + 10
+        d.line([(cx - dx, y + 6), (cx + dx, y + 6)], fill=(132, 56, 42), width=3)
+    return im
+
+
+def rooster_vane(w=340, h=580):
+    """Флюгер-петух: мачта, стрелка и петух. В наборе на этом месте стояла
+    водокачка — название и картинка расходились."""
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    cx, W, Hh = w // 2, w, h
+
+    def P(fx, fy):
+        return (cx + W * fx, Hh * fy)
+
+    # мачта и раскосы
+    d.line([P(0, 0.99), P(0, 0.42)], fill=INK, width=20)
+    d.line([P(0, 0.99), P(0, 0.42)], fill=(120, 92, 60), width=12)
+    for y in (0.62, 0.78):
+        d.line([P(-0.18, y + 0.06), P(0.18, y)], fill=INK, width=8)
+        d.line([P(-0.18, y), P(0.18, y + 0.06)], fill=INK, width=8)
+    # стрелка направления
+    d.line([P(-0.36, 0.40), P(0.36, 0.40)], fill=INK, width=9)
+    d.polygon([P(0.36, 0.40), P(0.26, 0.365), P(0.26, 0.435)], fill=INK)
+    d.polygon([P(-0.36, 0.40), P(-0.24, 0.372), P(-0.24, 0.428)], fill=INK)
+
+    red, dark = (176, 62, 46), (132, 40, 30)
+    # хвост — три пера назад и вверх
+    for k, (tx, ty) in enumerate([(-0.40, 0.03), (-0.44, 0.11), (-0.40, 0.19)]):
+        d.polygon([P(-0.10, 0.22), P(tx, ty), P(tx + 0.10, ty + 0.05), P(-0.06, 0.28)],
+                  fill=dark if k % 2 else red, outline=INK, width=6)
+    # туловище и грудь
+    d.polygon([P(-0.12, 0.20), P(0.02, 0.15), P(0.16, 0.20), P(0.20, 0.29),
+               P(0.10, 0.35), P(-0.06, 0.33), P(-0.14, 0.27)], fill=red, outline=INK, width=7)
+    # шея и голова
+    d.polygon([P(0.06, 0.18), P(0.16, 0.08), P(0.24, 0.10), P(0.20, 0.22)],
+              fill=red, outline=INK, width=7)
+    d.ellipse([P(0.10, 0.03)[0], P(0.10, 0.03)[1], P(0.30, 0.13)[0], P(0.30, 0.13)[1]],
+              fill=red, outline=INK, width=7)
+    # гребень, клюв, бородка
+    d.polygon([P(0.12, 0.035), P(0.16, -0.01), P(0.20, 0.03), P(0.24, -0.01), P(0.27, 0.04)],
+              fill=(216, 86, 66), outline=INK, width=5)
+    d.polygon([P(0.29, 0.07), P(0.40, 0.085), P(0.29, 0.11)], fill=(226, 176, 72), outline=INK, width=5)
+    d.polygon([P(0.24, 0.12), P(0.29, 0.17), P(0.22, 0.16)], fill=(216, 86, 66), outline=INK, width=4)
+    d.ellipse([P(0.20, 0.055)[0], P(0.20, 0.055)[1], P(0.235, 0.075)[0], P(0.235, 0.075)[1]], fill=INK)
+    # лапы на ось
+    for fx in (-0.02, 0.08):
+        d.line([P(fx, 0.33), P(fx, 0.40)], fill=INK, width=7)
+    return im
+
+
+def planks(w=460, h=300):
+    """Стопка досок для раздела «Ресурсы»: там висели эмодзи."""
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for i, (dx, dy) in enumerate([(0, 0), (18, -46), (-12, -92), (10, -136)]):
+        x0, y0 = 40 + dx, h - 70 + dy
+        pts = [(x0, y0), (x0 + 330, y0 - 34), (x0 + 330, y0 + 10), (x0, y0 + 44)]
+        base = (176, 134, 86) if i % 2 else (156, 116, 74)
+        d.polygon(pts, fill=base, outline=INK, width=7)
+        d.line([(x0 + 8, y0 + 14), (x0 + 322, y0 - 20)], fill=(126, 94, 58), width=3)
+        d.line([(x0 + 8, y0 + 28), (x0 + 322, y0 - 6)], fill=(200, 160, 110), width=2)
+    return im
+
+
+def nails(w=420, h=320):
+    """Горсть гвоздей."""
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    rnd = random.Random(12)
+    for ax, ay, bx, by in [(60, 250, 330, 150), (90, 190, 350, 240), (70, 120, 300, 90)]:
+        ax += rnd.randint(-6, 6); ay += rnd.randint(-6, 6)
+        d.line([(ax, ay), (bx, by)], fill=INK, width=20)
+        d.line([(ax, ay), (bx, by)], fill=(168, 172, 180), width=12)
+        d.line([(ax + 6, ay - 2), (bx - 20, by - 2)], fill=(214, 218, 224), width=3)
+        dxn, dyn = bx - ax, by - ay
+        ln = max(1.0, math.hypot(dxn, dyn))
+        px, py = -dyn / ln * 26, dxn / ln * 26
+        d.line([(ax - px, ay - py), (ax + px, ay + py)], fill=INK, width=20)
+        d.line([(ax - px, ay - py), (ax + px, ay + py)], fill=(186, 190, 198), width=13)
+    return im
+
+
 # ----------------------------------------------------------------- сборка
 if __name__ == "__main__":
     W_BIG, W_MID = 420, 300
@@ -441,6 +552,11 @@ if __name__ == "__main__":
     print("постройки перекрашены")
 
     save(fit(wattle(), 220), "prop-pleten")
+    save(fit(well(), 150), "prop-kolodec")
+    save(fit(rooster_vane(), 130), "prop-fluger")
+    save(fit(planks(), 190), "res-doska")
+    save(fit(nails(), 180), "res-gvozdi")
+    save(fit(load("Bale1"), 180), "res-soloma")
     print("плетень нарисован")
 
     bg = build_background()

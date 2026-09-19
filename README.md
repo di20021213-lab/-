@@ -181,6 +181,18 @@ offline/         ранняя версия одним файлом, без се�
 | ![TOP 100](docs/screenshots/23-top-100.jpg) Таблица рекордов из базы | ![Питомцы](docs/screenshots/24-pes-i-kot.jpg) Пёс и кот дают проценты урожайности |
 | ![Госзаказ](docs/screenshots/15-goszakaz.jpg) Госзаказ: заготконтора берёт продукцию вдвое дороже рынка | ![Телефон](docs/screenshots/26-telefon-dvor.jpg) На телефоне |
 
+### Магазин по разделам
+
+Все разделы витрины — в `docs/screenshots/magazin/`, снимает их
+`node server/test/shop-tour.js` по сборке без сервера.
+
+| | |
+|---|---|
+| ![Животные](docs/screenshots/magazin/02-zhivotnye-1.jpg) Животные: страницы, цены в серебре и кристаллах | ![Карточка](docs/screenshots/magazin/04-kartochka-porody.jpg) Карточка породы: прибыль за цикл и окупаемость |
+| ![Растения](docs/screenshots/magazin/05-rasteniya-1.jpg) Растения: огород, сад и теплица | ![Корма](docs/screenshots/magazin/07-korma.jpg) Корма с подразделами для собаки и кота |
+| ![Декор](docs/screenshots/magazin/10-dekor.jpg) Декор: проценты к урожайности | ![Улучшения](docs/screenshots/magazin/12-uluchsheniya.jpg) Улучшения: видно доски и продукцию на стройку |
+| ![Ресурсы](docs/screenshots/magazin/15-resursy.jpg) Ресурсы: доски, гвозди, солома | ![Телефон](docs/screenshots/magazin/17-telefon-magazin.jpg) Магазин на телефоне |
+
 ## Правила игры
 
 1. Купи живность или рассаду — она занимает место в постройке.
