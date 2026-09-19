@@ -25,7 +25,7 @@ python3 tools/import-art.py картинка.png <id>
 
 ## Список
 
-Всего животных 15, готовы 8 (курятник и гусятник целиком), одна из них временная.
+Всего животных 19, готовы 8, одна из них временная.
 
 | Готово | Файл | Порода | Постройка | Уровень | Как выглядит |
 |:---:|---|---|---|:---:|---|
@@ -38,6 +38,10 @@ python3 tools/import-art.py картинка.png <id>
 |  | `breed-vietnam.png` | Вьетнамская вислобрюхая | Свинарник | 5 | Чёрная свинья, брюхо до земли |
 | ✅ | `breed-kuchin.png` | Кучинская юбилейная | Курятник | 6 | Рыже-бурая, золотая шея |
 | ✅ | `breed-holmgus.png` | Холмогорский гусь | Гусятник | 7 | Белый гусь, шишка на клюве |
+|  | `breed-kitay.png` | Китайский | Гусятник | 5 | Бурый, лебединая шея, шишка на лбу |
+|  | `breed-kuban.png` | Кубанский | Гусятник | 9 | Серо-бурый, тёмная полоса по шее |
+|  | `breed-tuluz.png` | Тулузский | Гусятник | 11 | Грузный серый, кошелёк под клювом |
+|  | `breed-ital.png` | Итальянский белый | Гусятник | 12 | Белый, лёгкий, без шишки |
 |  | `breed-mirgorod.png` | Миргородская | Свинарник | 9 | Рябая: розовая с чёрными пятнами |
 |  | `breed-holmkor.png` | Холмогорская | Коровник | 10 | Корова чёрно-пёстрая |
 |  | `breed-landras.png` | Ландрас | Свинарник | 11 | Длинная бледно-розовая, уши вперёд |
@@ -72,6 +76,18 @@ cute cartoon black pot-bellied pig with a sagging belly and short legs, 3/4 view
 Холмогорский гусь
 cute cartoon white domestic farm goose with a knob above its orange beak, long curved neck, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
+Китайский
+cute cartoon brown domestic farm goose with a swan-like slender neck and a round knob on its forehead, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Кубанский
+cute cartoon greyish brown domestic farm goose with a dark stripe down the back of its neck and a knob on its forehead, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Тулузский
+cute cartoon heavy grey domestic farm goose with a hanging dewlap pouch under its beak, low bulky body, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Итальянский белый
+cute cartoon slim white domestic farm goose with a plain orange beak and no knob, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
 Миргородская
 cute cartoon pink pig with big black spots, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
@@ -93,6 +109,12 @@ cute cartoon bay draft horse with feathered hooves, 3/4 view facing right, full 
 
 Если генератор всё равно рисует тень или траву под ногами — не страшно,
 импортёр их срезает.
+
+У гусей палитра бедная — белый, серый, бурый, и всё. Поэтому шесть пород
+разведены не мастью, а силуэтом: у китайского лебединая шея, у кубанского
+полоса по шее, у тулузского кошелёк под клювом и грузное тело, итальянский
+белый без шишки в отличие от холмогорского. Две пары всё равно близки —
+если в игре сольются, режем так же, как резали кур.
 
 Курятник закрыт: шесть пород, у каждой своя масть — белая, чёрная, белая
 высокая, рыжая с белой головой, серебристая, рыжая в крапинку. Десять сначала

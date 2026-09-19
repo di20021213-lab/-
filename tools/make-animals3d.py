@@ -324,6 +324,10 @@ BREEDS = {
                          spots=((86, 80, 86), 10)),
     "tula":    goose(GREY, scale=1.04),
     "holmgus": goose(WHITE, knob=True, scale=1.14),
+    "kitay":   goose((162, 122, 82), knobc=(96, 74, 56), knob=True, scale=1.0),
+    "kuban":   goose((150, 138, 118), knobc=(92, 82, 70), knob=True, scale=1.08),
+    "tuluz":   goose((154, 152, 146), knobc=ORANGE, scale=1.26),
+    "ital":    goose((246, 244, 238), scale=1.12),
     # свиньи, коровы и конь — модели Quaternius
     "vietnam":  model("Pig", {"Material.003": DARK, "Material": (60, 54, 58)}, 0.92, flip=True),
     "mirgorod": model("Pig", {"Material.003": PINK}, 1.0, spots=((78, 70, 74), 7), flip=True),
