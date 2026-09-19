@@ -1,0 +1,122 @@
+# -*- coding: utf-8 -*-
+"""Готовит присланную картинку животного к игре: снимает фон, обрезает, ужимает.
+
+Картинки приходят квадратными (обычно 1024×1024) и с «прозрачным» фоном,
+который на деле нарисован шашечками или просто белый. Плюс под ногами часто
+лежит серый эллипс-тень — она своя у каждой картинки и во дворе выглядит
+блином, поэтому её тоже срезаем и подставляем общую мягкую тень.
+
+Фон ищется заливкой от краёв по признаку «серое и светлое»: тушка животного
+цветная, а шашечки и тень — нейтральные, поэтому заливка до них не достаёт.
+
+Запуск из корня проекта:
+    python3 tools/import-art.py картинка.png rusbel
+    python3 tools/import-art.py картинка.png rusbel --keep-shadow
+"""
+from PIL import Image, ImageDraw, ImageFilter
+from collections import deque
+import os, sys
+
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+OUT = os.path.join(ROOT, "public", "img", "iso")
+WIDTH = 200                       # столько же, сколько у остальных пород
+
+
+def is_backdrop(px, bright=168, spread=14):
+    """Нейтральный и светлый — значит фон или тень, а не животное."""
+    r, g, b = px[:3]
+    return max(r, g, b) >= bright and max(r, g, b) - min(r, g, b) <= spread
+
+
+def cut_background(im):
+    """Заливка от краёв: всё связное с рамкой и похожее на фон становится дырой."""
+    im = im.convert("RGBA")
+    w, h = im.size
+    px = im.load()
+    alpha = Image.new("L", (w, h), 255)
+    ap = alpha.load()
+
+    seen = bytearray(w * h)
+    q = deque()
+
+    def push(x, y):
+        i = y * w + x
+        if seen[i]:
+            return
+        seen[i] = 1
+        if px[x, y][3] == 0 or is_backdrop(px[x, y]):
+            ap[x, y] = 0
+            q.append((x, y))
+
+    for x in range(w):
+        push(x, 0); push(x, h - 1)
+    for y in range(h):
+        push(0, y); push(w - 1, y)
+
+    while q:
+        x, y = q.popleft()
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h:
+                push(nx, ny)
+
+    # JPEG оставляет по контуру светлую кайму: подчищаем полупрозрачную кромку
+    alpha = alpha.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.6))
+    im.putalpha(alpha)
+    return im
+
+
+def drop_ground(im, look=0.22):
+    """Убирает то, что осталось от нарисованной тени: нейтральные пятна в нижней
+    четверти, не связанные с тушкой. Заливка их не достала, если тень отдельная."""
+    w, h = im.size
+    px = im.load()
+    y0 = int(h * (1 - look))
+    for y in range(y0, h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a and is_backdrop((r, g, b), bright=150, spread=18):
+                px[x, y] = (r, g, b, 0)
+    return im
+
+
+def shadow(im):
+    """Общая мягкая тень — такая же, как у отрисованных пород."""
+    box = im.getbbox()
+    if not box:
+        return im
+    x0, y0, x1, y1 = box
+    pad = Image.new("RGBA", (im.width, im.height + 24), (0, 0, 0, 0))
+    pad.alpha_composite(im)
+    d = ImageDraw.Draw(pad)
+    sh = Image.new("RGBA", pad.size, (0, 0, 0, 0))
+    ds = ImageDraw.Draw(sh)
+    cx, half = (x0 + x1) / 2, (x1 - x0) * 0.36
+    ds.ellipse([cx - half, y1 - 14, cx + half, y1 + 18], fill=(40, 34, 20, 95))
+    sh = sh.filter(ImageFilter.GaussianBlur(9))
+    sh.alpha_composite(pad)
+    return sh
+
+
+def prepare(path, keep_shadow=False):
+    im = Image.open(path)
+    im = cut_background(im)
+    if not keep_shadow:
+        im = drop_ground(im)
+    box = im.getbbox()
+    if not box:
+        raise SystemExit("после обрезки ничего не осталось — проверь картинку")
+    im = im.crop(box)
+    im = im.resize((WIDTH, max(1, round(im.height * WIDTH / im.width))), Image.LANCZOS)
+    return shadow(im)
+
+
+if __name__ == "__main__":
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if len(args) < 2:
+        raise SystemExit(__doc__)
+    src, key = args[0], args[1]
+    im = prepare(src, keep_shadow="--keep-shadow" in sys.argv)
+    os.makedirs(OUT, exist_ok=True)
+    dst = os.path.join(OUT, "breed-" + key + ".png")
+    im.save(dst, optimize=True)
+    print("готово:", dst, im.size)

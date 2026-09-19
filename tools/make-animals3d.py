@@ -329,8 +329,19 @@ BREEDS = {
     "vladimir": model("Horse", None, 1.15),
 }
 
+def imported(key):
+    """Порода уже заменена присланной картинкой — рендер её не трогает."""
+    art = os.path.join(ROOT, "assets-src", "art")
+    return any(os.path.exists(os.path.join(art, key + ext))
+               for ext in (".png", ".jpg", ".jpeg", ".webp"))
+
+
 if __name__ == "__main__":
+    skipped = []
     for key, spec in BREEDS.items():
+        if imported(key):
+            skipped.append(key)
+            continue
         if "mesh" in spec:
             im = render(spec["mesh"], yaw=-38, pitch=24, scale=spec["scale"])
         else:
@@ -344,4 +355,6 @@ if __name__ == "__main__":
         if spec.get("spots"):
             im = specks(im, spec["spots"][0] + (255,), seed=hash(key) % 1000, n=spec["spots"][1])
         save(shadow(im), key)
-    print("готово пород:", len(BREEDS))
+    print("отрисовано пород:", len(BREEDS) - len(skipped))
+    if skipped:
+        print("взяты присланные картинки:", ", ".join(skipped))
