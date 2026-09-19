@@ -21,6 +21,8 @@ import os, sys
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 OUT = os.path.join(ROOT, "public", "img", "iso")
 WIDTH = 200                       # столько же, сколько у остальных пород
+HEIGHT = 330                      # и не выше самой рослой: во дворе размер задаётся
+                                  # шириной, и долговязая птица переросла бы постройку
 
 
 def is_backdrop(px, bright=168, spread=14):
@@ -30,10 +32,21 @@ def is_backdrop(px, bright=168, spread=14):
 
 
 def cut_background(im):
-    """Заливка от краёв: всё связное с рамкой и похожее на фон становится дырой."""
+    """Заливка от краёв: всё связное с рамкой и похожее на фон становится дырой.
+
+    Фон бывает не белым, а кремовым — (252,243,234). По признаку «нейтральное»
+    он не проходит, поэтому дополнительно берём цвет угла как образец и считаем
+    фоном всё, что от него почти не отличается. Допуск тесный: у белой птицы
+    перо от кремового фона отличается всего на десяток по синему каналу.
+    """
     im = im.convert("RGBA")
     w, h = im.size
     px = im.load()
+    corners = [px[1, 1], px[w - 2, 1], px[1, h - 2], px[w - 2, h - 2]]
+    ref = tuple(sorted(c[i] for c in corners)[1] for i in range(3))
+
+    def near_ref(p):
+        return all(abs(p[i] - ref[i]) <= 10 for i in range(3))
     alpha = Image.new("L", (w, h), 255)
     ap = alpha.load()
 
@@ -45,7 +58,8 @@ def cut_background(im):
         if seen[i]:
             return
         seen[i] = 1
-        if px[x, y][3] == 0 or is_backdrop(px[x, y]):
+        p = px[x, y]
+        if p[3] == 0 or is_backdrop(p) or near_ref(p):
             ap[x, y] = 0
             q.append((x, y))
 
@@ -131,8 +145,14 @@ def prepare(path, keep_shadow=False, flip=False):
     if not box:
         raise SystemExit("после обрезки ничего не осталось — проверь картинку")
     im = im.crop(box)
-    im = im.resize((WIDTH, max(1, round(im.height * WIDTH / im.width))), Image.LANCZOS)
-    return shadow(im)
+    k = min(WIDTH / im.width, HEIGHT / im.height)
+    im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
+    # Во дворе размер задаётся шириной, а высота идёт за пропорцией картинки.
+    # Поэтому холст у всех один: долговязая птица получает воздух по бокам и
+    # встаёт вровень с остальными, а не перерастает постройку.
+    canvas = Image.new("RGBA", (WIDTH, im.height), (0, 0, 0, 0))
+    canvas.alpha_composite(im, ((WIDTH - im.width) // 2, 0))
+    return shadow(canvas)
 
 
 if __name__ == "__main__":
