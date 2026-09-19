@@ -25,7 +25,7 @@ python3 tools/import-art.py картинка.png <id>
 
 ## Список
 
-Всего животных 19, готовы 8, одна из них временная.
+Всего животных 19, готовы 9, одна из них временная.
 
 | Готово | Файл | Порода | Постройка | Уровень | Как выглядит |
 |:---:|---|---|---|:---:|---|
@@ -40,7 +40,7 @@ python3 tools/import-art.py картинка.png <id>
 | ✅ | `breed-holmgus.png` | Холмогорский гусь | Гусятник | 7 | Белый гусь, шишка на клюве |
 |  | `breed-kitay.png` | Китайский | Гусятник | 5 | Бурый, лебединая шея, шишка на лбу |
 |  | `breed-kuban.png` | Кубанский | Гусятник | 9 | Серо-бурый, тёмная полоса по шее |
-|  | `breed-tuluz.png` | Тулузский | Гусятник | 11 | Грузный серый, кошелёк под клювом |
+| ✅ | `breed-tuluz.png` | Тулузский | Гусятник | 11 | Грузный серый, кошелёк под клювом |
 |  | `breed-ital.png` | Итальянский белый | Гусятник | 12 | Белый, лёгкий, без шишки |
 |  | `breed-mirgorod.png` | Миргородская | Свинарник | 9 | Рябая: розовая с чёрными пятнами |
 |  | `breed-holmkor.png` | Холмогорская | Коровник | 10 | Корова чёрно-пёстрая |
@@ -126,10 +126,20 @@ cute cartoon bay draft horse with feathered hooves, 3/4 view facing right, full 
 
 ## Если генератор отказал
 
-Он режет торговые марки, даже когда речь про птицу. «Grey goose» — это водка,
-и запрос с такой парой слов Leonardo завернул как нарушение правил. Лечится
-перестановкой: «domestic farm goose with soft grey and white feathers».
-По той же причине из списка убрана Брама — это ещё и марка пива.
+Leonardo иногда отвечает «did not meet content safety guidelines» на совершенно
+безобидный запрос про птицу. Почему — неизвестно, но по пяти прогонам видна
+закономерность в том, куда поставлен цвет:
+
+| Не прошло | Прошло |
+|---|---|
+| `grey goose with a long neck` | `domestic farm goose with soft grey and white feathers` |
+| `brown domestic farm goose with a swan-like neck` | `white domestic farm goose with a knob above its beak` |
+| `brown farm goose with a long graceful neck` | `heavy domestic farm goose with grey and white feathers` |
+
+Падали те, где цвет стоит прямо перед словом goose; проходили те, где цвет
+описан после существительного: «goose **with** … feathers». Слово brown не
+прошло ни разу. Это наблюдение, а не правило фильтра — сначала просто повтори
+тот же запрос, классификатор шумит и со второго раза часто пропускает.
 
 ## Потом, если захочется
 
