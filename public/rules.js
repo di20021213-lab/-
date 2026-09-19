@@ -17,7 +17,7 @@ var GM_PER_SEC = C.GM_PER_SEC, HOUSES = C.HOUSES, HKEYS = C.HKEYS, CAP = C.CAP,
 var byId = function(list, id){ for(var i = 0; i < list.length; i++) if(list[i].id === id) return list[i]; return null; };
 var breedOf = function(id){ return byId(BREEDS, id); };
 var feedOf = function(id){ return byId(FEEDS, id); };
-var maxXp = function(l){ return Math.round(150 * Math.pow(l, 1.55)); };
+var maxXp = function(l){ return Math.round(C.XP_BASE * Math.pow(l, C.XP_POW)); };
 var MAX_ENERGY = 100;
 var ENERGY_STEP = 15000;   // секунда на единицу энергии: 15 с
 var PET_STEP = 60000;
@@ -158,7 +158,10 @@ const ACTIONS = {
   },
   feedAll(st, p){
     const k = String(p.house || ""); if(!HOUSES[k]) throw fail("Нет такой постройки.");
-    const order = ["elite", "high", "mid", "univer", "low"];
+    /* Кнопка «Покормить всех» знала только пять кормов из пятнадцати: крапиву,
+       отруби, жмых, навоз и торф она молча пропускала. Порядок — от лучшего
+       к худшему, чтобы дорогое уходило первым, а дешёвое дорабатывало остаток. */
+    const order = ["elite", "high", "zhmyh", "torf", "mid", "univer", "navoz", "otrubi", "low", "krapiva"];
     let n = 0;
     st.houses[k].slots.forEach(a => {
       if(a.fed) return;
@@ -352,6 +355,17 @@ const ACTIONS = {
     rollContracts(st);
     return {msg:"Заказ принят: +" + c.silver + " серебра" + (c.gems ? " и кристалл" : "") + ", +" + c.xp + " опыта"};
   },
+  /* Касса: серебро в кристаллы по твёрдому курсу. Обратно не меняем —
+     иначе кристаллы перестают быть отдельной валютой. */
+  exchange(st, p){
+    const n = Math.max(1, Math.min(99, parseInt(p.qty, 10) || 1));
+    const cost = C.GEM_PRICE * n;
+    if(st.silver < cost) throw fail("Нужно " + cost + " серебра, а есть " + Math.floor(st.silver) + ".");
+    st.silver -= cost;
+    st.gems += n;
+    bump(st, "exchanged", n);
+    return {msg:"Касса выдала кристаллов: " + n + "."};
+  },
   rename(st, p){
     const v = String(p.name || "").trim().slice(0, 24);
     if(v.length < 2) throw fail("Слишком короткое название.");
@@ -402,8 +416,29 @@ function runHelpers(st){
 }
 
 /** Прогон времени перед действием: энергия, питомцы, сутки подарка, помощники. */
+/* Двор пуст, склад пуст и денег нет даже на самую дешёвую рассаду — дальше
+   игрок не может сделать вообще ничего. Правление выдаёт подъёмные: стартовый
+   набор, как новому колхозу, и не чаще раза в сутки, иначе это дойная корова. */
+const BAILOUT_SILVER = 500, BAILOUT_FEED = 3;
+function bailout(st){
+  if(HKEYS.some(k => st.houses[k].slots.length)) return null;
+  if(HKEYS.some(k => st.prods[k].n > 0)) return null;
+  const cheap = BREEDS.filter(b => !b.c && b.lvl <= st.lvl).sort((a, b) => a.s - b.s)[0];
+  const feed = feedOf("low");
+  if(!cheap || !feed) return null;
+  if(st.silver >= cheap.s + feed.s) return null;     // на круг ещё хватает
+  const day = todayKey();
+  if(st.bailoutDay === day) return null;
+  st.bailoutDay = day;
+  st.silver += BAILOUT_SILVER;
+  st.feed.low = (st.feed.low || 0) + BAILOUT_FEED;
+  bump(st, "bailout");
+  return "Двор опустел. Правление выделило подъёмные: " + BAILOUT_SILVER +
+         " серебра и " + BAILOUT_FEED + " мешка корма. Следующие — не раньше завтра.";
+}
 function tick(st){
   tickEnergy(st); tickPets(st); rollDaily(st); runHelpers(st); rollContracts(st);
+  return bailout(st);
 }
 function publicState(st){
   return {
@@ -431,6 +466,7 @@ var RULES = {
   matureMs:matureMs, fail:fail, needEnergy:needEnergy, charge:charge, grant:grant,
   checkQuests:checkQuests, reap:reap, rollDaily:rollDaily, runHelpers:runHelpers,
   rollContracts:rollContracts, genContract:genContract, houseEconomy:houseEconomy,
+  bailout:bailout,
   ACTIONS:ACTIONS, publicState:publicState
 };
 if(typeof module !== "undefined" && module.exports) module.exports = RULES;

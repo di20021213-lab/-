@@ -40,8 +40,21 @@ db.transaction = function(fn){
   };
 };
 
+/* Схема раскатывается через CREATE TABLE IF NOT EXISTS, а он не добавляет
+   колонки в уже существующую таблицу. У игроков базы с прошлых версий, поэтому
+   недостающие колонки досыпаем руками. */
+const ADDED_COLUMNS = [
+  ["farms", "bailout_day", "TEXT"]
+];
+function addMissingColumns(){
+  ADDED_COLUMNS.forEach(([table, col, decl]) => {
+    const has = db.prepare("SELECT COUNT(*) n FROM pragma_table_info(?) WHERE name = ?").get(table, col).n;
+    if(!has) db.exec("ALTER TABLE " + table + " ADD COLUMN " + col + " " + decl);
+  });
+}
 function migrate(){
   db.exec(global.__SCHEMA_SQL || fs.readFileSync(SCHEMA_PATH, "utf8"));
+  addMissingColumns();
   return db.prepare("SELECT value FROM schema_meta WHERE key = 'version'").get().value;
 }
 const now = () => Date.now();

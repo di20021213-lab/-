@@ -147,6 +147,30 @@ const ok = (name) => console.log("  ✓ " + name);
     assert.ok(/досок/i.test(r.data.error), r.data.error);
     ok("улучшение без досок отклонено");
 
+    // касса: курс твёрдый, за чужой счёт кристаллов не выдают
+    r = await call("/api/game/exchange", {qty:1});
+    assert.strictEqual(r.status, 400);
+    assert.ok(/серебра/i.test(r.data.error), r.data.error);
+    ok("обмен без денег отклонён");
+
+    /* Чтобы проверить удачный обмен, деньги нужно откуда-то взять: честным
+       путём это часы игры, поэтому кладём их прямо в базу отдельным соединением. */
+    const CONTENT = require("../../public/content.js");
+    const {DatabaseSync: DB1} = require("node:sqlite");
+    const w = new DB1(DB_PATH);
+    w.exec("UPDATE farms SET silver = " + (CONTENT.GEM_PRICE * 2 + 5));
+    w.close();
+    const gemsBefore = S.gems;
+    r = await call("/api/game/exchange", {qty:2});
+    assert.strictEqual(r.status, 200, r.data && r.data.error);
+    assert.strictEqual(r.data.state.gems, gemsBefore + 2, "кристаллы не начислены");
+    assert.strictEqual(r.data.state.silver, 5, "серебро списано не по курсу");
+    ok("серебро меняется на кристаллы по курсу " + CONTENT.GEM_PRICE + " за штуку");
+
+    r = await call("/api/game/exchange", {qty:1});
+    assert.strictEqual(r.status, 400);
+    ok("на остаток кристалл не выдали");
+
     r = await call("/api/top");
     assert.ok(r.data.top.length >= 1, "таблица рекордов пуста");
     ok("таблица рекордов отдаётся: " + r.data.top[0].nick);

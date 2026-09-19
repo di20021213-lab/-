@@ -65,7 +65,16 @@ function fmtC(n){ return (Math.round(n * 100) / 100).toFixed(2); }
 function priceC(n){ return (Math.round(n * 10) / 10).toFixed(1); }
 function breed(id){ for(var i = 0; i < BREEDS.length; i++) if(BREEDS[i].id === id) return BREEDS[i]; return null; }
 function feedById(id){ for(var i = 0; i < FEEDS.length; i++) if(FEEDS[i].id === id) return FEEDS[i]; return null; }
-function maxXp(l){ return Math.round(150 * Math.pow(l, 1.55)); }
+function maxXp(l){ return Math.round(XP_BASE * Math.pow(l, XP_POW)); }
+/** Самый дешёвый корм, которым вообще можно кормить: по нему считаем прибыль. */
+function cheapestFeed(){
+  var best = null;
+  FEEDS.forEach(function(f){
+    if(f.pet || f.inst || f.gives || !f.s) return;
+    if(!best || f.s < best.s) best = f;
+  });
+  return best || FEEDS[0];
+}
 function maxEn(){ return 100; }
 function gtime(min){
   min = Math.max(0, Math.round(min));
@@ -338,7 +347,7 @@ function openShop(cat, sub){
   wrap.appendChild(nav); wrap.appendChild(main);
   w.body.appendChild(wrap);
   footer(w, [
-    {label:"Пополнить счет", cls:"flat", on:function(){ toast("Касса на обеде. Приходите после уборочной.", true); }},
+    {label:"Пополнить счет", cls:"flat", on:openExchange},
     {label:"Закрыть", on:function(){ closeWin(w.scrim); }}
   ]);
   function draw(){
@@ -459,9 +468,12 @@ function openDetail(g, redraw){
     line("Чистая прибыль", "<i class='dot s'></i> " + fmt(it.y * it.u * it.se - it.s));
     line("Кол-во опыта", it.xp);
     line("Сезон", it.se);
-    var feed = feedById("low");
-    var perCycle = it.y * it.u - feed.s;
-    line("Прибыль за цикл", "<i class='dot s'></i> " + fmt(perCycle) + " <small>(за вычетом корма)</small>");
+    /* Кормить надо каждый цикл, поэтому прибыль считаем за вычетом корма —
+       по самому дешёвому, иначе дешёвые культуры выглядят убыточными. */
+    var feed = cheapestFeed();
+    var perCycle = Math.round(it.y * (feed.ym || 1)) * it.u - feed.s;
+    line("Прибыль за цикл", "<i class='dot s'></i> " + fmt(perCycle) +
+         " <small>минус " + esc(feed.n.toLowerCase()) + "</small>");
     line("Окупится за", Math.max(1, Math.ceil(it.s / Math.max(1, perCycle))) + " " +
          (Math.ceil(it.s / Math.max(1, perCycle)) === 1 ? "цикл" : "цикла"));
     line("Постройка", HOUSES[it.h].n + " (свободно " + free(it.h) + ")");
@@ -671,6 +683,52 @@ function openContracts(){
   closeBar(w);
   panels.push({scrim:w.scrim, fn:draw});
 }
+/** Касса: серебро в кристаллы по твёрдому курсу из справочника. */
+function openExchange(){
+  var w = makeWin("Касса", "sm");
+  var qty = 1;
+  function draw(){
+    w.body.innerHTML = "";
+    var can = Math.floor(S.silver / GEM_PRICE);
+    qty = Math.max(1, Math.min(qty, Math.max(1, can)));
+    w.body.appendChild(el("p", null,
+      "<small>Колхоз меняет серебро на кристаллы: <b>" + fmt(GEM_PRICE) + "</b> серебра за один кристалл. " +
+      "Обратно касса не принимает.</small>"));
+
+    var row = el("div", "row");
+    row.innerHTML = "<span class='ic'><i class='dot c'></i></span>" +
+      "<span class='grow'><b>Кристаллы</b>" +
+      "<small>в кассе есть на " + fmt(can) + " шт. (серебра " + fmt(S.silver) + ")</small></span>";
+    var spin = el("div", "spin");
+    var minus = el("button", null, "−"), plus = el("button", null, "+");
+    var inp = el("input");
+    inp.value = String(qty);
+    inp.inputMode = "numeric";
+    minus.onclick = function(){ qty = Math.max(1, qty - 1); draw(); };
+    plus.onclick = function(){ qty = Math.min(99, qty + 1); draw(); };
+    inp.onchange = function(){ qty = Math.max(1, Math.min(99, parseInt(inp.value, 10) || 1)); draw(); };
+    spin.appendChild(minus); spin.appendChild(inp); spin.appendChild(plus);
+    row.appendChild(spin);
+    w.body.appendChild(row);
+
+    var total = GEM_PRICE * qty;
+    var sum = el("div", "row");
+    sum.innerHTML = "<span class='grow'><b>К оплате</b><small>" +
+      (S.silver >= total ? "хватает" : "не хватает " + fmt(total - S.silver) + " серебра") + "</small></span>" +
+      "<span class='num' style='font-weight:700;white-space:nowrap'><i class='dot s'></i> " + fmt(total) + "</span>";
+    w.body.appendChild(sum);
+  }
+  draw();
+  footer(w, [
+    {label:"Обменять", cls:"go", on:function(){
+      act("exchange", {qty:qty}).then(function(){ if(document.body.contains(w.scrim)) draw(); });
+    }},
+    {label:"Закрыть", on:function(){ closeWin(w.scrim); }}
+  ]);
+  w.refresh = draw;
+  panels.push({scrim:w.scrim, fn:draw});
+}
+
 /** Первая порода постройки — нужна только для картинки в списке заказов. */
 function firstBreedOf(house){
   for(var i = 0; i < BREEDS.length; i++) if(BREEDS[i].h === house) return BREEDS[i].id;

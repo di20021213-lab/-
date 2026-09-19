@@ -50,8 +50,9 @@
       S.houses[k].slots.forEach(function(a){ if(!a.id) a.id = uid++; });
     });
   }
-  function reply(res, quests){
-    return {state:R.publicState(S), msg:(res && res.msg) || null, gift:(res && res.gift) || null, quests:quests || []};
+  function reply(res, quests, tickMsg){
+    return {state:R.publicState(S), msg:(res && res.msg) || tickMsg || null,
+            gift:(res && res.gift) || null, quests:quests || []};
   }
   function top(){
     var me = {nick:S.nick, farm:S.farm, level:S.lvl, xp:S.xp, score:S.lvl * 1000 + S.xp};
@@ -78,7 +79,7 @@
         if(url === "/api/content") return resolve(C);
 
         var action = url === "/api/game" ? "sync" : url.replace("/api/game/", "");
-        R.tick(S);
+        var tickMsg = R.tick(S);       // подъёмные выдаются в tick, о них надо сказать
         var res = {msg:null};
         if(action !== "sync"){
           var fn = R.ACTIONS[action];
@@ -89,7 +90,7 @@
         delete S._newHelp;
         idify();
         save();
-        resolve(reply(res, quests));
+        resolve(reply(res, quests, tickMsg));
       }catch(e){
         var err = new Error(e && e.message ? e.message : "Что-то пошло не так.");
         err.status = e && e.gameError ? 400 : 500;

@@ -47,6 +47,7 @@ function loadState(farmId){
     energy:f.energy, enAt:f.energy_at, dog:f.dog, cat:f.cat, petAt:f.pet_at,
     quest:f.quest_index, boostUntil:f.boost_until, vympUntil:f.vympel_until, helpAt:f.helper_at,
     daily:{date:f.daily_date, streak:f.daily_streak, opened:!!f.daily_opened, picked:f.daily_picked},
+    bailoutDay:f.bailout_day || null,
     feed:{}, res:{}, items:{}, gifts:{}, houses:{}, prods:{}, decor:[], helpers:[], c:{}, helped:{}
   };
   FEEDS.forEach(x => { st.feed[x.id] = 0; });
@@ -88,10 +89,11 @@ const saveState = db.transaction(function(st){
   db.prepare(
     "UPDATE farms SET name=?, silver=?, gems=?, xp=?, level=?, energy=?, energy_at=?, dog=?, cat=?, pet_at=?," +
     " quest_index=?, boost_until=?, vympel_until=?, helper_at=?, daily_date=?, daily_streak=?, daily_opened=?," +
-    " daily_picked=?, updated_at=? WHERE id=?"
+    " daily_picked=?, bailout_day=?, updated_at=? WHERE id=?"
   ).run(st.farm, Math.round(st.silver), st.gems, Math.round(st.xp), st.lvl, Math.round(st.energy), st.enAt,
         Math.round(st.dog), Math.round(st.cat), st.petAt, st.quest, st.boostUntil, st.vympUntil, st.helpAt,
-        st.daily.date, st.daily.streak, st.daily.opened ? 1 : 0, st.daily.picked, t, st.id);
+        st.daily.date, st.daily.streak, st.daily.opened ? 1 : 0, st.daily.picked,
+        st.bailoutDay || null, t, st.id);
 
   const upB = db.prepare("UPDATE buildings SET level = ? WHERE id = ?");
   const insS = db.prepare("INSERT INTO slots(building_id, breed, seasons_left, fed, ready_at, feed_id, created_at) VALUES(?,?,?,?,?,?,?)");
@@ -147,7 +149,7 @@ const {tick, checkQuests, publicState, todayKey: ruleDay, ACTIONS, fail} = R;
 const perform = db.transaction(function(farmId, action, params){
   const st = loadState(farmId);
   if(!st) throw fail("Хозяйство не найдено.");
-  tick(st);
+  const tickMsg = tick(st);          // подъёмные выдаются в tick, о них надо сказать
   let res = {msg:null};
   if(action !== "sync"){
     const fn = ACTIONS[action];
@@ -162,7 +164,7 @@ const perform = db.transaction(function(farmId, action, params){
     delete st._newHelp;
   }
   if(action !== "sync") logEvent(farmId, action, params);
-  return {state:publicState(st), msg:res.msg || null, gift:res.gift || null, quests};
+  return {state:publicState(st), msg:res.msg || tickMsg || null, gift:res.gift || null, quests};
 });
 
 function leaderboard(limit){

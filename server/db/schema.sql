@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS farms (
   daily_streak  INTEGER NOT NULL DEFAULT 0,
   daily_opened  INTEGER NOT NULL DEFAULT 0,
   daily_picked  INTEGER NOT NULL DEFAULT -1,
+  bailout_day   TEXT,                                  -- когда правление в последний раз выдавало подъёмные
   created_at    INTEGER NOT NULL,
   updated_at    INTEGER NOT NULL,
   CHECK (silver >= 0 AND gems >= 0 AND energy >= 0 AND level >= 1)
