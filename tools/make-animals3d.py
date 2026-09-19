@@ -302,8 +302,8 @@ PINK   = (228, 168, 164)
 PALE   = (238, 198, 194)
 CHERRY = (176, 92, 70)
 
-def chicken(body, comb=RED, beak=GOLD, legs=GOLD, scale=1.0):
-    return dict(mesh=bird_mesh(body, comb, beak, legs), scale=scale)
+def chicken(body, comb=RED, beak=GOLD, legs=GOLD, scale=1.0, spots=None):
+    return dict(mesh=bird_mesh(body, comb, beak, legs), scale=scale, spots=spots)
 
 def goose(body, knobc=ORANGE, knob=False, scale=1.0):
     return dict(mesh=bird_mesh(body, knobc, ORANGE, ORANGE, goose=True, knob=knob), scale=scale)
@@ -317,6 +317,15 @@ BREEDS = {
     "leggorn": chicken(WHITE, comb=(212, 74, 58), scale=1.06),
     "kuchin":  chicken(CHERRY, comb=RED, scale=1.04),
     "brama":   chicken(CREAM, scale=1.16),
+    # шесть пород добавлены, чтобы курятник не был рядом одинаково белых птиц
+    "moskchern": chicken((64, 58, 66), comb=RED, legs=(96, 92, 98), scale=1.02),
+    "orlov":     chicken((196, 148, 92), comb=(168, 58, 46), scale=1.06,
+                         spots=((242, 238, 230), 9)),
+    "pavlov":    chicken((206, 204, 198), comb=RED, scale=1.04,
+                         spots=((86, 80, 86), 10)),
+    "yurlov":    chicken((92, 76, 68), comb=(178, 52, 42), scale=1.14),
+    "poltav":    chicken((218, 182, 118), comb=RED, scale=1.08),
+    "zagorsk":   chicken((234, 188, 158), comb=RED, scale=1.1),
     "tula":    goose(GREY, scale=1.04),
     "holmgus": goose(WHITE, knob=True, scale=1.14),
     # свиньи, коровы и конь — модели Quaternius

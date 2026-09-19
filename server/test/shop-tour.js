@@ -31,6 +31,17 @@ let n = 0;
     await p.locator('.shop-nav button', { hasText: label }).first().click();
     await p.waitForTimeout(300);
   };
+  /* Витрина разбита на страницы, и от числа пород зависит, на какой лежит товар.
+     Поэтому не «вторая страница», а «листаем, пока не найдём». */
+  const openGood = async name => {
+    for (let i = 0; i < 12; i++) {
+      const card = p.locator('.good', { hasText: name }).first();
+      if (await card.count()) { await card.locator('button.pick').click(); return; }
+      await p.locator('.pager button').last().click();
+      await p.waitForTimeout(250);
+    }
+    throw new Error('не нашёл товар: ' + name);
+  };
 
   await p.goto('http://127.0.0.1:' + PORT + '/', { waitUntil: 'load' });
   await p.waitForSelector('.bld');
@@ -53,7 +64,7 @@ let n = 0;
   await p.locator('.pager button').last().click();
   await shot('zhivotnye-2', 300);
   // карточка породы — все числа, прибыль и окупаемость
-  await p.locator('.good', { hasText: 'Ландрас' }).first().locator('button.pick').click();
+  await openGood('Ландрас');
   await shot('kartochka-porody', 400);
   await p.locator('.win-ft .btn', { hasText: 'Закрыть' }).last().click();
   await p.waitForTimeout(300);

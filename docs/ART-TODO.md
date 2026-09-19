@@ -25,21 +25,29 @@ python3 tools/import-art.py картинка.png <id>
 
 ## Список
 
+Всего животных 19, готовы 2.
+
 | Готово | Файл | Порода | Постройка | Уровень | Как выглядит |
 |:---:|---|---|---|:---:|---|
-| ✅ | `breed-rusbel.png` | Русская белая | Курятник | 1 | Белая несушка, красный гребень |
-| ✅ | `breed-leggorn.png` | Леггорн | Курятник | 3 | Белая, гребень крупный, набок |
-| | `breed-tula.png` | Тульский бойцовый | Гусятник | 4 | Серый гусь, характер скверный |
-| | `breed-vietnam.png` | Вьетнамская вислобрюхая | Свинарник | 5 | Чёрная свинья, брюхо до земли |
-| | `breed-kuchin.png` | Кучинская юбилейная | Курятник | 6 | Рыже-бурая курица, золотая шея |
-| | `breed-holmgus.png` | Холмогорский гусь | Гусятник | 7 | Белый гусь, шишка на клюве |
-| | `breed-brama.png` | Брама | Курятник | 8 | Крупная, светлая, мохнатые ноги |
-| | `breed-mirgorod.png` | Миргородская | Свинарник | 9 | Рябая: розовая с чёрными пятнами |
-| | `breed-holmkor.png` | Холмогорская | Коровник | 10 | Корова чёрно-пёстрая |
-| | `breed-landras.png` | Ландрас | Свинарник | 11 | Длинная бледно-розовая, уши вперёд |
-| | `breed-simment.png` | Симментальская | Коровник | 13 | Корова рыже-пёстрая, белая голова |
-| | `breed-krupbel.png` | Крупная белая | Свинарник | 13 | Крупная розовая свинья |
-| | `breed-vladimir.png` | Владимирский тяжеловоз | Конюшня | 14 | Гнедой тяжеловоз, щётки на ногах |
+| ✅ | `breed-rusbel.png` | Русская белая | Курятник | 1 | Белая приземистая несушка, красный гребень |
+|  | `breed-moskchern.png` | Московская чёрная | Курятник | 2 | Чёрная, золотистая грива |
+| ✅ | `breed-leggorn.png` | Леггорн | Курятник | 3 | Белая, высокая, крупный гребень набок |
+|  | `breed-tula.png` | Тульский бойцовый | Гусятник | 4 | Серый гусь |
+|  | `breed-orlov.png` | Орловская ситцевая | Курятник | 4 | Пёстрая ситцевая, борода и баки |
+|  | `breed-pavlov.png` | Павловская | Курятник | 5 | Хохлатая, мохноногая, серебристо-пёстрая |
+|  | `breed-vietnam.png` | Вьетнамская вислобрюхая | Свинарник | 5 | Чёрная свинья, брюхо до земли |
+|  | `breed-kuchin.png` | Кучинская юбилейная | Курятник | 6 | Рыже-бурая, золотая шея |
+|  | `breed-holmgus.png` | Холмогорский гусь | Гусятник | 7 | Белый гусь, шишка на клюве |
+|  | `breed-yurlov.png` | Юрловская голосистая | Курятник | 7 | Тёмная, рослая, длинные ноги |
+|  | `breed-brama.png` | Брама | Курятник | 8 | Крупная палевая, мохнатые ноги |
+|  | `breed-mirgorod.png` | Миргородская | Свинарник | 9 | Рябая: розовая с чёрными пятнами |
+|  | `breed-poltav.png` | Полтавская глинистая | Курятник | 9 | Глинисто-жёлтая |
+|  | `breed-holmkor.png` | Холмогорская | Коровник | 10 | Корова чёрно-пёстрая |
+|  | `breed-zagorsk.png` | Загорская лососёвая | Курятник | 11 | Лососёвая, розовато-кремовая |
+|  | `breed-landras.png` | Ландрас | Свинарник | 11 | Длинная бледно-розовая, уши вперёд |
+|  | `breed-simment.png` | Симментальская | Коровник | 13 | Корова рыже-пёстрая, белая голова |
+|  | `breed-krupbel.png` | Крупная белая | Свинарник | 13 | Крупная розовая свинья |
+|  | `breed-vladimir.png` | Владимирский тяжеловоз | Конюшня | 14 | Гнедой тяжеловоз, щётки на ногах |
 
 ## Запросы для генератора
 
@@ -47,8 +55,29 @@ python3 tools/import-art.py картинка.png <id>
 в одном стиле. Порядок тот же, что в таблице выше.
 
 ```text
-Леггорн
-cute cartoon white leghorn hen with a large floppy red comb, yellow beak, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+Московская чёрная
+cute cartoon black hen with golden neck feathers and a red comb, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Орловская ситцевая
+cute cartoon mottled orange white and black hen with a beard and thick cheek feathers, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Павловская
+cute cartoon silver speckled hen with a feather crest on its head and feathered legs, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Кучинская юбилейная
+cute cartoon reddish-brown hen with golden neck feathers, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Юрловская голосистая
+cute cartoon tall dark brown rooster with long legs and an upright red comb, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Брама
+cute cartoon large fluffy cream brahma hen with feathered legs, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Полтавская глинистая
+cute cartoon clay-yellow buff hen, plump body, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Загорская лососёвая
+cute cartoon salmon pink cream hen, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Тульский бойцовый
 cute cartoon grey goose with a long neck and orange beak, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
@@ -56,14 +85,8 @@ cute cartoon grey goose with a long neck and orange beak, 3/4 view facing right,
 Вьетнамская вислобрюхая
 cute cartoon black pot-bellied pig with a sagging belly and short legs, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
-Кучинская юбилейная
-cute cartoon reddish-brown hen with golden neck feathers, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
-
 Холмогорский гусь
 cute cartoon white goose with a knob above its orange beak, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
-
-Брама
-cute cartoon large fluffy cream brahma hen with feathered legs, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Миргородская
 cute cartoon pink pig with big black spots, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
@@ -87,11 +110,10 @@ cute cartoon bay draft horse with feathered hooves, 3/4 view facing right, full 
 Если генератор всё равно рисует тень или траву под ногами — не страшно,
 импортёр их срезает.
 
-Две белые курицы подряд (Русская белая и Леггорн) в плитке магазина похожи:
-различаются только статью и гребнем. Если захочется контраста — порода меняется
-одной строкой в `public/content.js`, взамен подойдут Московская чёрная (чёрная с
-золотой гривой), Орловская ситцевая (пёстрая, с бородой) или Павловская
-(хохлатая, мохноногая). Хуже, когда животное смотрит влево: такую картинку
+Куры подобраны так, чтобы масть у каждой своя: белая, чёрная, ситцевая,
+серебристо-пёстрая, рыже-бурая, тёмная, палевая, глинистая, лососёвая. Пока
+картинки не пришли, в игре стоят отрисованные заглушки — они хотя бы разного
+цвета, но видно, что это заглушки. Хуже, когда животное смотрит влево: такую картинку
 приходится отражать, и надписи с несимметричными деталями уезжают.
 
 ## Потом, если захочется

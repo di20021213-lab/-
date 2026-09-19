@@ -116,7 +116,8 @@ var ISO = {
      в наборе животных нет, а пиксельные спрайты Kenney давали четырёх
      одинаковых кур и гуся, неотличимого от курицы. */
   breed: {"baklazh":1, "brokkoli":1, "chili":1, "grusha":1, "kapusta":1, "kartoha":1, "kukuruza":1, "luk":1, "morkov":1, "oblepiha":1, "ogurcy":1, "perec":1, "podsol":1, "pomidor":1, "redis":1, "salat":1, "selderey":1, "shpinat":1, "sliva":1, "trufel":1, "vishnya":1, "yablon":1,
-          "rusbel":1, "leggorn":1, "kuchin":1, "brama":1, "tula":1, "holmgus":1, "vietnam":1, "mirgorod":1, "landras":1, "krupbel":1, "holmkor":1, "simment":1, "vladimir":1},
+          "rusbel":1, "leggorn":1, "kuchin":1, "brama":1, "moskchern":1, "orlov":1, "pavlov":1, "yurlov":1, "poltav":1, "zagorsk":1,
+          "tula":1, "holmgus":1, "vietnam":1, "mirgorod":1, "landras":1, "krupbel":1, "holmkor":1, "simment":1, "vladimir":1},
   feed: {"elite":1, "high":1, "instant":1, "krapiva":1, "low":1, "lowset":1, "mid":1, "navoz":1, "otrubi":1, "torf":1, "univer":1, "zhmyh":1},
   house: {"gusi":1, "koni":1, "korovy":1, "kury":1, "ogorod":1, "sad":1, "svini":1, "teplica":1},
   prop: {"bush":1, "doska":1, "fence":1, "fluger":1, "grass":1, "hay":1, "klumba":1, "kolodec":1, "path":1, "pleten":1, "scare":1, "skirda":1, "table":1, "telega":1, "traktor":1, "tree":1},
