@@ -64,7 +64,6 @@ breeds = {
   'rusbel':   chicken,
   'leggorn':  recolor(chicken, {GREY1:(250,250,250)}),
   'kuchin':   recolor(chicken, RUSTY),
-  'brama':    recolor(chicken, CHICK),
   'tula':     recolor(chicken, GOOSE),
   'holmgus':  recolor(chicken, GREYG),
   'vietnam':  recolor(sheep, PINK),

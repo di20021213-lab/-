@@ -25,7 +25,7 @@ python3 tools/import-art.py картинка.png <id>
 
 ## Список
 
-Всего животных 19, готовы 5, одна временная.
+Всего животных 15, готовы 6 (все куры), одна из них временная.
 
 | Готово | Файл | Порода | Постройка | Уровень | Как выглядит |
 |:---:|---|---|---|:---:|---|
@@ -38,12 +38,8 @@ python3 tools/import-art.py картинка.png <id>
 |  | `breed-vietnam.png` | Вьетнамская вислобрюхая | Свинарник | 5 | Чёрная свинья, брюхо до земли |
 | ✅ | `breed-kuchin.png` | Кучинская юбилейная | Курятник | 6 | Рыже-бурая, золотая шея |
 |  | `breed-holmgus.png` | Холмогорский гусь | Гусятник | 7 | Белый гусь, шишка на клюве |
-|  | `breed-yurlov.png` | Юрловская голосистая | Курятник | 7 | Тёмная, рослая, длинные ноги |
-|  | `breed-brama.png` | Брама | Курятник | 8 | Крупная палевая, мохнатые ноги |
 |  | `breed-mirgorod.png` | Миргородская | Свинарник | 9 | Рябая: розовая с чёрными пятнами |
-|  | `breed-poltav.png` | Полтавская глинистая | Курятник | 9 | Глинисто-жёлтая |
 |  | `breed-holmkor.png` | Холмогорская | Коровник | 10 | Корова чёрно-пёстрая |
-|  | `breed-zagorsk.png` | Загорская лососёвая | Курятник | 11 | Лососёвая, розовато-кремовая |
 |  | `breed-landras.png` | Ландрас | Свинарник | 11 | Длинная бледно-розовая, уши вперёд |
 |  | `breed-simment.png` | Симментальская | Коровник | 13 | Корова рыже-пёстрая, белая голова |
 |  | `breed-krupbel.png` | Крупная белая | Свинарник | 13 | Крупная розовая свинья |
@@ -66,18 +62,6 @@ cute cartoon golden brown hen with black speckles, a big round fluffy feather cr
 
 Кучинская юбилейная
 cute cartoon reddish-brown hen with golden neck feathers, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
-
-Юрловская голосистая
-cute cartoon tall dark brown rooster with long legs and an upright red comb, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
-
-Брама
-cute cartoon large fluffy cream brahma hen with feathered legs, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
-
-Полтавская глинистая
-cute cartoon clay-yellow buff hen, plump body, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
-
-Загорская лососёвая
-cute cartoon salmon pink cream hen, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Тульский бойцовый
 cute cartoon grey goose with a long neck and orange beak, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
@@ -110,10 +94,13 @@ cute cartoon bay draft horse with feathered hooves, 3/4 view facing right, full 
 Если генератор всё равно рисует тень или траву под ногами — не страшно,
 импортёр их срезает.
 
-Куры подобраны так, чтобы масть у каждой своя: белая, чёрная, ситцевая,
-серебристо-пёстрая, рыже-бурая, тёмная, палевая, глинистая, лососёвая. Пока
-картинки не пришли, в игре стоят отрисованные заглушки — они хотя бы разного
-цвета, но видно, что это заглушки. Хуже, когда животное смотрит влево: такую картинку
+Курятник закрыт: шесть пород, у каждой своя масть — белая, чёрная, белая
+высокая, рыжая с белой головой, серебристая, рыжая в крапинку. Десять сначала
+завели зря: разницу между третьей и четвёртой белой курицей в плитке всё равно
+не видно, а картинок на них уходит столько же.
+
+Заодно из игры выпала единственная порода за кристаллы (Брама). Когда дойдут
+руки до «дорогой» живности — верну такую в гусятник или коровник. Хуже, когда животное смотрит влево: такую картинку
 приходится отражать, и надписи с несимметричными деталями уезжают.
 
 ## Потом, если захочется
