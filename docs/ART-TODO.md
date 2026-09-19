@@ -25,14 +25,14 @@ python3 tools/import-art.py картинка.png <id>
 
 ## Список
 
-Всего животных 15, готовы 6 (все куры), одна из них временная.
+Всего животных 15, готовы 7, одна из них временная.
 
 | Готово | Файл | Порода | Постройка | Уровень | Как выглядит |
 |:---:|---|---|---|:---:|---|
 | ✅ | `breed-rusbel.png` | Русская белая | Курятник | 1 | Белая приземистая несушка, красный гребень |
 | ✅ | `breed-moskchern.png` | Московская чёрная | Курятник | 2 | Чёрная, золотистая грива |
 | ✅ | `breed-leggorn.png` | Леггорн | Курятник | 3 | Белая, высокая, крупный гребень набок |
-|  | `breed-tula.png` | Тульский бойцовый | Гусятник | 4 | Серый гусь |
+| ✅ | `breed-tula.png` | Тульский бойцовый | Гусятник | 4 | Серый гусь |
 | ✅ | `breed-orlov.png` | Орловская ситцевая | Курятник | 4 | Пёстрая ситцевая, борода и баки |
 | ~ | `breed-pavlov.png` | Павловская | Курятник | 5 | Стоит временная: генератор не нарисовал ни хохла, ни мохнатых ног, и вышла третья белая птица |
 |  | `breed-vietnam.png` | Вьетнамская вислобрюхая | Свинарник | 5 | Чёрная свинья, брюхо до земли |
@@ -64,7 +64,7 @@ cute cartoon golden brown hen with black speckles, a big round fluffy feather cr
 cute cartoon reddish-brown hen with golden neck feathers, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Тульский бойцовый
-cute cartoon grey goose with a long neck and orange beak, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+cute cartoon domestic farm goose with soft grey and white feathers, long curved neck, orange beak, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Вьетнамская вислобрюхая
 cute cartoon black pot-bellied pig with a sagging belly and short legs, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
@@ -100,8 +100,14 @@ cute cartoon bay draft horse with feathered hooves, 3/4 view facing right, full 
 не видно, а картинок на них уходит столько же.
 
 Заодно из игры выпала единственная порода за кристаллы (Брама). Когда дойдут
-руки до «дорогой» живности — верну такую в гусятник или коровник. Хуже, когда животное смотрит влево: такую картинку
-приходится отражать, и надписи с несимметричными деталями уезжают.
+руки до «дорогой» живности — верну такую в гусятник или коровник.
+
+## Если генератор отказал
+
+Он режет торговые марки, даже когда речь про птицу. «Grey goose» — это водка,
+и запрос с такой парой слов Leonardo завернул как нарушение правил. Лечится
+перестановкой: «domestic farm goose with soft grey and white feathers».
+По той же причине из списка убрана Брама — это ещё и марка пива.
 
 ## Потом, если захочется
 
