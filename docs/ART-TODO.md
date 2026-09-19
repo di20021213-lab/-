@@ -25,7 +25,7 @@ python3 tools/import-art.py картинка.png <id>
 
 ## Список
 
-Всего животных 15, готовы 7, одна из них временная.
+Всего животных 15, готовы 8 (курятник и гусятник целиком), одна из них временная.
 
 | Готово | Файл | Порода | Постройка | Уровень | Как выглядит |
 |:---:|---|---|---|:---:|---|
@@ -37,7 +37,7 @@ python3 tools/import-art.py картинка.png <id>
 | ~ | `breed-pavlov.png` | Павловская | Курятник | 5 | Стоит временная: генератор не нарисовал ни хохла, ни мохнатых ног, и вышла третья белая птица |
 |  | `breed-vietnam.png` | Вьетнамская вислобрюхая | Свинарник | 5 | Чёрная свинья, брюхо до земли |
 | ✅ | `breed-kuchin.png` | Кучинская юбилейная | Курятник | 6 | Рыже-бурая, золотая шея |
-|  | `breed-holmgus.png` | Холмогорский гусь | Гусятник | 7 | Белый гусь, шишка на клюве |
+| ✅ | `breed-holmgus.png` | Холмогорский гусь | Гусятник | 7 | Белый гусь, шишка на клюве |
 |  | `breed-mirgorod.png` | Миргородская | Свинарник | 9 | Рябая: розовая с чёрными пятнами |
 |  | `breed-holmkor.png` | Холмогорская | Коровник | 10 | Корова чёрно-пёстрая |
 |  | `breed-landras.png` | Ландрас | Свинарник | 11 | Длинная бледно-розовая, уши вперёд |
@@ -70,7 +70,7 @@ cute cartoon domestic farm goose with soft grey and white feathers, long curved 
 cute cartoon black pot-bellied pig with a sagging belly and short legs, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Холмогорский гусь
-cute cartoon white goose with a knob above its orange beak, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+cute cartoon white domestic farm goose with a knob above its orange beak, long curved neck, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Миргородская
 cute cartoon pink pig with big black spots, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background

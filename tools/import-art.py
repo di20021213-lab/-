@@ -66,17 +66,39 @@ def cut_background(im):
     return im
 
 
-def drop_ground(im, look=0.22):
-    """Убирает то, что осталось от нарисованной тени: нейтральные пятна в нижней
-    четверти, не связанные с тушкой. Заливка их не достала, если тень отдельная."""
+def drop_ground(im, band=0.12):
+    """Срезает нарисованную под ногами тень.
+
+    Тень бывает не серой, а тёплой — у белого гуся (232,216,206). По цвету её
+    от белого пера не отличить, по строкам тоже: в строках со ступнёй лежат и
+    лапа, и тень. Зато тень всегда стелется вокруг ног, а не выше.
+
+    Поэтому ищем нижнюю точку самого зверя — последний непрозрачный пиксель,
+    который не бледный (лапы оранжевые, копыта тёмные), — и в полосе вокруг неё
+    гасим всё бледное. Туша выше этой полосы и не страдает.
+    """
     w, h = im.size
     px = im.load()
-    y0 = int(h * (1 - look))
+
+    def pale(p):
+        r, g, b, a = p
+        return a > 40 and min(r, g, b) >= 160 and (max(r, g, b) - min(r, g, b)) <= 38
+
+    feet = 0
+    for y in range(h):
+        for x in range(w):
+            p = px[x, y]
+            if p[3] > 40 and not pale(p):
+                feet = y
+                break
+        else:
+            continue
+    y0 = max(0, feet - int(h * band))
     for y in range(y0, h):
         for x in range(w):
-            r, g, b, a = px[x, y]
-            if a and is_backdrop((r, g, b), bright=150, spread=18):
-                px[x, y] = (r, g, b, 0)
+            p = px[x, y]
+            if pale(p) or (p[3] and is_backdrop(p[:3], bright=150, spread=18)):
+                px[x, y] = (p[0], p[1], p[2], 0)
     return im
 
 
