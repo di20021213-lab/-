@@ -11,9 +11,9 @@
 
 Запуск из корня проекта:
     python3 tools/recolor.py assets-src/art/vladimir.jpg bay готовый.png
-    python3 tools/recolor.py пакет.jpg green готовый.png
+    python3 tools/recolor.py пакет.jpg green готовый.png --only 0
 """
-from PIL import Image
+from PIL import Image, ImageChops
 import sys
 
 # Светлая часть переводится в вилку «тень — свет», тёмная просто гасится.
@@ -29,11 +29,21 @@ PALETTES = {
 HUES = {"red": 0, "green": 85, "blue": 145, "purple": 190}
 
 
-def rehue(src, hue):
-    """Перекрашивает насыщенные пиксели в заданный тон (0–255 по шкале PIL)."""
+def rehue(src, hue, only=None, width=12):
+    """Перекрашивает насыщенные пиксели в заданный тон (0–255 по шкале PIL).
+
+    `only` сужает перекраску до пикселей, чей тон лежит около заданного —
+    иначе вместе с пакетом корма перекрасится и картинка на этикетке, и
+    выйдет синяя корова на синей траве. Тон замкнут в кольцо, поэтому
+    расстояние считаем по кольцу: красный лежит и около 0, и около 255.
+    """
     hsv = src.convert("RGB").convert("HSV")
     h, s, v = hsv.split()
     mask = s.point(lambda x: 255 if x > 40 else 0)
+    if only is not None:
+        ring = [255 if min(abs(i - only), 256 - abs(i - only)) <= width else 0
+                for i in range(256)]
+        mask = ImageChops.multiply(mask, h.point(ring))
     h = Image.composite(Image.new("L", src.size, hue), h, mask)
     return Image.merge("HSV", (h, s, v)).convert("RGB")
 
@@ -65,7 +75,12 @@ if __name__ == "__main__":
         raise SystemExit(__doc__ + "\nмасти: " + ", ".join(PALETTES) +
                          "\nтона: " + ", ".join(HUES))
     src, name, dst = sys.argv[1], sys.argv[2], sys.argv[3]
-    out = (rehue(Image.open(src), HUES[name]) if name in HUES
+    # «--only <тон>» — перекрашивать лишь то, что уже этого тона: так у пакета
+    # корма меняется цвет мешка, а картинка на этикетке остаётся своей.
+    only = None
+    if "--only" in sys.argv:
+        only = int(sys.argv[sys.argv.index("--only") + 1])
+    out = (rehue(Image.open(src), HUES[name], only) if name in HUES
            else recolor(Image.open(src), PALETTES[name]))
     out.save(dst)
     print("готово:", dst)
