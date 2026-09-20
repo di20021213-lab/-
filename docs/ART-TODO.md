@@ -29,7 +29,7 @@ python3 tools/import-art.py картинка.png <id>
 
 ## Список
 
-Всего животных 19, готовы 14; одна из кур временная.
+Всего животных 19, готовы 15; одна из кур временная.
 
 | Готово | Файл | Порода | Постройка | Уровень | Как выглядит |
 |:---:|---|---|---|:---:|---|
@@ -48,7 +48,7 @@ python3 tools/import-art.py картинка.png <id>
 | ✅ | `breed-ital.png` | Итальянский белый | Гусятник | 12 | Белый, лёгкий, без шишки |
 | ✅ | `breed-mirgorod.png` | Миргородская | Свинарник | 9 | Рябая: розовая с чёрными пятнами |
 |  | `breed-holmkor.png` | Холмогорская | Коровник | 10 | Корова чёрно-пёстрая |
-|  | `breed-landras.png` | Ландрас | Свинарник | 11 | Длинная бледно-розовая, уши вперёд |
+| ✅ | `breed-landras.png` | Ландрас | Свинарник | 11 | Ровно-розовая без пятен, уши торчком |
 |  | `breed-simment.png` | Симментальская | Коровник | 13 | Корова рыже-пёстрая, белая голова |
 |  | `breed-krupbel.png` | Крупная белая | Свинарник | 13 | Крупная розовая свинья |
 |  | `breed-vladimir.png` | Владимирский тяжеловоз | Конюшня | 14 | Гнедой тяжеловоз, щётки на ногах |
@@ -104,8 +104,8 @@ cute cartoon long pale pink pig with big forward-drooping ears, 3/4 view facing 
 Симментальская
 cute cartoon red and white simmental cow with a white head, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
-Крупная белая
-cute cartoon large pink sow, heavy body, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+Крупная белая — просить уши вниз, иначе сольётся с ландрасом
+cute cartoon huge fat pink sow with big floppy ears hanging down over her eyes and a heavy sagging belly, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Владимирский тяжеловоз
 cute cartoon bay draft horse with feathered hooves, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
