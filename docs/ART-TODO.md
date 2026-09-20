@@ -192,6 +192,22 @@ done
 Новую иконку надо не только положить в `public/img/iso/`, но и вписать в
 `ISO.feed` в `public/game.js` — иначе клиент продолжит рисовать эмодзи.
 
+### Сорта корма
+
+В оригинале сорт — бумажный пакет с картинкой животного на этикетке, а сорта
+разведены цветом; у нас это уже заложено эмодзи 🟥 🟩 🟦 🟪 в `content.js`,
+но нарисованы сеновал и три ящика с овощами из набора.
+
+Генерить четыре раза не надо: четыре генерации дадут четыре разные формы
+пакета, и цветовой код развалится. Нужен один красный пакет, остальные три
+делаются сменой тона — `tools/recolor.py` умеет `red`, `green`, `blue`,
+`purple`: цветным пикселям задаётся новый тон, а светотень и насыщенность
+остаются свои. Серое и белое не трогаются, поэтому контур и блики целы.
+
+```text
+cute cartoon red paper feed sack with a folded top and a printed picture of a farm animal on the label, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+```
+
 ```text
 Косточка
 cute cartoon dog bone, 3/4 view, hand-painted 2D casual game item icon, plain flat background
