@@ -19,10 +19,26 @@ from collections import deque
 import os, sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+FLIP_LIST = os.path.join(ROOT, "assets-src", "art", "flip.txt")
 OUT = os.path.join(ROOT, "public", "img", "iso")
 WIDTH = 200                       # столько же, сколько у остальных пород
 HEIGHT = 330                      # и не выше самой рослой: во дворе размер задаётся
                                   # шириной, и долговязая птица переросла бы постройку
+
+
+def needs_flip(key):
+    """Породы, у которых исходник смотрит влево, перечислены в flip.txt.
+
+    Список лежит рядом с картинками, а не держится в голове: при разовом
+    переимпорте всех пород его легко переврать по памяти, и часть двора
+    разворачивается спиной к остальным.
+    """
+    try:
+        with open(FLIP_LIST, encoding="utf-8") as f:
+            names = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+    except OSError:
+        return False
+    return key in names
 
 
 def is_backdrop(px, bright=168, spread=14):
@@ -36,8 +52,14 @@ def cut_background(im):
 
     Фон бывает не белым, а кремовым — (252,243,234). По признаку «нейтральное»
     он не проходит, поэтому дополнительно берём цвет угла как образец и считаем
-    фоном всё, что от него почти не отличается. Допуск тесный: у белой птицы
-    перо от кремового фона отличается всего на десяток по синему каналу.
+    фоном всё, что от него почти не отличается.
+
+    Допуск не постоянный, а по шуму самого фона: замеряем разброс в рамке
+    кадра и берём его с небольшим запасом. Глухой допуск не годится — у
+    итальянского гуся перо (253,248,242) отстоит от кремового фона
+    (254,244,235) всего на семь единиц, и допуск в десять съедал птицу
+    целиком, оставляя один контур. Краем силуэта тут тоже не спастись:
+    перепад тоньше шума JPEG, его не видит ни один детектор.
     """
     im = im.convert("RGBA")
     w, h = im.size
@@ -45,8 +67,18 @@ def cut_background(im):
     corners = [px[1, 1], px[w - 2, 1], px[1, h - 2], px[w - 2, h - 2]]
     ref = tuple(sorted(c[i] for c in corners)[1] for i in range(3))
 
+    devs = []
+    for y in list(range(0, 8)) + list(range(h - 8, h)):
+        for x in range(0, w, 3):
+            devs.append(max(abs(px[x, y][i] - ref[i]) for i in range(3)))
+    for x in list(range(0, 8)) + list(range(w - 8, w)):
+        for y in range(0, h, 3):
+            devs.append(max(abs(px[x, y][i] - ref[i]) for i in range(3)))
+    devs.sort()
+    tol = max(4, min(10, devs[int(len(devs) * 0.98)] + 3))
+
     def near_ref(p):
-        return all(abs(p[i] - ref[i]) <= 10 for i in range(3))
+        return all(abs(p[i] - ref[i]) <= tol for i in range(3))
     alpha = Image.new("L", (w, h), 255)
     ap = alpha.load()
 
@@ -107,7 +139,17 @@ def drop_ground(im, band=0.12):
                 break
         else:
             continue
+    # Доля высоты задаёт лишь потолок полосы, а начинается она от верхней
+    # тёмной строки внутри этой доли — от копыт или лап. Тень стелется вокруг
+    # них и выше не поднимается, а нога бывает того же кремового цвета, что и
+    # тень: у чёрно-пёстрой коровы полоса в 12% высоты выгрызала из бабок
+    # куски. Ищем именно верхнюю тёмную строку, а не сплошную их цепочку:
+    # цепочку обрывает сглаживание, и полоса схлопывается в четыре пикселя.
     y0 = max(0, feet - int(h * band))
+    for y in range(y0, feet + 1):
+        if any(px[x, y][3] > 40 and min(px[x, y][:3]) < 120 for x in range(w)):
+            y0 = y
+            break
     for y in range(y0, h):
         for x in range(w):
             p = px[x, y]
@@ -160,7 +202,8 @@ if __name__ == "__main__":
     if len(args) < 2:
         raise SystemExit(__doc__)
     src, key = args[0], args[1]
-    im = prepare(src, keep_shadow="--keep-shadow" in sys.argv, flip="--flip" in sys.argv)
+    flip = "--flip" in sys.argv or needs_flip(key)
+    im = prepare(src, keep_shadow="--keep-shadow" in sys.argv, flip=flip)
     os.makedirs(OUT, exist_ok=True)
     dst = os.path.join(OUT, "breed-" + key + ".png")
     im.save(dst, optimize=True)
