@@ -57,7 +57,7 @@ function auth(req, res, next){
 }
 function requireVerified(req, res, next){
   if(REQUIRE_VERIFY && !req.user.email_verified_at){
-    return res.status(403).json({error:"Подтвердите почту — мы прислали ссылку.", code:"email_unverified"});
+    return res.status(403).json({error:"Подтвердите почту — мы прислали код.", code:"email_unverified"});
   }
   next();
 }
@@ -82,8 +82,8 @@ app.post("/api/auth/register", async (req, res) => {
   if(existing){
     /* Не говорим, занят ли адрес: это утечка. Если аккаунт есть и не подтверждён — шлём ссылку заново. */
     if(!existing.email_verified_at){
-      const token = A.issueEmailToken(existing.id, "verify");
-      await mail.sendVerify(existing.email, PUBLIC_URL + "/api/auth/verify?token=" + token).catch(err => console.error(err));
+      const t = A.issueEmailToken(existing.id, "verify");
+      await mail.sendVerify(existing.email, PUBLIC_URL + "/api/auth/verify?token=" + t.token, t.code).catch(err => console.error(err));
     }
     return res.json({ok:true, message:"Если адрес свободен, письмо уже в пути. Проверьте почту."});
   }
@@ -95,9 +95,9 @@ app.post("/api/auth/register", async (req, res) => {
     setSession(res, A.createSession(user.id, req.headers["user-agent"], ipOf(req)), A.SESSION_TTL);
     return res.json({ok:true, verified:true, message:"Колхоз заведён, заходите."});
   }
-  const token = A.issueEmailToken(user.id, "verify");
-  await mail.sendVerify(user.email, PUBLIC_URL + "/api/auth/verify?token=" + token).catch(err => console.error(err));
-  res.json({ok:true, message:"Готово. Ссылка для подтверждения ушла на " + user.email + "."});
+  const t = A.issueEmailToken(user.id, "verify");
+  await mail.sendVerify(user.email, PUBLIC_URL + "/api/auth/verify?token=" + t.token, t.code).catch(err => console.error(err));
+  res.json({ok:true, message:"Готово. Код подтверждения ушёл на " + user.email + "."});
 });
 
 app.get("/api/auth/verify", (req, res) => {
@@ -109,6 +109,41 @@ app.get("/api/auth/verify", (req, res) => {
   res.redirect("/?verify=ok");
 });
 
+/* Подтверждение кодом из письма. Ссылка остаётся и работает так же —
+   человеку удобнее ссылка, когда почта открыта на другом устройстве, и код,
+   когда она открыта рядом. Строка в базе у них общая, так что сработает то,
+   что человек сделает первым. */
+app.post("/api/auth/verify-code", (req, res) => {
+  const e = A.checkEmail(req.body.email);
+  if(!e.ok) return res.status(400).json({error:e.msg});
+  const code = String(req.body.code || "").replace(/\D/g, "");
+  if(code.length !== 6) return res.status(400).json({error:"Код состоит из шести цифр."});
+  const rl = rateLimit("code:" + e.email, 20, 15 * 60 * 1000);
+  if(!rl.ok) return res.status(429).json({error:"Много попыток. Подождите " + rl.retryIn + " с."});
+
+  const u = A.userByEmail(e.email);
+  /* Про чужой и про несуществующий адрес отвечаем одинаково: по ответу
+     нельзя понять, заведён ли такой аккаунт. */
+  if(!u) return res.status(400).json({error:"Код не подошёл. Проверьте и впишите снова."});
+  if(u.email_verified_at){
+    return res.json({ok:true, message:"Почта уже подтверждена, заходите."});
+  }
+  const verdict = A.checkVerifyCode(u.id, code);
+  if(verdict === "ok"){
+    A.markVerified(u.id);
+    logEvent(u.id, "verify_code", {});
+    setSession(res, A.createSession(u.id, req.headers["user-agent"], ipOf(req)), A.SESSION_TTL);
+    return res.json({ok:true, verified:true, message:"Почта подтверждена. Колхоз ваш."});
+  }
+  if(verdict === "spent"){
+    return res.status(400).json({error:"Код заблокирован: слишком много промахов. Запросите новый."});
+  }
+  if(verdict === "none"){
+    return res.status(400).json({error:"Код устарел. Запросите новый."});
+  }
+  res.status(400).json({error:"Код не подошёл. Проверьте и впишите снова."});
+});
+
 app.post("/api/auth/resend", async (req, res) => {
   const e = A.checkEmail(req.body.email);
   if(!e.ok) return res.status(400).json({error:e.msg});
@@ -116,8 +151,8 @@ app.post("/api/auth/resend", async (req, res) => {
   if(!rl.ok) return res.status(429).json({error:"Письмо уже отправляли. Подождите " + rl.retryIn + " с."});
   const u = A.userByEmail(e.email);
   if(u && !u.email_verified_at){
-    const token = A.issueEmailToken(u.id, "verify");
-    await mail.sendVerify(u.email, PUBLIC_URL + "/api/auth/verify?token=" + token).catch(err => console.error(err));
+    const t = A.issueEmailToken(u.id, "verify");
+    await mail.sendVerify(u.email, PUBLIC_URL + "/api/auth/verify?token=" + t.token, t.code).catch(err => console.error(err));
   }
   res.json({ok:true, message:"Если адрес у нас есть и не подтверждён, письмо ушло."});
 });
@@ -157,7 +192,7 @@ app.post("/api/auth/forgot", async (req, res) => {
   if(!rl.ok) return res.status(429).json({error:"Письмо уже отправляли. Подождите " + rl.retryIn + " с."});
   const u = A.userByEmail(e.email);
   if(u){
-    const token = A.issueEmailToken(u.id, "reset");
+    const token = A.issueEmailToken(u.id, "reset").token;
     await mail.sendReset(u.email, PUBLIC_URL + "/?reset=" + token).catch(err => console.error(err));
   }
   res.json({ok:true, message:"Если такой адрес есть, письмо со ссылкой ушло."});

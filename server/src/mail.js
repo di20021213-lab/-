@@ -45,10 +45,23 @@ function letter(title, body, link, linkLabel){
     '<p style="font-size:12px;color:#7a5a38">Если это были не вы, просто удалите письмо.</p></div>';
   return {text, html};
 }
-async function sendVerify(to, link){
-  const l = letter("Подтвердите почту", "Вы завели колхоз в игре «Червонэ дышло». Осталось подтвердить адрес — ссылка живёт сутки.", link, "Подтвердить почту");
-  console.log("[почта] подтверждение для " + to + ": " + link);
-  return send(to, "Подтверждение почты — Червонэ дышло", l.text, l.html);
+/* Подтверждение идёт двумя путями сразу: код можно вписать в игре, не уходя
+   с экрана, а ссылка выручает, когда почту открывают на другом устройстве.
+   Что сработает первым, то и засчитается — строка в базе у них одна. */
+async function sendVerify(to, link, code){
+  const l = letter("Подтвердите почту",
+    "Вы завели колхоз в игре «Червонэ дышло». Впишите в игре код <b>" + code +
+    "</b> — или откройте ссылку ниже. И код, и ссылка живут сутки.",
+    link, "Подтвердить почту");
+  const text = "Подтвердите почту\n\nКод: " + code +
+    "\n\nИли откройте ссылку:\n" + link +
+    "\n\nИ код, и ссылка живут сутки. Если это были не вы, просто удалите письмо.";
+  const html = l.html.replace("<p><a href=",
+    '<p style="font:bold 30px/1.2 Georgia,serif;letter-spacing:6px;background:#fff3d4;' +
+    'border:3px solid #5f3d1c;border-radius:8px;padding:12px 18px;display:inline-block">' +
+    code + "</p><p><a href=");
+  console.log("[почта] подтверждение для " + to + ": код " + code + ", ссылка " + link);
+  return send(to, "Подтверждение почты — Червонэ дышло", text, html);
 }
 async function sendReset(to, link){
   const l = letter("Сброс пароля", "Кто-то запросил сброс пароля для вашего колхоза. Ссылка действует час.", link, "Задать новый пароль");

@@ -26,6 +26,11 @@ CREATE TABLE IF NOT EXISTS email_tokens (
   user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   kind        TEXT    NOT NULL,                        -- verify | reset
   token_hash  TEXT    NOT NULL,
+  -- Код из письма живёт в той же строке, что и ссылка: один срок, одно
+  -- погашение. Третьим видом его не завести — kind закрыт проверкой, а
+  -- менять её пришлось бы перестройкой таблицы на боевой базе.
+  code_hash   TEXT,
+  attempts    INTEGER NOT NULL DEFAULT 0,               -- неверные попытки ввода кода
   created_at  INTEGER NOT NULL,
   expires_at  INTEGER NOT NULL,
   used_at     INTEGER,

@@ -28,14 +28,25 @@ function verifyPassword(pw, stored){
 const sha = t => crypto.createHash("sha256").update(t).digest("hex");
 const rawToken = () => crypto.randomBytes(32).toString("base64url");
 
+/** Шестизначный код для письма. Ноли значащие, поэтому берём с ведущими. */
+function rawCode(){
+  return String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+}
+
+/** Выдаёт ссылку, а для подтверждения почты — ещё и код к ней.
+ *
+ *  Код лежит в той же строке, что и ссылка: срок у них общий, погашение тоже,
+ *  и подтвердить можно любым из двух способов — что сработает первым. Третьим
+ *  видом токена код не завести: kind закрыт проверкой в схеме. */
 function issueEmailToken(userId, kind){
   const raw = rawToken();
+  const code = kind === "verify" ? rawCode() : null;
   const ttl = kind === "verify" ? VERIFY_TTL : RESET_TTL;
   db.prepare("UPDATE email_tokens SET used_at = ? WHERE user_id = ? AND kind = ? AND used_at IS NULL")
     .run(now(), userId, kind);
-  db.prepare("INSERT INTO email_tokens(user_id, kind, token_hash, created_at, expires_at) VALUES(?,?,?,?,?)")
-    .run(userId, kind, sha(raw), now(), now() + ttl);
-  return raw;
+  db.prepare("INSERT INTO email_tokens(user_id, kind, token_hash, code_hash, created_at, expires_at) VALUES(?,?,?,?,?,?)")
+    .run(userId, kind, sha(raw), code ? sha(code) : null, now(), now() + ttl);
+  return {token:raw, code};
 }
 function consumeEmailToken(raw, kind){
   if(!raw) return null;
@@ -43,6 +54,32 @@ function consumeEmailToken(raw, kind){
   if(!row || row.used_at || row.expires_at < now()) return null;
   db.prepare("UPDATE email_tokens SET used_at = ? WHERE id = ?").run(now(), row.id);
   return row.user_id;
+}
+
+/** Проверяет код подтверждения. Возвращает "ok" | "bad" | "spent" | "none".
+ *
+ *  Код короткий — миллион вариантов, — поэтому строка гасится после
+ *  CODE_TRIES промахов: перебрать не успеют, а честный человек за шесть
+ *  попыток впечатает. Сравниваем хеши, причём постоянным по времени
+ *  сравнением: по скорости ответа код подбирать тоже не дадим. */
+const CODE_TRIES = 6;
+function checkVerifyCode(userId, code){
+  const row = db.prepare(
+    "SELECT * FROM email_tokens WHERE user_id = ? AND kind = 'verify' AND used_at IS NULL " +
+    "ORDER BY id DESC LIMIT 1"
+  ).get(userId);
+  if(!row || !row.code_hash) return "none";
+  if(row.expires_at < now()) return "none";
+  const want = Buffer.from(row.code_hash, "hex");
+  const got = Buffer.from(sha(String(code || "")), "hex");
+  if(want.length === got.length && crypto.timingSafeEqual(want, got)){
+    db.prepare("UPDATE email_tokens SET used_at = ? WHERE id = ?").run(now(), row.id);
+    return "ok";
+  }
+  const tries = (row.attempts || 0) + 1;
+  db.prepare("UPDATE email_tokens SET attempts = ?" + (tries >= CODE_TRIES ? ", used_at = " + now() : "") +
+             " WHERE id = ?").run(tries, row.id);
+  return tries >= CODE_TRIES ? "spent" : "bad";
 }
 
 /* ---------- сессии ---------- */
@@ -106,7 +143,7 @@ function markVerified(userId){
 }
 
 module.exports = {
-  hashPassword, verifyPassword, issueEmailToken, consumeEmailToken,
+  hashPassword, verifyPassword, issueEmailToken, consumeEmailToken, checkVerifyCode,
   createSession, userBySession, revokeSession, revokeAllSessions,
   checkEmail, checkPassword, checkNick, userByEmail, createUser, setPassword, markVerified,
   rateLimit, SESSION_TTL

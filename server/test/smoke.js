@@ -83,6 +83,7 @@ const ok = (name) => console.log("  ✓ " + name);
     assert.ok(String(r.location).includes("verify=fail"), "токен одноразовый");
     ok("повторная ссылка не работает");
 
+
     r = await call("/api/game");
     assert.strictEqual(r.status, 200);
     let S = r.data.state;
@@ -179,6 +180,53 @@ const ok = (name) => console.log("  ✓ " + name);
     r = await call("/api/game");
     assert.strictEqual(r.status, 401);
     ok("выход из аккаунта гасит сессию");
+
+    /* Второй путь подтверждения — код из письма. Проверяем его в самом конце
+       и на отдельных адресах: код выдаёт сессию, и посреди прогона она
+       перебила бы сессию основного колхоза — дальше игра пошла бы за чужого
+       игрока, а проверки молча считали бы его двор. */
+    const codeMail = "kod" + Date.now() + "@example.org";
+    await call("/api/auth/register", {email:codeMail, password:"kolhoz12345", nick:"Кодов"});
+    const codeFiles = fs.readdirSync(MAIL_DIR).filter(f => f.includes(codeMail));
+    assert.ok(codeFiles.length, "письмо с кодом не отправлено");
+    const codeEml = fs.readFileSync(path.join(MAIL_DIR, codeFiles[0]), "utf8")
+      .replace(/=\r?\n/g, "").replace(/=3D/g, "=");
+    const code = (codeEml.match(/letter-spacing:6px[\s\S]*?>(\d{6})</) || [])[1];
+    assert.ok(code, "в письме нет кода");
+    assert.ok(/verify\?token=/.test(codeEml), "ссылка из письма никуда не делась");
+    ok("в письме и код, и ссылка");
+
+    r = await call("/api/auth/verify-code", {email:codeMail, code:"000000" === code ? "111111" : "000000"});
+    assert.strictEqual(r.status, 400, "неверный код");
+    ok("неверный код отклонён");
+
+    r = await call("/api/auth/verify-code", {email:codeMail, code});
+    assert.strictEqual(r.status, 200, "верный код");
+    assert.ok(r.data.verified, "код подтверждает почту");
+    ok("код подтверждает почту и выдаёт сессию");
+
+    r = await call("/api/auth/verify-code", {email:codeMail, code});
+    assert.strictEqual(r.status, 200);
+    assert.ok(!r.data.verified, "второй раз код не тратится впустую");
+    ok("повторный код отвечает «уже подтверждена»");
+
+    /* Шесть промахов подряд гасят код: миллион вариантов перебрать не дадим. */
+    const lockMail = "zamok" + Date.now() + "@example.org";
+    await call("/api/auth/register", {email:lockMail, password:"kolhoz12345", nick:"Замков"});
+    const lockEml = fs.readFileSync(path.join(MAIL_DIR,
+      fs.readdirSync(MAIL_DIR).filter(f => f.includes(lockMail))[0]), "utf8")
+      .replace(/=\r?\n/g, "").replace(/=3D/g, "=");
+    const lockCode = (lockEml.match(/letter-spacing:6px[\s\S]*?>(\d{6})</) || [])[1];
+    const wrong = lockCode === "000000" ? "111111" : "000000";
+    let lastErr = "";
+    for(let i = 0; i < 6; i++){
+      r = await call("/api/auth/verify-code", {email:lockMail, code:wrong});
+      lastErr = r.data.error || "";
+    }
+    assert.ok(/заблокирован/i.test(lastErr), "после шести промахов код гасится");
+    r = await call("/api/auth/verify-code", {email:lockMail, code:lockCode});
+    assert.strictEqual(r.status, 400, "погашенный код не принимается даже верный");
+    ok("шесть промахов гасят код");
 
     /* данные действительно в базе, а не в памяти процесса */
     const {DatabaseSync} = require("node:sqlite");

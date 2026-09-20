@@ -44,7 +44,9 @@ db.transaction = function(fn){
    колонки в уже существующую таблицу. У игроков базы с прошлых версий, поэтому
    недостающие колонки досыпаем руками. */
 const ADDED_COLUMNS = [
-  ["farms", "bailout_day", "TEXT"]
+  ["farms", "bailout_day", "TEXT"],
+  ["email_tokens", "code_hash", "TEXT"],
+  ["email_tokens", "attempts", "INTEGER NOT NULL DEFAULT 0"]
 ];
 function addMissingColumns(){
   ADDED_COLUMNS.forEach(([table, col, decl]) => {

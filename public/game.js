@@ -1024,7 +1024,7 @@ function authScreen(mode, prefill){
     token = (prefill && prefill.token) || "";
   } else {
     note.innerHTML = mode === "register"
-      ? "<span class='ic'>🌾</span><span class='grow'><small>Заведём колхоз. На почту придёт ссылка — без неё в игру не пустят.</small></span>"
+      ? "<span class='ic'>🌾</span><span class='grow'><small>Заведём колхоз. На почту придёт код — без него в игру не пустят.</small></span>"
       : "<span class='ic'>🚪</span><span class='grow'><small>Входите — хозяйство ждёт там же, где вы его оставили.</small></span>";
     email = field("f-email", "Почта", "email", (prefill && prefill.email) || "");
     if(mode === "register") nick = field("f-nick", "Имя председателя", "text", "");
@@ -1079,20 +1079,63 @@ function authScreen(mode, prefill){
     i.addEventListener("keydown", function(e){ if(e.key === "Enter") submit(); });
   });
 }
+/* Экран подтверждения: шесть цифр из письма. Ссылка в письме тоже есть и
+   работает — она выручает, когда почту открывают на другом устройстве, —
+   поэтому кнопка «я перешёл по ссылке» остаётся. */
 function verifyScreen(email, message){
   closeAll();
   var w = makeWin("Подтвердите почту", "sm");
   w.win.querySelector(".x").remove();
   var box = el("div", "reward-box");
   box.appendChild(el("div", "im", "✉️"));
-  box.appendChild(el("div", null, esc(message || ("Мы отправили ссылку на " + email + ". Откройте её — и колхоз ваш."))));
+  box.appendChild(el("div", null, esc(message || ("Мы отправили код на " + email + "."))));
   w.body.appendChild(box);
+
+  var hint = el("p", null, "Впишите шесть цифр из письма. В письме есть и ссылка — если открыли её, нажмите «Я перешёл по ссылке».");
+  hint.style.cssText = "font-size:13px;margin:10px 0 0";
+  w.body.appendChild(hint);
+
+  var code = document.createElement("input");
+  code.id = "f-code";
+  code.type = "text";
+  code.inputMode = "numeric";
+  code.autocomplete = "one-time-code";
+  code.maxLength = 6;
+  code.placeholder = "000000";
+  code.style.cssText = "display:block;width:100%;margin-top:10px;padding:10px;" +
+    "border:2px solid var(--wood-dk);border-radius:6px;" +
+    "background:#fff8e6;font:700 26px/1.2 Georgia,serif;letter-spacing:10px;text-align:center";
+  w.body.appendChild(code);
+
+  var msg = el("div", null, "");
+  msg.style.cssText = "font-size:13px;font-weight:700;min-height:18px;margin-top:6px";
+  w.body.appendChild(msg);
+  function say(t, bad){ msg.textContent = t; msg.style.color = bad ? "#bf3b2c" : "#25611a"; }
+
+  function submit(){
+    var v = String(code.value || "").replace(/\D/g, "");
+    if(v.length !== 6) return say("Код состоит из шести цифр.", true);
+    say("Секунду…");
+    api("/api/auth/verify-code", {email:email, code:v})
+      .then(function(r){ closeAll(); toast(r.message); boot(); })
+      .catch(function(e){ say(e.message, true); code.select(); });
+  }
+  /* Код обычно вставляют из письма — чистим от пробелов и дефисов на лету. */
+  code.addEventListener("input", function(){
+    var v = String(code.value || "").replace(/\D/g, "").slice(0, 6);
+    if(v !== code.value) code.value = v;
+    if(v.length === 6) submit();
+  });
+  code.addEventListener("keydown", function(e){ if(e.key === "Enter") submit(); });
+
   footer(w, [
-    {label:"Отправить письмо ещё раз", cls:"flat", on:function(){
+    {label:"Выслать код заново", cls:"flat", on:function(){
       api("/api/auth/resend", {email:email}).then(function(r){ toast(r.message); }).catch(function(e){ toast(e.message, true); });
     }},
-    {label:"Я подтвердил", cls:"go", on:function(){ closeAll(); boot(); }}
+    {label:"Я перешёл по ссылке", cls:"flat", on:function(){ closeAll(); boot(); }},
+    {label:"Подтвердить", cls:"go", on:submit}
   ]);
+  setTimeout(function(){ code.focus(); }, 50);
 }
 
 /* ===================== запуск ===================== */
