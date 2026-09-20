@@ -155,6 +155,9 @@ Leonardo иногда отвечает «did not meet content safety guidelines�
 | `brown farm goose with a long graceful neck` | `heavy domestic farm goose with grey and white feathers` |
 | `huge fat pink sow with … her … sagging belly` | `farm pig with a big round heavy body and large floppy ears` |
 | `bay draft horse with feathered hooves` | — |
+| `farm horse with a brown coat …` | — |
+| `workhorse with a chestnut coat …` | — |
+| `pony with a warm brown coat …` | — |
 
 Падали те, где цвет стоит прямо перед словом goose; проходили те, где цвет
 описан после существительного: «goose **with** … feathers». Слово brown не
