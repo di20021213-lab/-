@@ -105,7 +105,7 @@ cute cartoon long pale pink pig with big forward-drooping ears, 3/4 view facing 
 cute cartoon red and white simmental cow with a white head, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Крупная белая — просить уши вниз, иначе сольётся с ландрасом
-cute cartoon huge fat pink sow with big floppy ears hanging down over her eyes and a heavy sagging belly, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+cute cartoon farm pig with a big round heavy body and large floppy ears hanging down over its eyes, pale pink skin, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Владимирский тяжеловоз
 cute cartoon bay draft horse with feathered hooves, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
@@ -139,6 +139,7 @@ Leonardo иногда отвечает «did not meet content safety guidelines�
 | `grey goose with a long neck` | `domestic farm goose with soft grey and white feathers` |
 | `brown domestic farm goose with a swan-like neck` | `white domestic farm goose with a knob above its beak` |
 | `brown farm goose with a long graceful neck` | `heavy domestic farm goose with grey and white feathers` |
+| `huge fat pink sow with … her … sagging belly` | `farm pig with a big round heavy body and large floppy ears` |
 
 Падали те, где цвет стоит прямо перед словом goose; проходили те, где цвет
 описан после существительного: «goose **with** … feathers». Слово brown не
