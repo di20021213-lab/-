@@ -13,6 +13,7 @@
     python3 tools/import-art.py картинка.png rusbel
     python3 tools/import-art.py картинка.png rusbel --keep-shadow
     python3 tools/import-art.py картинка.png rusbel --flip      # смотрит влево
+    python3 tools/import-art.py картинка.png bone --item        # иконка предмета
 """
 from PIL import Image, ImageDraw, ImageFilter
 from collections import deque
@@ -20,10 +21,12 @@ import os, sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 FLIP_LIST = os.path.join(ROOT, "assets-src", "art", "flip.txt")
+RECOLOR_LIST = os.path.join(ROOT, "assets-src", "art", "recolor.txt")
 OUT = os.path.join(ROOT, "public", "img", "iso")
 WIDTH = 200                       # столько же, сколько у остальных пород
 HEIGHT = 330                      # и не выше самой рослой: во дворе размер задаётся
                                   # шириной, и долговязая птица переросла бы постройку
+ITEM = 150                        # иконки кормов и ресурсов: вписываем в квадрат
 
 
 def needs_flip(key):
@@ -39,6 +42,22 @@ def needs_flip(key):
     except OSError:
         return False
     return key in names
+
+
+def wanted_palette(key):
+    """Масть из recolor.txt, если для этой породы она задана."""
+    try:
+        with open(RECOLOR_LIST, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                name, _, pal = line.partition(" ")
+                if name == key:
+                    return pal.strip()
+    except OSError:
+        pass
+    return None
 
 
 def is_backdrop(px, bright=168, spread=14):
@@ -176,8 +195,11 @@ def shadow(im):
     return sh
 
 
-def prepare(path, keep_shadow=False, flip=False):
+def prepare(path, keep_shadow=False, flip=False, item=False, palette=None):
     im = Image.open(path)
+    if palette:
+        import recolor
+        im = recolor.recolor(im, recolor.PALETTES[palette])
     im = cut_background(im)
     if flip:
         im = im.transpose(Image.FLIP_LEFT_RIGHT)   # во дворе все смотрят вправо
@@ -187,6 +209,13 @@ def prepare(path, keep_shadow=False, flip=False):
     if not box:
         raise SystemExit("после обрезки ничего не осталось — проверь картинку")
     im = im.crop(box)
+    if item:
+        # Иконку предмета не надо равнять по ширине с остальными: она лежит в
+        # плитке магазина, а не стоит во дворе рядом с постройкой. Просто
+        # вписываем в квадрат, как лежат иконки из набора.
+        k = min(ITEM / im.width, ITEM / im.height)
+        im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
+        return shadow(im)
     k = min(WIDTH / im.width, HEIGHT / im.height)
     im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
     # Во дворе размер задаётся шириной, а высота идёт за пропорцией картинки.
@@ -202,9 +231,12 @@ if __name__ == "__main__":
     if len(args) < 2:
         raise SystemExit(__doc__)
     src, key = args[0], args[1]
+    item = "--item" in sys.argv
     flip = "--flip" in sys.argv or needs_flip(key)
-    im = prepare(src, keep_shadow="--keep-shadow" in sys.argv, flip=flip)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    im = prepare(src, keep_shadow="--keep-shadow" in sys.argv, flip=flip, item=item,
+                 palette=wanted_palette(key))
     os.makedirs(OUT, exist_ok=True)
-    dst = os.path.join(OUT, "breed-" + key + ".png")
+    dst = os.path.join(OUT, ("feed-" if item else "breed-") + key + ".png")
     im.save(dst, optimize=True)
     print("готово:", dst, im.size)

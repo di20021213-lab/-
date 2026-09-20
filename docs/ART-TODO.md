@@ -164,15 +164,48 @@ Leonardo иногда отвечает «did not meet content safety guidelines�
 прошло ни разу. Это наблюдение, а не правило фильтра — сначала просто повтори
 тот же запрос, классификатор шумит и со второго раза часто пропускает.
 
-## Потом, если захочется
+## Корма
 
-Не животные, но тоже пиксельные и выбиваются:
+Из пятнадцати кормов нарисованы двенадцать. Трёх нет вовсе — рисуются эмодзи
+среди нарисованных иконок. Ещё три взяты из набора реквизита не по смыслу:
+
+| Файл | Что это | Сейчас |
+|---|---|---|
+| `feed-bone.png` | Косточка, корм для собаки | 🦴 эмодзи |
+| `feed-fish.png` | Рыбка, корм для кота | 🐟 эмодзи |
+| `feed-vitamin.png` | Витаминная добавка | 💊 эмодзи |
+| `feed-navoz.png` | Перепревший навоз | доска |
+| `feed-torf.png` | Торфяной субстрат | доска |
+| `feed-univer.png` | Комбикорм универсальный | лавка |
+
+Иконки импортируются тем же скриптом с флагом `--item`: он не равняет их по
+общей ширине и вписывает в квадрат 150, как лежат иконки из набора.
+
+```text
+Косточка
+cute cartoon dog bone, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+
+Рыбка
+cute cartoon small fresh fish, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+
+Витаминная добавка
+cute cartoon glass jar of vitamin pills with two pills lying beside it, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+
+Перепревший навоз
+cute cartoon heap of dark compost with a wooden pitchfork stuck in it, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+
+Торфяной субстрат
+cute cartoon open burlap sack filled with dark crumbly soil, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+
+Комбикорм универсальный
+cute cartoon open paper sack filled with golden grain pellets, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+```
+
+## Потом, если захочется
 
 | Файл | Что это | Где видно |
 |---|---|---|
 | `prop-farmer.png` | Председатель | подсказка внизу двора |
-| `feed-bone.png` | Косточка | корм для собаки |
-| `feed-fish.png` | Рыбка | корм для кота |
 
 Пёс и кот пока эмодзи в шапке — если дашь картинки, заведу им спрайты.
 
