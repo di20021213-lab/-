@@ -111,8 +111,8 @@ cute cartoon red and white simmental cow with a white head, 3/4 view facing righ
 Крупная белая — просить уши вниз, иначе сольётся с ландрасом
 cute cartoon farm pig with a big round heavy body and large floppy ears hanging down over its eyes, pale pink skin, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
-Владимирский тяжеловоз
-cute cartoon bay draft horse with feathered hooves, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+Владимирский тяжеловоз — на draft фильтр ругается, заменять на farm horse
+cute cartoon farm horse with a brown coat, a black mane and tail, and thick shaggy hair over its hooves, heavy sturdy build, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 ```
 
 Если генератор всё равно рисует тень или траву под ногами — не страшно,
@@ -154,6 +154,7 @@ Leonardo иногда отвечает «did not meet content safety guidelines�
 | `brown domestic farm goose with a swan-like neck` | `white domestic farm goose with a knob above its beak` |
 | `brown farm goose with a long graceful neck` | `heavy domestic farm goose with grey and white feathers` |
 | `huge fat pink sow with … her … sagging belly` | `farm pig with a big round heavy body and large floppy ears` |
+| `bay draft horse with feathered hooves` | — |
 
 Падали те, где цвет стоит прямо перед словом goose; проходили те, где цвет
 описан после существительного: «goose **with** … feathers». Слово brown не
