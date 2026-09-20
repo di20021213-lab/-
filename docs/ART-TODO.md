@@ -33,7 +33,7 @@ python3 tools/import-art.py картинка.png <id>
 
 ## Список
 
-Всего животных 19, готовы 18; одна из кур временная.
+Все девятнадцать заменены присланными картинками; одна из кур временная.
 
 | Готово | Файл | Порода | Постройка | Уровень | Как выглядит |
 |:---:|---|---|---|:---:|---|
@@ -55,7 +55,7 @@ python3 tools/import-art.py картинка.png <id>
 | ✅ | `breed-landras.png` | Ландрас | Свинарник | 11 | Ровно-розовая без пятен, уши торчком |
 | ✅ | `breed-simment.png` | Симментальская | Коровник | 13 | Бело-красная в пятнах, белая голова |
 | ✅ | `breed-krupbel.png` | Крупная белая | Свинарник | 13 | Круглая розовая, уши висят на глаза |
-|  | `breed-vladimir.png` | Владимирский тяжеловоз | Конюшня | 14 | Гнедой тяжеловоз, щётки на ногах |
+| ✅ | `breed-vladimir.png` | Владимирский тяжеловоз | Конюшня | 14 | Гнедой; масть доведена перекраской |
 
 ## Запросы для генератора
 
@@ -157,7 +157,7 @@ Leonardo иногда отвечает «did not meet content safety guidelines�
 | `bay draft horse with feathered hooves` | — |
 | `farm horse with a brown coat …` | — |
 | `workhorse with a chestnut coat …` | — |
-| `pony with a warm brown coat …` | — |
+| `pony with a warm brown coat …` | `farm horse standing in profile, big friendly eyes` |
 
 Падали те, где цвет стоит прямо перед словом goose; проходили те, где цвет
 описан после существительного: «goose **with** … feathers». Слово brown не
