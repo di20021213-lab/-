@@ -166,7 +166,30 @@ Leonardo иногда отвечает «did not meet content safety guidelines�
 
 ## Корма
 
-Все пятнадцать кормов нарисованы.
+Все пятнадцать кормов нарисованы, но три иконки взяты из набора реквизита
+и показывают не то: набор моментальных подкормок и отруби — два почти
+одинаковых белых бидона, жмых — пустой ящик.
+
+| Файл | Что это | Сейчас |
+|---|---|---|
+| `feed-instant.png` | Набор моментальных подкормок | бидон |
+| `feed-otrubi.png` | Отруби с мельницы | тот же бидон |
+| `feed-zhmyh.png` | Жмых подсолнечный | пустой ящик |
+
+```text
+Набор моментальных подкормок
+cute cartoon glass jar filled with glowing golden pellets, sparkles floating around it, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+
+Отруби с мельницы
+cute cartoon wooden scoop filled with coarse pale bran flakes, a small spill beside it, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+
+Жмых подсолнечный
+cute cartoon round pressed cake of dark brown sunflower meal with a few sunflower seeds lying beside it, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+```
+
+Первый со свечением нарочно: это единственный корм за кристаллы, он должен
+выделяться. Второй и третий разведены формой — совок против прессованного
+круга, — чтобы не повторить историю с двумя бидонами.
 
 | Готово | Файл | Что это |
 |:---:|---|---|
