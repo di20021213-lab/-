@@ -14,6 +14,7 @@
     python3 tools/import-art.py картинка.png rusbel --keep-shadow
     python3 tools/import-art.py картинка.png rusbel --flip      # смотрит влево
     python3 tools/import-art.py картинка.png bone --item        # иконка предмета
+    python3 tools/import-art.py картинка.png farmer --prop      # портрет, реквизит
 """
 from PIL import Image, ImageDraw, ImageFilter
 from collections import deque
@@ -231,12 +232,13 @@ if __name__ == "__main__":
     if len(args) < 2:
         raise SystemExit(__doc__)
     src, key = args[0], args[1]
-    item = "--item" in sys.argv
+    prop = "--prop" in sys.argv
+    item = "--item" in sys.argv or prop
     flip = "--flip" in sys.argv or needs_flip(key)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     im = prepare(src, keep_shadow="--keep-shadow" in sys.argv, flip=flip, item=item,
                  palette=wanted_palette(key))
     os.makedirs(OUT, exist_ok=True)
-    dst = os.path.join(OUT, ("feed-" if item else "breed-") + key + ".png")
+    dst = os.path.join(OUT, ("prop-" if prop else "feed-" if item else "breed-") + key + ".png")
     im.save(dst, optimize=True)
     print("готово:", dst, im.size)

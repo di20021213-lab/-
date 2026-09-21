@@ -70,7 +70,7 @@ cute cartoon black hen with golden neck feathers and a red comb, 3/4 view facing
 cute cartoon mottled orange white and black hen with a beard and thick cheek feathers, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Павловская — переснять: нужен хохол и не белая
-cute cartoon golden brown hen with black speckles, a big round fluffy feather crest on top of its head like a pompom, thick feathered legs, tiny comb, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+cute cartoon hen with a huge round fluffy feather crest covering the top of its head like a pompom, speckled black and gold plumage, thick feathers down its legs, tiny comb, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Кучинская юбилейная
 cute cartoon reddish-brown hen with golden neck feathers, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
@@ -230,7 +230,21 @@ cute cartoon open paper sack filled with golden grain pellets, 3/4 view, hand-pa
 |---|---|---|
 | `prop-farmer.png` | Председатель | подсказка внизу двора |
 
-Пёс и кот пока эмодзи в шапке — если дашь картинки, заведу им спрайты.
+Председатель сейчас — пиксельный бюст 96×96 из набора Kenney, и это ковбой
+в шляпе, а не председатель колхоза. В подсказке он показывается квадратным
+портретом, поэтому нужна голова с плечами, а не фигура в полный рост: она
+там ужмётся в точку. Импортируется флагом `--prop`, файл ложится в
+`public/img/iso/prop-<id>.png`.
+
+```text
+cute cartoon portrait of a friendly older village man with a grey moustache and a flat cloth cap, head and shoulders only, 3/4 view, hand-painted 2D casual game art, plain flat background
+```
+
+Кепка вместо шляпы тут не мелочь: от неё зависит, выйдет председатель или
+снова ковбой.
+
+Пёс и кот пока эмодзи в шапке — если дашь картинки, заведу им спрайты тем
+же флагом.
 
 ## Откуда что взялось
 
