@@ -108,7 +108,7 @@ var qview = 0;
 var SPRITES = {
   breed: {grusha:1, holmgus:1, holmkor:1, kartoha:1, krupbel:1, kuchin:1, kukuruza:1, landras:1, leggorn:1, mirgorod:1, ogurcy:1, podsol:1, rusbel:1, simment:1, trufel:1, tula:1, vietnam:1, vladimir:1, yablon:1},
   house: {gusi:1, koni:1, korovy:1, kury:1, ogorod:1, sad:1, svini:1, teplica:1},
-  prop: {barrel:1, crate:1, egg:1, farmer:1, fence:1, hay:1, milk:1, sign:1, stone:1, tree:1, vily:1, well:1}
+  prop: {barrel:1, crate:1, egg:1, fence:1, hay:1, milk:1, sign:1, stone:1, tree:1, vily:1, well:1}
 };
 
 var ISO = {

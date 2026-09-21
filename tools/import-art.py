@@ -196,7 +196,7 @@ def shadow(im):
     return sh
 
 
-def prepare(path, keep_shadow=False, flip=False, item=False, palette=None):
+def prepare(path, keep_shadow=False, flip=False, item=False, palette=None, prop=False):
     im = Image.open(path)
     if palette:
         import recolor
@@ -216,7 +216,9 @@ def prepare(path, keep_shadow=False, flip=False, item=False, palette=None):
         # вписываем в квадрат, как лежат иконки из набора.
         k = min(ITEM / im.width, ITEM / im.height)
         im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
-        return shadow(im)
+        # Реквизит вроде портрета ни на чём не стоит: тень под парящей
+        # головой выглядит пятном, поэтому её ставим только предметам.
+        return im if prop else shadow(im)
     k = min(WIDTH / im.width, HEIGHT / im.height)
     im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
     # Во дворе размер задаётся шириной, а высота идёт за пропорцией картинки.
@@ -237,7 +239,7 @@ if __name__ == "__main__":
     flip = "--flip" in sys.argv or needs_flip(key)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     im = prepare(src, keep_shadow="--keep-shadow" in sys.argv, flip=flip, item=item,
-                 palette=wanted_palette(key))
+                 palette=wanted_palette(key), prop=prop)
     os.makedirs(OUT, exist_ok=True)
     dst = os.path.join(OUT, ("prop-" if prop else "feed-" if item else "breed-") + key + ".png")
     im.save(dst, optimize=True)
