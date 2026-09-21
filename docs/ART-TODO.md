@@ -167,19 +167,15 @@ Leonardo иногда отвечает «did not meet content safety guidelines�
 ## Корма
 
 Все пятнадцать кормов нарисованы, но три иконки взяты из набора реквизита
-и показывают не то: набор моментальных подкормок и отруби — два почти
-одинаковых белых бидона, жмых — пустой ящик.
+и показывают не то: отруби — белый бидон, жмых — пустой ящик. Набор
+моментальных подкормок был таким же бидоном, как отруби, — заменён.
 
 | Файл | Что это | Сейчас |
 |---|---|---|
-| `feed-instant.png` | Набор моментальных подкормок | бидон |
-| `feed-otrubi.png` | Отруби с мельницы | тот же бидон |
+| `feed-otrubi.png` | Отруби с мельницы | бидон |
 | `feed-zhmyh.png` | Жмых подсолнечный | пустой ящик |
 
 ```text
-Набор моментальных подкормок
-cute cartoon glass jar filled with glowing golden pellets, sparkles floating around it, 3/4 view, hand-painted 2D casual game item icon, plain flat background
-
 Отруби с мельницы
 cute cartoon wooden scoop filled with coarse pale bran flakes, a small spill beside it, 3/4 view, hand-painted 2D casual game item icon, plain flat background
 
