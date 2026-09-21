@@ -33,7 +33,7 @@ python3 tools/import-art.py картинка.png <id>
 
 ## Список
 
-Все девятнадцать заменены присланными картинками; одна из кур временная.
+Все девятнадцать заменены присланными картинками, временных не осталось.
 
 | Готово | Файл | Порода | Постройка | Уровень | Как выглядит |
 |:---:|---|---|---|:---:|---|
@@ -42,7 +42,7 @@ python3 tools/import-art.py картинка.png <id>
 | ✅ | `breed-leggorn.png` | Леггорн | Курятник | 3 | Белая, высокая, крупный гребень набок |
 | ✅ | `breed-tula.png` | Тульский бойцовый | Гусятник | 4 | Серый гусь |
 | ✅ | `breed-orlov.png` | Орловская ситцевая | Курятник | 4 | Пёстрая ситцевая, борода и баки |
-| ~ | `breed-pavlov.png` | Павловская | Курятник | 5 | Стоит временная: генератор не нарисовал ни хохла, ни мохнатых ног, и вышла третья белая птица |
+| ✅ | `breed-pavlov.png` | Павловская | Курятник | 5 | Кремовый хохол-помпон, тёмное тело в крапинку |
 | ✅ | `breed-vietnam.png` | Вьетнамская вислобрюхая | Свинарник | 5 | Чёрная свинья, брюхо до земли |
 | ✅ | `breed-kuchin.png` | Кучинская юбилейная | Курятник | 6 | Рыже-бурая, золотая шея |
 | ✅ | `breed-holmgus.png` | Холмогорский гусь | Гусятник | 7 | Белый гусь, шишка на клюве |
@@ -69,7 +69,7 @@ cute cartoon black hen with golden neck feathers and a red comb, 3/4 view facing
 Орловская ситцевая
 cute cartoon mottled orange white and black hen with a beard and thick cheek feathers, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
-Павловская — переснять: нужен хохол и не белая
+Павловская
 cute cartoon hen with a huge round fluffy feather crest covering the top of its head like a pompom, speckled black and gold plumage, thick feathers down its legs, tiny comb, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
 
 Кучинская юбилейная
@@ -135,7 +135,7 @@ cute cartoon farm horse with a brown coat, a black mane and tail, and thick shag
 клубничные, чем рыжие, но масть от холмогорской отличают уверенно.
 
 Курятник закрыт: шесть пород, у каждой своя масть — белая, чёрная, белая
-высокая, рыжая с белой головой, серебристая, рыжая в крапинку. Десять сначала
+высокая, рыжая с белой головой, тёмная с кремовым хохлом, рыжая. Десять сначала
 завели зря: разницу между третьей и четвёртой белой курицей в плитке всё равно
 не видно, а картинок на них уходит столько же.
 
