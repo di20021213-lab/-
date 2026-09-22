@@ -39,7 +39,10 @@ button{font:inherit;color:inherit;cursor:pointer}
 .nickbox small{color:var(--ink-soft);font-size:11px}
 .meters{display:flex;flex-direction:column;gap:3px;flex:1 1 170px;min-width:150px}
 .mrow{display:flex;align-items:center;gap:5px}
-.mrow>i{font-style:normal;font-size:13px;width:15px;text-align:center;flex:none}
+.mrow>i{font-style:normal;font-size:13px;width:22px;text-align:center;flex:none}
+/* Пёс и кот — картинками, а не эмодзи. Высота по строке, ширина своя:
+   сидящий зверь уже, чем квадрат, и квадрат бы его сплющил. */
+.mrow>i img.pet{width:auto;height:20px;vertical-align:middle;image-rendering:auto}
 .bar{position:relative;height:12px;flex:1;border:2px solid var(--wood-dk);border-radius:7px;background:#7a5a37;overflow:hidden}
 .bar span{position:absolute;inset:0;width:0}
 .bar em{position:absolute;inset:0;display:grid;place-items:center;font-style:normal;font-size:9px;font-weight:700;
@@ -335,8 +338,9 @@ body.booting #app, body.booting .dock{visibility:hidden}
     <div class="nickbox"><b id="nick">test123 12345</b><small>ур. <span class="num" id="lvl">1</span></small></div>
     <div class="meters">
       <div class="mrow"><i>⭐</i><div class="bar xp"><span id="xpbar"></span><em id="xptxt"></em></div></div>
-      <div class="mrow"><i>🐕</i><div class="bar dog"><span id="dogbar"></span><em id="dogtxt"></em></div></div>
-      <div class="mrow"><i>🐈</i><div class="bar cat"><span id="catbar"></span><em id="cattxt"></em></div></div>
+      <div class="mrow"><i><img class="pet" src="img/iso/prop-dog.png" alt="Пёс"></i><div class="bar dog"><span id="dogbar"></span><em id="dogtxt"></em></div></div>
+      <div class="mrow"><i><img class="pet" src="img/iso/prop-cat.png" alt="Кот">
+</i><div class="bar cat"><span id="catbar"></span><em id="cattxt"></em></div></div>
       <div class="mrow"><i>⚡</i><div class="bar en"><span id="enbar"></span><em id="entxt"></em></div></div>
     </div>
     <div class="purse">
