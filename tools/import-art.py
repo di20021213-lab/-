@@ -180,6 +180,86 @@ def drop_ground(im, band=0.12):
     return im
 
 
+def drop_base(im):
+    """Срезает у постройки подставку — кусок газона, на котором она стоит.
+
+    Генератор почти всегда рисует постройку на плите с травой, а во дворе
+    своя земля, и такая плита торчит. Заливаем землю от нижней кромки:
+    траву по цвету, песчаную дорожку тоже.
+
+    Дальше оставляем только самый большой связный кусок. Без этого на
+    картинке зависает всё, что стояло на газоне, а не на постройке: у
+    свинарника это плетень, который без земли рассыпается на столбики,
+    плюс светлый кант самой плиты.
+    """
+    im = im.convert("RGBA")
+    px = im.load()
+    w, h = im.size
+    box = im.getbbox()
+    if not box:
+        return im
+    hsv = im.convert("RGB").convert("HSV")
+    hp, sp, vp = [c.load() for c in hsv.split()]
+
+    # Зелень — признак однозначный: ни дерева, ни соломы такого тона нет.
+    # Песчаную дорожку берём тесным допуском: расширишь — заливка пойдёт по
+    # соломе на крыше и по светлым венцам, это уже проверено.
+    def ground(x, y):
+        H, S, V = hp[x, y], sp[x, y], vp[x, y]
+        if 40 <= H <= 120 and S > 35:
+            return True                                  # трава
+        return 15 <= H <= 35 and S < 90 and V > 190      # песчаная дорожка
+
+    # Пускаем заливку отовсюду, где земля касается вырезанного фона. Сначала
+    # стартовали только от нижней кромки — и дорожка перед второй дверью
+    # уцелела: она выше кромки, заливка до неё не дошла.
+    seen = bytearray(w * h)
+    q = deque()
+    for y in range(h):
+        for x in range(w):
+            if px[x, y][3] > 40 or seen[y * w + x]:
+                continue
+            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if 0 <= nx < w and 0 <= ny < h and px[nx, ny][3] > 40 \
+                   and ground(nx, ny) and not seen[ny * w + nx]:
+                    seen[ny * w + nx] = 1
+                    q.append((nx, ny))
+    while q:
+        x, y = q.popleft()
+        px[x, y] = (px[x, y][0], px[x, y][1], px[x, y][2], 0)
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and not seen[ny * w + nx]:
+                seen[ny * w + nx] = 1
+                if px[nx, ny][3] > 40 and ground(nx, ny):
+                    q.append((nx, ny))
+
+    # самый большой связный кусок — сама постройка, остальное обрезки
+    seen = bytearray(w * h)
+    best, best_n = None, 0
+    for sy in range(h):
+        for sx in range(w):
+            if seen[sy * w + sx] or px[sx, sy][3] <= 40:
+                continue
+            comp, qq = [], deque([(sx, sy)])
+            seen[sy * w + sx] = 1
+            while qq:
+                x, y = qq.popleft()
+                comp.append((x, y))
+                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if 0 <= nx < w and 0 <= ny < h and not seen[ny * w + nx] and px[nx, ny][3] > 40:
+                        seen[ny * w + nx] = 1
+                        qq.append((nx, ny))
+            if len(comp) > best_n:
+                best, best_n = comp, len(comp)
+    if best:
+        keep = set(best)
+        for y in range(h):
+            for x in range(w):
+                if px[x, y][3] and (x, y) not in keep:
+                    px[x, y] = (px[x, y][0], px[x, y][1], px[x, y][2], 0)
+    return im
+
+
 def shadow(im):
     """Общая мягкая тень — такая же, как у отрисованных пород."""
     box = im.getbbox()
@@ -214,6 +294,8 @@ def prepare(path, keep_shadow=False, flip=False, item=False, palette=None, prop=
         raise SystemExit("после обрезки ничего не осталось — проверь картинку")
     im = im.crop(box)
     if house:
+        im = drop_base(im)
+        im = im.crop(im.getbbox())
         # Постройке важна ширина: во дворе она задаёт масштаб, а высота идёт
         # за пропорцией. Курятник и гусятник мельче хлевов — их ширину
         # задаём отдельно, иначе двор выровняется и потеряет иерархию.

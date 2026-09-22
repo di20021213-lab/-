@@ -239,6 +239,133 @@ cute cartoon open paper sack filled with golden grain pellets, 3/4 view, hand-pa
 
 ## Постройки
 
+Все пять хлевов заменены присланными: срубы с прямой двускатной крышей
+вместо американских амбаров. Огород, Сад и Теплица остались прежними.
+
+Исходники — в `assets-src/art/houses/`, отдельно от пород и иконок.
+Импорт флагом `--house`, ширина через `--w`: во дворе масштаб идёт по
+ширине, курятник с гусятником мельче хлевов.
+
+```
+python3 tools/import-art.py assets-src/art/houses/korovy.jpg korovy --house
+python3 tools/import-art.py assets-src/art/houses/kury.jpg   kury   --house --w 300
+```
+
+Генератор почти всегда ставит постройку на плиту с газоном, а во дворе
+своя земля. `--house` эту плиту срезает: заливает зелень от вырезанного
+фона, а потом оставляет только самый большой связный кусок — иначе в
+воздухе виснет всё, что стояло на газоне, а не на постройке.
+
+Расширять правило с зелени на песок не вышло: дорожка того же тона, что
+солома на крыше и светлые венцы, и заливка шла по ним. Поэтому у
+свинарника перед дверью остался клочок дорожки — в игровом размере он
+читается порожком.
+
+Что просить у генератора: `log walls` и `simple straight gable roof` —
+ломаная крыша и белые доски и есть американский амбар. Плюс в конец
+`the building alone with nothing under it, no ground, no grass base`,
+иначе плита приедет снова. Ракурс у всех один, хвост запроса одинаковый:
+постройки стоят во дворе рядом, разнобой в углах виден сразу.
+
+Теплица теперь выбивается сильнее всего: она из набора, современная,
+из поликарбоната, а двор вокруг деревянный.
+
+## Если генератор отказал
+
+Leonardo иногда отвечает «did not meet content safety guidelines» на совершенно
+безобидный запрос про птицу. Почему — неизвестно, но по пяти прогонам видна
+закономерность в том, куда поставлен цвет:
+
+| Не прошло | Прошло |
+|---|---|
+| `grey goose with a long neck` | `domestic farm goose with soft grey and white feathers` |
+| `brown domestic farm goose with a swan-like neck` | `white domestic farm goose with a knob above its beak` |
+| `brown farm goose with a long graceful neck` | `heavy domestic farm goose with grey and white feathers` |
+| `huge fat pink sow with … her … sagging belly` | `farm pig with a big round heavy body and large floppy ears` |
+| `bay draft horse with feathered hooves` | — |
+| `farm horse with a brown coat …` | — |
+| `workhorse with a chestnut coat …` | — |
+| `pony with a warm brown coat …` | `farm horse standing in profile, big friendly eyes` |
+
+Падали те, где цвет стоит прямо перед словом goose; проходили те, где цвет
+описан после существительного: «goose **with** … feathers». Слово brown не
+прошло ни разу. Это наблюдение, а не правило фильтра — сначала просто повтори
+тот же запрос, классификатор шумит и со второго раза часто пропускает.
+
+## Корма
+
+Все пятнадцать кормов нарисованы и все пятнадцать различаются: заглушек из
+набора реквизита не осталось. Последними ушли три — набор моментальных
+подкормок и отруби были одинаковыми белыми бидонами, жмых пустым ящиком.
+
+Исходники иконок лежат отдельно, в `assets-src/art/items/`: массовый
+переимпорт пород идёт по `assets-src/art/*.jpg` и иначе принял бы иконку
+за животное. Импортируются тем же скриптом с флагом `--item` — он не
+равняет их по общей ширине и вписывает в квадрат 150, как лежат иконки
+из набора:
+
+```
+for f in assets-src/art/items/*.jpg; do
+  python3 tools/import-art.py "$f" "$(basename "$f" .jpg)" --item
+done
+```
+
+Новую иконку надо не только положить в `public/img/iso/`, но и вписать в
+`ISO.feed` в `public/game.js` — иначе клиент продолжит рисовать эмодзи.
+
+### Сорта корма
+
+В оригинале сорт — бумажный пакет с картинкой животного на этикетке, а сорта
+разведены цветом; у нас это уже заложено эмодзи 🟥 🟩 🟦 🟪 в `content.js`,
+но нарисованы сеновал и три ящика с овощами из набора.
+
+Сделано так: нарисован один красный пакет (`assets-src/art/items/low.jpg`),
+остальные три получаются сменой тона, а набор корма — стопкой из трёх пачек.
+Всё это пересобирает `python3 tools/make-feed-grades.py`, поэтому исходник
+один, а иконок пять.
+
+Перекрашивается только мешок: окно по тону оставляет картинку на этикетке
+в покое, иначе вышла бы синяя корова на синей траве. Тон у пакета лежит
+около нуля и заворачивается через 255, у коровы начинается с 16, трава на
+64, небо на 128 — окна в ±12 хватает, чтобы их разделить.
+
+Стопку складываем из пачек без теней и ставим общую тень уже на неё:
+иначе под каждым пакетом остаётся своя клякса.
+
+```text
+Косточка
+cute cartoon dog bone, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+
+Рыбка
+cute cartoon small fresh fish, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+
+Витаминная добавка
+cute cartoon glass jar of vitamin pills with two pills lying beside it, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+
+Перепревший навоз
+cute cartoon heap of dark compost with a wooden pitchfork stuck in it, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+
+Торфяной субстрат
+cute cartoon open burlap sack filled with dark crumbly soil, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+
+Комбикорм универсальный
+cute cartoon open paper sack filled with golden grain pellets, 3/4 view, hand-painted 2D casual game item icon, plain flat background
+```
+
+## Потом, если захочется
+
+Председатель заменён: был пиксельный бюст 96×96 из набора Kenney, и это
+был ковбой в шляпе. Теперь рисованный портрет в кепке, `--prop` кладёт
+такие в `public/img/iso/prop-<id>.png` и не ставит им тень — под парящей
+головой она выглядит пятном. Показывается он в самом низу двора, так что
+при прокрутке вверх его не видно: это не поломка, просто он ниже сгиба.
+
+Пёс и кот тоже заменены: сидят в шапке рядом со своими полосками сытости,
+`prop-dog.png` и `prop-cat.png`. Сидящая фигура там читается лучше стоящей —
+места в строке мало.
+
+## Постройки
+
 Живность и корма присланные, а постройки до сих пор рисует
 `tools/make-scene.py` — и четыре из пяти хлевов вышли американскими
 амбарами. Дело не в цвете: у коровника и конюшни ломаная крыша (gambrel),
