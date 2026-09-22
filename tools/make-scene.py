@@ -367,8 +367,8 @@ def build_background():
                 img.alpha_composite(t2, (x, max(0, ty)))
             x += rnd.randint(int(W * step_lo), int(W * step_hi))
 
-    treeline(0.135, 0.07, 0.10, 0.028, 0.055, 0.78, True)    # дальний план
-    treeline(0.185, 0.10, 0.155, 0.045, 0.085, 1.0, False)   # ближний
+    treeline(0.085, 0.07, 0.10, 0.028, 0.055, 0.78, True)    # дальний план
+    treeline(0.125, 0.10, 0.155, 0.045, 0.085, 1.0, False)   # ближний
 
     # двор
     dm = dirt_mask(size)
@@ -386,16 +386,19 @@ def build_background():
         ww = rnd.randint(60, 115)
         b2 = b.resize((ww, max(1, round(b.height * ww / b.width))), Image.LANCZOS)
         bx = rnd.randrange(0, W - ww)
-        by = rnd.randint(int(H * 0.20), int(H * 0.27))
+        by = rnd.randint(int(H * 0.13), int(H * 0.19))
         if dmp[min(W - 1, bx + ww // 2), min(H - 1, by + b2.height)] > 60:
             continue                      # на вытоптанной земле кусты не растут
         img.alpha_composite(b2, (bx, by))
 
-    # забор: поперёк за постройками и по бокам с уходом в перспективу
+    # Забор: поперёк за постройками и по бокам с уходом в перспективу.
+    # Высота выбрана не на глаз: самая высокая постройка (конюшня) занимает
+    # во дворе полосу 15–34% высоты, поэтому низ забора держим выше 15%,
+    # иначе рейки режут крыши заднего ряда.
     d = ImageDraw.Draw(img)
-    board_fence(d, [(-20, H * 0.235), (W + 20, H * 0.235)], H * 0.072)
-    board_fence(d, [(-6, H * 0.245), (-30, H * 1.05)], H * 0.075)
-    board_fence(d, [(W + 6, H * 0.245), (W + 30, H * 1.05)], H * 0.075)
+    board_fence(d, [(-20, H * 0.148), (W + 20, H * 0.148)], H * 0.062)
+    board_fence(d, [(-6, H * 0.158), (-30, H * 1.05)], H * 0.075)
+    board_fence(d, [(W + 6, H * 0.158), (W + 30, H * 1.05)], H * 0.075)
 
     # мягкая виньетка, чтобы края не спорили с постройками
     vg = Image.new("L", size, 0)
@@ -541,15 +544,32 @@ def nails(w=420, h=320):
     return im
 
 
+def supplied(key):
+    """Постройку уже заменили присланной картинкой — рисовать её не надо.
+
+    Без этой проверки скрипт затирает присланные постройки своими: фон и
+    хлева он собирает одним прогоном, и правка фона уносит с собой двор.
+    """
+    d = os.path.join(ROOT, "assets-src", "art", "houses")
+    return any(os.path.exists(os.path.join(d, key + ext))
+               for ext in (".png", ".jpg", ".jpeg", ".webp"))
+
+
 # ----------------------------------------------------------------- сборка
 if __name__ == "__main__":
     W_BIG, W_MID = 420, 300
-    save(fit(village("Barn1", "cherepica", "brevna", 1), W_BIG), "house-korovy")
-    save(fit(village("Barn1", "dranka", "temdoski", 2), W_BIG), "house-koni")
-    save(fit(village("Barn2", "cherepica", "mazanka", 3), W_BIG), "house-svini")
-    save(fit(village("Shed", "soloma", "mazanka", 4), W_MID), "house-kury")
-    save(fit(village("Shed", "soloma", "doski", 5), W_MID), "house-gusi")
-    print("постройки перекрашены")
+    HOUSES_OWN = [("korovy", "Barn1", "cherepica", "brevna",  1, W_BIG),
+                  ("koni",   "Barn1", "dranka",    "temdoski", 2, W_BIG),
+                  ("svini",  "Barn2", "cherepica", "mazanka",  3, W_BIG),
+                  ("kury",   "Shed",  "soloma",    "mazanka",  4, W_MID),
+                  ("gusi",   "Shed",  "soloma",    "doski",    5, W_MID)]
+    drawn = []
+    for key, shape, roof, wall, seed, w in HOUSES_OWN:
+        if supplied(key):
+            continue
+        save(fit(village(shape, roof, wall, seed), w), "house-" + key)
+        drawn.append(key)
+    print("построек отрисовано: " + (", ".join(drawn) if drawn else "ни одной, все присланные"))
 
     save(fit(wattle(), 220), "prop-pleten")
     save(fit(well(), 150), "prop-kolodec")
