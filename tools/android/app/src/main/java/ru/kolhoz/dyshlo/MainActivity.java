@@ -22,8 +22,11 @@ public class MainActivity extends Activity {
     s.setDomStorageEnabled(true);          // без него прогресс не сохранится
     s.setAllowFileAccess(true);
     s.setDatabaseEnabled(true);
-    s.setLoadWithOverviewMode(true);
+    // Страница объявляет свою ширину тегом viewport, и WebView должен её
+    // слушаться. С overview-режимом он вместо этого ужимает всю страницу
+    // под экран, и шрифт становится нечитаемым.
     s.setUseWideViewPort(true);
+    s.setLoadWithOverviewMode(false);
     s.setTextZoom(100);                    // системный «крупный шрифт» ломает вёрстку
     web.setOverScrollMode(View.OVER_SCROLL_NEVER);
     setContentView(web);

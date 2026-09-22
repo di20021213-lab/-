@@ -1,3 +1,8 @@
+<meta charset="utf-8">
+<!-- Без этого тега телефон считает страницу настольной, шириной 980 точек,
+     и ужимает её целиком: шрифт становится нечитаемым, а мобильные правила
+     ниже (560 и 620 точек) не срабатывают ни разу. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Червонэ дышло</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🐔</text></svg>">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -302,10 +307,38 @@ button{font:inherit;color:inherit;cursor:pointer}
   .bld .chip{font-size:10px;padding:0 6px;bottom:-13px}
 }
 @media (max-width:620px){
+  /* На телефоне двор по ширине упирается в экран, а по высоте остаётся
+     полоса пустоты до нижней панели. Отдаём её сцене: пропорция мягко
+     вытягивается, постройки расходятся, фон подрезается по бокам. */
+  .iso{aspect-ratio:16/12}
   .shop{grid-template-columns:1fr}
   .shop-nav{flex-direction:row;flex-wrap:wrap;max-height:none}
   .shop-nav button.sub{margin-left:0}
 }
+/* Телефон в повороте: экран низкий, и шапка с аркой съедали его целиком —
+   двору оставалась полоска. Поэтому здесь арка убирается, шапка ужимается,
+   строка задания уходит (она открывается кнопкой «Задания»), а двор
+   меряется по высоте, а не по ширине, и встаёт посередине. */
+@media (orientation:landscape) and (max-height:560px){
+  .arch{display:none}
+  .hud{padding:3px 16px}
+  .ava{width:30px;height:30px}
+  .mrow{gap:4px}
+  .quick button{width:27px;height:27px;font-size:14px}
+  .qstrip{display:none}
+  /* Сцена в повороте узкая: названия построек налезают друг на друга, а
+     пузырь Председателя закрывает четверть двора. Оставляем счётчики —
+     название есть в окне постройки, подсказки крутятся и в портрете. */
+  .bld .chip b.nm{display:none}
+  .bld .chip{font-size:10px;padding:0 6px;bottom:-13px}
+  .chair{display:none}
+  #app{padding-bottom:58px}
+  /* Рамку двора ужимаем вместе со сценой: если оставить её во всю ширину,
+     фон растянется на неё и подрежет забор с деревьями. */
+  .iso{aspect-ratio:16/10;width:auto;height:calc(100dvh - 215px);max-width:100%;margin:0 auto}
+  .yard{width:fit-content;margin:0 auto;padding:6px 6px 10px}
+}
+
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 /* ---------- спрайты ----------
    Пиксель-арт нельзя сглаживать при масштабировании, иначе получается каша. */
