@@ -1,0 +1,6 @@
+# Сборочный мусор Gradle и копия страницы, которую кладёт задача copyGame:
+# держать её в репозитории нельзя, она разойдётся с dist/index.html.
+build/
+.gradle/
+app/build/
+app/src/main/assets/

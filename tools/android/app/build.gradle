@@ -1,0 +1,28 @@
+plugins { id "com.android.application" }
+
+android {
+  namespace "ru.kolhoz.dyshlo"
+  compileSdk 34
+  defaultConfig {
+    applicationId "ru.kolhoz.dyshlo"
+    minSdk 24
+    targetSdk 34
+    versionCode 1
+    versionName "1.0"
+  }
+  buildTypes {
+    debug { }
+  }
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+}
+
+/* Страницу игры кладём в assets прямо из dist: отдельной копии в репозитории
+   не держим, иначе она разойдётся со сборкой. */
+tasks.register("copyGame", Copy) {
+  from "${rootDir}/../../dist/index.html"
+  into "${projectDir}/src/main/assets"
+}
+preBuild.dependsOn "copyGame"
