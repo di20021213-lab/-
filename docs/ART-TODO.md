@@ -237,8 +237,47 @@ cute cartoon open paper sack filled with golden grain pellets, 3/4 view, hand-pa
 `prop-dog.png` и `prop-cat.png`. Сидящая фигура там читается лучше стоящей —
 места в строке мало.
 
-Рисованного в игре больше не осталось ничего пиксельного и ничего
-подставленного не по смыслу.
+## Постройки
+
+Живность и корма присланные, а постройки до сих пор рисует
+`tools/make-scene.py` — и четыре из пяти хлевов вышли американскими
+амбарами. Дело не в цвете: у коровника и конюшни ломаная крыша (gambrel),
+у свинарника башенка и косые кресты на воротах — по этим приметам и
+узнаётся молочная ферма со Среднего Запада. Перекраска в деревенские
+цвета формы не меняет. Курятник и гусятник ближе к делу — обычные сараи
+под соломой. Огород, Сад и Теплица вопросов не вызывают.
+
+Импортируются флагом `--house`, ширина задаётся `--w`: во дворе масштаб
+идёт по ширине, и курятник с гусятником должны остаться мельче хлевов,
+иначе двор выровняется и потеряет иерархию.
+
+```
+python3 tools/import-art.py картинка.jpg korovy --house          # 420, хлев
+python3 tools/import-art.py картинка.jpg kury   --house --w 300  # мельче
+```
+
+Ракурс у всех пяти должен быть один: они стоят во дворе рядом, и разнобой
+в углах виден сразу. Поэтому хвост запроса у всех одинаковый до запятой.
+Ключевые слова — `log walls` и `simple straight gable roof`: ломаная крыша
+и белые доски и есть американский амбар. Само слово `barn` тоже тянет
+туда, и если генератор упрётся — его стоит убрать.
+
+```text
+Курятник
+cute cartoon small russian village hen house, log walls, simple straight gable roof covered with straw thatch, a tiny doorway with a plank ramp, one small window with carved trim, isometric 3/4 view from above, front wall facing left, right side wall visible, hand-painted 2D casual game art, plain flat background
+
+Гусятник
+cute cartoon low long russian village goose shed, weathered plank walls, simple straight gable roof covered with straw thatch, a wide low doorway, isometric 3/4 view from above, front wall facing left, right side wall visible, hand-painted 2D casual game art, plain flat background
+
+Свинарник
+cute cartoon long low russian village pig barn, log walls, simple straight gable roof of wooden shingles, a wide plank door, a small fenced pen beside it, isometric 3/4 view from above, front wall facing left, right side wall visible, hand-painted 2D casual game art, plain flat background
+
+Коровник
+cute cartoon big russian village cow barn, log walls, simple straight gable roof of wooden shingles, a wide plank door with a hay loft hatch above it, isometric 3/4 view from above, front wall facing left, right side wall visible, hand-painted 2D casual game art, plain flat background
+
+Конюшня
+cute cartoon tall russian village stable, log walls, simple straight gable roof of wooden shingles, a wide plank door with a horseshoe nailed above it, isometric 3/4 view from above, front wall facing left, right side wall visible, hand-painted 2D casual game art, plain flat background
+```
 
 ## Откуда что взялось
 

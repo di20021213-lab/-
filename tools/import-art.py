@@ -15,6 +15,7 @@
     python3 tools/import-art.py картинка.png rusbel --flip      # смотрит влево
     python3 tools/import-art.py картинка.png bone --item        # иконка предмета
     python3 tools/import-art.py картинка.png farmer --prop      # портрет, реквизит
+    python3 tools/import-art.py картинка.png kury --house --w 300   # постройка
 """
 from PIL import Image, ImageDraw, ImageFilter
 from collections import deque
@@ -28,6 +29,7 @@ WIDTH = 200                       # столько же, сколько у ос�
 HEIGHT = 330                      # и не выше самой рослой: во дворе размер задаётся
                                   # шириной, и долговязая птица переросла бы постройку
 ITEM = 150                        # иконки кормов и ресурсов: вписываем в квадрат
+HOUSE = 420                       # постройки: по ширине, как самые крупные из нынешних
 
 
 def needs_flip(key):
@@ -196,7 +198,8 @@ def shadow(im):
     return sh
 
 
-def prepare(path, keep_shadow=False, flip=False, item=False, palette=None, prop=False):
+def prepare(path, keep_shadow=False, flip=False, item=False, palette=None, prop=False,
+            house=False, width=HOUSE):
     im = Image.open(path)
     if palette:
         import recolor
@@ -210,6 +213,13 @@ def prepare(path, keep_shadow=False, flip=False, item=False, palette=None, prop=
     if not box:
         raise SystemExit("после обрезки ничего не осталось — проверь картинку")
     im = im.crop(box)
+    if house:
+        # Постройке важна ширина: во дворе она задаёт масштаб, а высота идёт
+        # за пропорцией. Курятник и гусятник мельче хлевов — их ширину
+        # задаём отдельно, иначе двор выровняется и потеряет иерархию.
+        k = width / im.width
+        im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
+        return shadow(im)
     if item:
         # Иконку предмета не надо равнять по ширине с остальными: она лежит в
         # плитке магазина, а не стоит во дворе рядом с постройкой. Просто
@@ -235,12 +245,15 @@ if __name__ == "__main__":
         raise SystemExit(__doc__)
     src, key = args[0], args[1]
     prop = "--prop" in sys.argv
+    house = "--house" in sys.argv
+    width = int(sys.argv[sys.argv.index("--w") + 1]) if "--w" in sys.argv else HOUSE
     item = "--item" in sys.argv or prop
     flip = "--flip" in sys.argv or needs_flip(key)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     im = prepare(src, keep_shadow="--keep-shadow" in sys.argv, flip=flip, item=item,
-                 palette=wanted_palette(key), prop=prop)
+                 palette=wanted_palette(key), prop=prop, house=house, width=width)
     os.makedirs(OUT, exist_ok=True)
-    dst = os.path.join(OUT, ("prop-" if prop else "feed-" if item else "breed-") + key + ".png")
+    dst = os.path.join(OUT, ("house-" if house else "prop-" if prop else
+                            "feed-" if item else "breed-") + key + ".png")
     im.save(dst, optimize=True)
     print("готово:", dst, im.size)
