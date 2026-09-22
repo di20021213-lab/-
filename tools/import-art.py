@@ -17,7 +17,7 @@
     python3 tools/import-art.py картинка.png farmer --prop      # портрет, реквизит
     python3 tools/import-art.py картинка.png kury --house --w 300   # постройка
 """
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 from collections import deque
 import os, sys
 
@@ -30,6 +30,7 @@ HEIGHT = 330                      # и не выше самой рослой: в
                                   # шириной, и долговязая птица переросла бы постройку
 ITEM = 150                        # иконки кормов и ресурсов: вписываем в квадрат
 HOUSE = 420                       # постройки: по ширине, как самые крупные из нынешних
+INK = (48, 48, 56)                # контур как у набора: им обведены кусты, забор, реквизит
 
 
 def needs_flip(key):
@@ -260,6 +261,45 @@ def drop_base(im):
     return im
 
 
+def ink_outline(im, width=3):
+    """Обводит силуэт тёмным контуром — тем же, каким обведён весь набор.
+
+    Без неё присланная постройка читается наклейкой: у кустов, забора и
+    реквизита контур плотный и холодный, а у неё свой, тонкий и тёплый.
+    Контур наращиваем наружу расширением маски, чтобы не съесть рисунок.
+    """
+    a = im.split()[3]
+    grown = a.filter(ImageFilter.MaxFilter(width * 2 + 1))
+    ring = ImageChops.subtract(grown, a)
+    out = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    out.paste(Image.new("RGBA", im.size, INK + (255,)), (0, 0), ring)
+    out.alpha_composite(im)
+    return out
+
+
+def house_shadow(im):
+    """Тень под постройкой — по её размеру, а не по животному.
+
+    Общая тень рассчитана на спрайт в 200 пикселей: под постройкой в 420
+    она превращается в невидимое пятнышко, и та стоит на земле наклейкой.
+    Здесь тень идёт по всей подошве и уходит вправо-вниз, за светом сцены.
+    """
+    box = im.getbbox()
+    if not box:
+        return im
+    x0, y0, x1, y1 = box
+    w = x1 - x0
+    pad = Image.new("RGBA", (im.width, im.height + int(w * 0.10)), (0, 0, 0, 0))
+    sh = Image.new("RGBA", pad.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(sh)
+    cx = (x0 + x1) / 2 + w * 0.04
+    half, thick = w * 0.46, w * 0.055
+    d.ellipse([cx - half, y1 - thick, cx + half, y1 + thick * 1.6], fill=(38, 32, 22, 110))
+    sh = sh.filter(ImageFilter.GaussianBlur(max(4, w * 0.035)))
+    sh.alpha_composite(im)
+    return sh
+
+
 def shadow(im):
     """Общая мягкая тень — такая же, как у отрисованных пород."""
     box = im.getbbox()
@@ -301,7 +341,7 @@ def prepare(path, keep_shadow=False, flip=False, item=False, palette=None, prop=
         # задаём отдельно, иначе двор выровняется и потеряет иерархию.
         k = width / im.width
         im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
-        return shadow(im)
+        return house_shadow(ink_outline(im))
     if item:
         # Иконку предмета не надо равнять по ширине с остальными: она лежит в
         # плитке магазина, а не стоит во дворе рядом с постройкой. Просто
