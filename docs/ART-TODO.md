@@ -233,7 +233,23 @@ cute cartoon open paper sack filled with golden grain pellets, 3/4 view, hand-pa
 при прокрутке вверх его не видно: это не поломка, просто он ниже сгиба.
 
 Пёс и кот пока эмодзи в шапке — если дашь картинки, заведу им спрайты тем
-же флагом.
+же флагом `--prop`.
+
+```text
+Пёс
+cute cartoon shaggy farm dog sitting, with warm chestnut and white fur and floppy ears, 3/4 view facing right, hand-painted 2D casual game art, plain flat background
+
+Кот
+cute cartoon farm cat sitting with a fluffy tail, grey and white striped fur, 3/4 view facing right, hand-painted 2D casual game art, plain flat background
+```
+
+Симментальскую стоит переснять: пятна вышли ярко-красными, скорее
+клубничными, чем рыжими. Слово `red` фильтр пропускает, но и рисует
+буквально красным, поэтому берём обход, сработавший на гусе:
+
+```text
+cute cartoon dairy cow with warm chestnut and white patches and a white face, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+```
 
 ## Откуда что взялось
 

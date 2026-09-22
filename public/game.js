@@ -192,13 +192,25 @@ function footer(win, buttons){
   return ft;
 }
 
+/** Иконка награды: рисованный спрайт, если он для неё есть, иначе эмодзи.
+ *  Серебро, опыт и кристаллы спрайтов не имеют — они не предметы. */
+function rewardIcon(rw){
+  var kind = rw.t === "feed" ? "feed" : rw.t === "res" ? "res" : null;
+  return kind ? ic(kind, rw.id, rw.em) : "<i class='em'>" + rw.em + "</i>";
+}
+
 /* ---------- модалка «Задание выполнено» ---------- */
 function showQuestDone(q){
   var w = makeWin("Задания", "sm");
   var box = el("div", "reward-box");
   box.appendChild(el("div", null, "Задание «" + esc(q.t) + "» выполнено. Ваша награда"));
-  box.appendChild(el("div", "im", q.rw.em));
-  box.appendChild(el("b", null, esc(q.rw.nm) + (q.rw.n ? " — " + q.rw.n : "")));
+  var tile = el("div", "im");
+  tile.innerHTML = rewardIcon(q.rw);
+  box.appendChild(tile);
+  /* Количество отдельной строкой под плиткой — как в оригинале игры.
+     В названии его больше не повторяем, иначе одно и то же дважды. */
+  if(q.rw.n) box.appendChild(el("div", "qty", fmt(q.rw.n)));
+  box.appendChild(el("b", null, esc(q.rw.nm)));
   w.body.appendChild(box);
   footer(w, [{label:"Закрыть", on:function(){ closeWin(w.scrim); }}]);
 }
@@ -963,7 +975,8 @@ function renderQuestStrip(){
   if(qview > QUESTS.length - 1) qview = QUESTS.length - 1;
   if(qview < 0) qview = 0;
   var q = QUESTS[qview], done = qview < S.quest;
-  var ic = el("div", "ic", done ? "✅" : q.rw.em);
+  var icon = el("div", "ic");
+  icon.innerHTML = done ? "<i class='em'>✅</i>" : rewardIcon(q.rw);
   var body = el("div", "body");
   body.innerHTML = "<b>" + esc(q.t) + "</b><small>" + esc(q.d) + "</small>" +
     "<small class='rw'>Награда: " + esc(q.rw.nm) + (q.rw.n ? ". Количество: " + q.rw.n : "") +
@@ -973,7 +986,7 @@ function renderQuestStrip(){
   up.onclick = function(){ qview = Math.max(0, qview - 1); renderQuestStrip(); };
   dn.onclick = function(){ qview = Math.min(QUESTS.length - 1, qview + 1); renderQuestStrip(); };
   pg.appendChild(up); pg.appendChild(dn);
-  s.appendChild(ic); s.appendChild(body); s.appendChild(pg);
+  s.appendChild(icon); s.appendChild(body); s.appendChild(pg);
 }
 function renderTabs(){
   var t = $("tabs");
