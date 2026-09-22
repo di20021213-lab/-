@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <meta charset="utf-8">
 <!-- Без этого тега телефон считает страницу настольной, шириной 980 точек,
      и ужимает её целиком: шрифт становится нечитаемым, а мобильные правила
@@ -30,6 +31,11 @@ body{margin:0;background:var(--grass-dk);color:var(--ink);
 #app{max-width:1040px;margin:0 auto;padding:0 16px 150px}
 h1,h2,h3{font-family:"Russo One","PT Sans",sans-serif;font-weight:400;margin:0}
 button{font:inherit;color:inherit;cursor:pointer}
+/* Телефон подсвечивает нажатие синим прямоугольником по всей рамке кнопки —
+   на постройке во дворе это выглядит заплаткой поверх сцены. Гасим подсветку
+   и выделение текста: по кнопкам не читают, по ним нажимают. */
+button,.bld,.deco,.tabs button,.quick button{-webkit-tap-highlight-color:transparent}
+button,.bld{-webkit-user-select:none;user-select:none}
 .num{font-variant-numeric:tabular-nums}
 .hide{display:none!important}
 
