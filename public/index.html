@@ -298,6 +298,9 @@ button,.bld{-webkit-user-select:none;user-select:none}
 .reward-box .im{width:70px;height:70px;border:3px solid var(--wood-dk);border-radius:8px;background:#5b8fc9;
   display:grid;place-items:center;font-size:36px}
 .reward-box .im img{max-width:62px;max-height:62px}
+/* В списке заданий награда тоже рисованная, а не эмодзи: значки сортов
+   корма выглядели там цветными квадратиками. */
+.row>.ic img{max-width:32px;max-height:32px}
 .reward-box .qty{font:700 22px/1 "Russo One","PT Sans",sans-serif;margin-top:-2px}
 
 #toasts{position:fixed;left:50%;bottom:132px;transform:translateX(-50%);z-index:60;width:min(420px,92vw);
@@ -313,36 +316,61 @@ button,.bld{-webkit-user-select:none;user-select:none}
   .bld .chip{font-size:10px;padding:0 6px;bottom:-13px}
 }
 @media (max-width:620px){
-  /* На телефоне двор по ширине упирается в экран, а по высоте остаётся
-     полоса пустоты до нижней панели. Отдаём её сцене: пропорция мягко
-     вытягивается, постройки расходятся, фон подрезается по бокам. */
-  .iso{aspect-ratio:16/12}
   .shop{grid-template-columns:1fr}
   .shop-nav{flex-direction:row;flex-wrap:wrap;max-height:none}
   .shop-nav button.sub{margin-left:0}
 }
-/* Телефон в повороте: экран низкий, и шапка с аркой съедали его целиком —
-   двору оставалась полоска. Поэтому здесь арка убирается, шапка ужимается,
-   строка задания уходит (она открывается кнопкой «Задания»), а двор
-   меряется по высоте, а не по ширине, и встаёт посередине. */
-@media (orientation:landscape) and (max-height:560px){
+/* ---------- телефон ----------
+   Страница становится колонкой во всю высоту экрана: шапка, двор, панель.
+   Раньше всё лежало обычным потоком, панель висела снизу отдельно, и между
+   двором и ней оставалась пустая зелёная полоса в треть экрана.
+
+   Размер сцены не подбирается числами в CSS — его считает fitScene() в
+   game.js по реально свободному месту. Подогнанные «минус столько-то
+   пикселей» врут на каждом втором телефоне: высота шапки зависит от
+   длины имени, а панели — от того, в сколько строк легли вкладки. */
+@media (max-width:620px), (orientation:landscape) and (max-height:600px){
+  body{display:flex;flex-direction:column;overflow:hidden}
+  #app{flex:1;min-height:0;display:flex;flex-direction:column;padding:0 8px;margin:0}
+  .hud{position:static;flex:none;margin:0 -8px 4px;padding:5px 8px}
   .arch{display:none}
-  .hud{padding:3px 16px}
-  .ava{width:30px;height:30px}
-  .mrow{gap:4px}
-  .quick button{width:27px;height:27px;font-size:14px}
-  .qstrip{display:none}
-  /* Сцена в повороте узкая: названия построек налезают друг на друга, а
-     пузырь Председателя закрывает четверть двора. Оставляем счётчики —
-     название есть в окне постройки, подсказки крутятся и в портрете. */
+  .yard{width:var(--scene,100%);margin:auto;padding:6px 6px 8px}
+  /* В портрете сцена вытягивается: раскладка YARD_TALL ставит постройки
+     лесенкой, фон подрезается по бокам. */
+  @media (orientation:portrait){ .iso{aspect-ratio:10/13} }
+  .dock{position:static;flex:none;padding:4px 6px}
+  #toasts{bottom:auto;top:50%}
+  /* Название постройки в узкой сцене налезает на соседнюю — оставляем счёт,
+     название есть в окне постройки. */
   .bld .chip b.nm{display:none}
   .bld .chip{font-size:10px;padding:0 6px;bottom:-13px}
+
+  /* Шапка ужимается: на узком экране она разъезжалась на три ряда и
+     съедала половину высоты, а двору оставалось то, что осталось. */
+  .hud{gap:4px}
+  .ava{width:30px;height:30px;font-size:15px}
+  .nickbox{min-width:0}
+  .nickbox b{font-size:12px}
+  .nickbox small{font-size:10px}
+  .meters{gap:2px;flex:1 1 140px;min-width:120px}
+  .bar{height:11px}
+  .quick{gap:3px}
+  .quick button{width:27px;height:27px;font-size:14px}
+  .quick button img.ui-ic{width:19px;height:19px}
+  .tbtn{padding:4px 8px;font-size:12px}
+  .tbtn img.ui-ic{width:15px;height:15px}
+  .tabs button{padding:4px 6px;font-size:11px}
+  .qstrip small{font-size:11px}
+}
+
+/* В повороте экран низкий: шапку ужимаем ещё, строку задания и подсказку
+   Председателя убираем — они съедают сцену, а задание открывается кнопкой. */
+@media (orientation:landscape) and (max-height:600px){
+  /* Полоски в два столбца вместо четырёх строк — шапка становится вдвое
+     ниже, и всё освободившееся уходит двору. */
+  .meters{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;flex:1 1 260px}
+  .qstrip{display:none}
   .chair{display:none}
-  #app{padding-bottom:58px}
-  /* Рамку двора ужимаем вместе со сценой: если оставить её во всю ширину,
-     фон растянется на неё и подрежет забор с деревьями. */
-  .iso{aspect-ratio:16/10;width:auto;height:calc(100dvh - 215px);max-width:100%;margin:0 auto}
-  .yard{width:fit-content;margin:0 auto;padding:6px 6px 10px}
 }
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

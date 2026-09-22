@@ -589,7 +589,7 @@ function openQuests(){
     var done = i < S.quest;
     var row = el("div", "row");
     var p = Math.min(qprog(q), q.n);
-    row.innerHTML = "<span class='ic'>" + (done ? "✅" : q.rw.em) + "</span>" +
+    row.innerHTML = "<span class='ic'>" + (done ? "<i class='em'>✅</i>" : rewardIcon(q.rw)) + "</span>" +
       "<span class='grow'><b>" + esc(q.t) + "</b><small>" + esc(q.d) + "</small>" +
       "<small>Награда: " + esc(q.rw.nm) + (q.rw.n ? ". Количество: " + q.rw.n : "") + "</small></span>" +
       (done ? "<span class='done'>Сдано</span>" : "<span class='num'>" + fmt(p) + " / " + fmt(q.n) + "</span>");
@@ -889,6 +889,25 @@ var YARD = {
   ogorod:  {x:28, y:85, w:28},
   sad:     {x:70, y:86, w:23}
 };
+
+/* Тот же двор для телефона в портрете: экран узкий и длинный, и раскладка
+   в два ряда оставляла две трети экрана пустой зеленью. Здесь постройки
+   идут лесенкой в четыре ряда, а сцена вытягивается по высоте. Ширины
+   крупнее: в портрете сцена сама по себе узкая, и прежние проценты дали
+   бы спичечные домики. */
+var YARD_TALL = {
+  koni:    {x:25, y:19, w:21},
+  korovy:  {x:74, y:22, w:22},
+  gusi:    {x:21, y:40, w:18},
+  svini:   {x:72, y:47, w:26},
+  kury:    {x:25, y:63, w:21},
+  teplica: {x:75, y:66, w:23},
+  ogorod:  {x:29, y:82, w:30},
+  sad:     {x:74, y:86, w:26}
+};
+var tallQ = window.matchMedia && window.matchMedia("(max-width:620px) and (orientation:portrait)");
+/** Раскладка двора: в портрете на телефоне своя. */
+function yardPos(){ return (tallQ && tallQ.matches) ? YARD_TALL : YARD; }
 /* Выгул: живность стоит перед своей постройкой, поэтому смещения считаются
    от её ширины, а не в процентах сцены — постройки разного размера.
    У растений выгула нет. */
@@ -916,7 +935,7 @@ function renderYard(){
   var put = [];
 
   HKEYS.forEach(function(k){
-    var H = HOUSES[k], h = S.houses[k], c = counts(k), pos = YARD[k];
+    var H = HOUSES[k], h = S.houses[k], c = counts(k), pos = yardPos()[k];
     var b = el("button", "bld");
     b.style.left = pos.x + "%";
     b.style.top = pos.y + "%";
@@ -935,7 +954,7 @@ function renderYard(){
   /* Живность во дворе: у занятой постройки пасётся пара подопечных. Во дворе
      оригинала куры и гуси ходят сами по себе, и без них двор выглядит нежилым. */
   HKEYS.forEach(function(k){
-    var slots = S.houses[k].slots, pos = YARD[k];
+    var slots = S.houses[k].slots, pos = yardPos()[k];
     if(!slots.length || !WALK[k]) return;
     var ids = [];
     slots.forEach(function(a){ if(ids.indexOf(a.breed) < 0) ids.push(a.breed); });
@@ -1002,7 +1021,7 @@ function renderTabs(){
 }
 function after(){
   if(!S) return;
-  renderHud(); renderYard(); renderQuestStrip();
+  renderHud(); renderYard(); renderQuestStrip(); fitScene();
   panels = panels.filter(function(l){ return document.body.contains(l.scrim); });
   panels.forEach(function(l){ l.fn(); });
 }
@@ -1151,6 +1170,34 @@ function verifyScreen(email, message){
   setTimeout(function(){ code.focus(); }, 50);
 }
 
+/** Подгоняет сцену под свободное место на телефоне.
+
+    Ширина двора задаётся переменной --scene, а высота идёт за пропорцией
+    16:10. Считаем по замеру, а не формулой в CSS: высота шапки зависит от
+    длины имени игрока, а нижней панели — от того, в сколько строк легли
+    вкладки, и подогнанное «минус столько-то пикселей» врёт на каждом
+    втором телефоне. На широком экране переменную снимаем — там двор идёт
+    во всю ширину, как раньше. */
+var PHONE = "(max-width:620px), (orientation:landscape) and (max-height:600px)";
+function fitScene(){
+  var app = $("app");
+  if(!app) return;
+  if(!window.matchMedia || !window.matchMedia(PHONE).matches){
+    app.style.removeProperty("--scene");
+    return;
+  }
+  var hud = document.querySelector(".hud"), dock = document.querySelector(".dock");
+  var free = window.innerHeight
+           - (hud ? hud.offsetHeight : 0)
+           - (dock ? dock.offsetHeight : 0)
+           - 26;                       // рамка и поля самого двора
+  var wide = app.clientWidth - 16;
+  var ratio = (tallQ && tallQ.matches) ? 10 / 13 : 1.6;   // ширина к высоте сцены
+  app.style.setProperty("--scene", Math.max(160, Math.min(wide, free * ratio)).toFixed(0) + "px");
+}
+window.addEventListener("resize", fitScene);
+window.addEventListener("orientationchange", function(){ setTimeout(fitScene, 120); });
+
 /* ===================== запуск ===================== */
 var started = false;
 function startGame(){
@@ -1159,6 +1206,7 @@ function startGame(){
      останется спрятанным. Ловится на повторном boot(): например, когда
      игрок жмёт «Я перешёл по ссылке» на уже загруженной игре. */
   document.body.classList.remove("booting");
+  setTimeout(fitScene, 0);
   if(started) return;
   started = true;
   renderTabs();
@@ -1176,7 +1224,7 @@ function startGame(){
   setInterval(function(){ hi = (hi + 1) % HINTS.length; $("hint").textContent = HINTS[hi]; }, 12000);
   setInterval(function(){
     if(!S) return;
-    renderHud(); renderYard(); renderQuestStrip();
+    renderHud(); renderYard(); renderQuestStrip(); fitScene();
     live = live.filter(function(l){ return document.body.contains(l.scrim); });
     live.forEach(function(l){ l.fn(); });
   }, 1000);
