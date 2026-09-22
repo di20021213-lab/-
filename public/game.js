@@ -1154,9 +1154,13 @@ function verifyScreen(email, message){
 /* ===================== запуск ===================== */
 var started = false;
 function startGame(){
+  /* Класс снимаем до проверки: boot() вешает его при каждом вызове, а
+     обвязку ниже надо ставить один раз. Если выйти раньше — двор так и
+     останется спрятанным. Ловится на повторном boot(): например, когда
+     игрок жмёт «Я перешёл по ссылке» на уже загруженной игре. */
+  document.body.classList.remove("booting");
   if(started) return;
   started = true;
-  document.body.classList.remove("booting");
   renderTabs();
   $("shopBtn").onclick = function(){ closeAll(); openShop(); };
   $("questBtn").onclick = function(){ closeAll(); openQuests(); };
