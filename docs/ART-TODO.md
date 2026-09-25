@@ -173,9 +173,9 @@ cute cartoon farm horse with a brown coat, a black mane and tail, and thick shag
 |---|---|---|
 | ✅ `room-kury.jpg` | Курятник | спереди |
 | ✅ `room-gusi.jpg` | Гусятник | спереди |
-| `room-svini.jpg` | Свинарник | **проход** — пока процедурный |
-| `room-korovy.jpg` | Коровник | **проход** — пока процедурный |
-| `room-koni.jpg` | Конюшня | **проход** — пока процедурный |
+| ✅ `room-svini.jpg` | Свинарник | проход |
+| ✅ `room-korovy.jpg` | Коровник | проход |
+| ✅ `room-koni.jpg` | Конюшня | проход |
 
 Проход рисует `aisle_room()` в `make-scene.py`: настил трапецией от
 нижнего края к дальней стене, подстилка по бокам. Это заглушка —
@@ -242,14 +242,13 @@ inside a russian village stable, front view of the back wall, log walls with a w
 | Файл | Что это | Под кем |
 |---|---|---|
 | ✅ `prop-nest.png` | Соломенное гнездо, вид сбоку-сверху | куры, гуси |
-| `prop-trough.png` | Деревянная кормушка-корыто | свиньи, коровы, кони |
+
+Кормушка не понадобилась: у скотины раскладка «проход», и подстилка там
+нарисована на фоне загонами. Гнездо кладётся только птице.
 
 ```text
 Гнездо
 cute cartoon round straw nest seen from a low three-quarter angle, empty with no eggs and no bird, hand-painted 2D casual game art, plain flat background
-
-Кормушка
-cute cartoon simple wooden trough of planks seen from a low three-quarter angle, empty, hand-painted 2D casual game art, plain flat background
 ```
 
 Пустыми: и яйца, и корм в них кладёт игра — их количество меняется.
@@ -431,9 +430,9 @@ python3 tools/import-art.py assets-src/art/houses/kury.jpg   kury   --house --w 
 |---|---|---|
 | ✅ `room-kury.jpg` | Курятник | спереди |
 | ✅ `room-gusi.jpg` | Гусятник | спереди |
-| `room-svini.jpg` | Свинарник | **проход** — пока процедурный |
-| `room-korovy.jpg` | Коровник | **проход** — пока процедурный |
-| `room-koni.jpg` | Конюшня | **проход** — пока процедурный |
+| ✅ `room-svini.jpg` | Свинарник | проход |
+| ✅ `room-korovy.jpg` | Коровник | проход |
+| ✅ `room-koni.jpg` | Конюшня | проход |
 
 Проход рисует `aisle_room()` в `make-scene.py`: настил трапецией от
 нижнего края к дальней стене, подстилка по бокам. Это заглушка —
@@ -500,14 +499,13 @@ inside a russian village stable, front view of the back wall, log walls with a w
 | Файл | Что это | Под кем |
 |---|---|---|
 | ✅ `prop-nest.png` | Соломенное гнездо, вид сбоку-сверху | куры, гуси |
-| `prop-trough.png` | Деревянная кормушка-корыто | свиньи, коровы, кони |
+
+Кормушка не понадобилась: у скотины раскладка «проход», и подстилка там
+нарисована на фоне загонами. Гнездо кладётся только птице.
 
 ```text
 Гнездо
 cute cartoon round straw nest seen from a low three-quarter angle, empty with no eggs and no bird, hand-painted 2D casual game art, plain flat background
-
-Кормушка
-cute cartoon simple wooden trough of planks seen from a low three-quarter angle, empty, hand-painted 2D casual game art, plain flat background
 ```
 
 Пустыми: и яйца, и корм в них кладёт игра — их количество меняется.
