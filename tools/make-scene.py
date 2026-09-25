@@ -547,6 +547,63 @@ def nails(w=420, h=320):
     return im
 
 
+def room(kind, w=1200, h=760, seed=41):
+    """Интерьер постройки: бревенчатая стена и пол, на котором стоит живность.
+
+    Пока процедурный — чтобы механика работала сразу. Заменяется присланной
+    картинкой ровно так же, как заменились сами постройки: см. ART-TODO.
+
+    Пол у всех разный: в курятнике солома, в свинарнике земля, в конюшне
+    опилки. По нему сразу видно, куда зашёл, даже без подписи.
+    """
+    FLOORS = {"kury":   ((214, 178, 96),  (176, 142, 70)),    # солома
+              "gusi":   ((206, 186, 130), (168, 148, 96)),    # подстилка
+              "svini":  ((150, 120, 88),  (112, 88, 64)),     # земля
+              "korovy": ((176, 150, 104), (136, 112, 76)),    # сенная труха
+              "koni":   ((198, 172, 128), (158, 134, 96))}    # опилки
+    f_lo, f_hi = FLOORS.get(kind, FLOORS["kury"])
+    rnd = random.Random(seed)
+
+    img = blotchy((w, h), f_lo, f_hi, seed=seed, scale=26).convert("RGBA")
+    d = ImageDraw.Draw(img)
+
+    # стена из брёвен занимает верх, пол — низ; граница чуть выше середины,
+    # чтобы живности хватило места встать в два ряда
+    wall_h = int(h * 0.46)
+    LOG_LO, LOG_HI = (150, 108, 70), (186, 140, 92)
+    logs = blotchy((w, wall_h), LOG_LO, LOG_HI, seed=seed + 1, scale=34)
+    img.alpha_composite(logs.convert("RGBA"), (0, 0))
+    dd = ImageDraw.Draw(img)
+    rows = 7
+    for i in range(rows + 1):
+        y = wall_h * i / rows
+        dd.line([(0, y), (w, y)], fill=(104, 74, 46, 180), width=4)
+        dd.line([(0, y + 4), (w, y + 4)], fill=(206, 166, 118, 90), width=3)
+    # окно: единственный источник света, иначе комната читается как стена
+    wx, wy, ww, wh = int(w * 0.70), int(wall_h * 0.22), int(w * 0.17), int(wall_h * 0.44)
+    dd.rectangle([wx, wy, wx + ww, wy + wh], fill=(150, 196, 214, 255), outline=INK + (255,), width=6)
+    dd.line([(wx + ww / 2, wy), (wx + ww / 2, wy + wh)], fill=INK + (255,), width=5)
+    dd.line([(wx, wy + wh / 2), (wx + ww, wy + wh / 2)], fill=INK + (255,), width=5)
+
+    # пол: соломинки или крошка, тем же приёмом, что трава во дворе
+    for _ in range(9000):
+        x = rnd.randrange(0, w); y = rnd.randint(wall_h, h - 1)
+        ln = rnd.randint(5, 16)
+        c = shade(f_hi if rnd.random() < 0.5 else f_lo, rnd.uniform(0.86, 1.14))
+        dd.line([(x, y), (x + rnd.randint(-ln, ln), y - rnd.randint(0, 3))], fill=c + (150,), width=1)
+
+    dd.line([(0, wall_h), (w, wall_h)], fill=(88, 62, 40, 220), width=6)
+
+    # виньетка, чтобы края не спорили с живностью
+    vig = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(vig).ellipse([-w * 0.2, -h * 0.35, w * 1.2, h * 1.5], fill=255)
+    vig = vig.filter(ImageFilter.GaussianBlur(w * 0.08))
+    dark = Image.new("RGBA", (w, h), (40, 26, 14, 255))
+    dark.putalpha(ImageChops.invert(vig).point(lambda v: int(v * 0.42)))
+    img.alpha_composite(dark)
+    return img.convert("RGB")
+
+
 def supplied(key):
     """Постройку уже заменили присланной картинкой — рисовать её не надо.
 
@@ -573,6 +630,10 @@ if __name__ == "__main__":
         save(fit(village(shape, roof, wall, seed), w), "house-" + key)
         drawn.append(key)
     print("построек отрисовано: " + (", ".join(drawn) if drawn else "ни одной, все присланные"))
+
+    for key in ("kury", "gusi", "svini", "korovy", "koni"):
+        room(key).save(os.path.join(OUT, "room-" + key + ".jpg"), quality=86, optimize=True)
+    print("интерьеры отрисованы: kury, gusi, svini, korovy, koni")
 
     save(fit(wattle(), 220), "prop-pleten")
     save(fit(well(), 150), "prop-kolodec")

@@ -120,6 +120,9 @@ var ISO = {
           "tula":1, "holmgus":1, "kitay":1, "kuban":1, "tuluz":1, "ital":1, "vietnam":1, "mirgorod":1, "landras":1, "krupbel":1, "holmkor":1, "simment":1, "vladimir":1},
   feed: {"bone":1, "elite":1, "fish":1, "high":1, "instant":1, "krapiva":1, "low":1, "lowset":1, "mid":1, "navoz":1, "otrubi":1, "torf":1, "univer":1, "vitamin":1, "zhmyh":1},
   house: {"gusi":1, "koni":1, "korovy":1, "kury":1, "ogorod":1, "sad":1, "svini":1, "teplica":1},
+  /* Интерьеры есть пока только у построек с живностью: у грядок и сада
+     «комнаты» нет, там список и остаётся. */
+  room: {"kury":1, "gusi":1, "svini":1, "korovy":1, "koni":1},
   prop: {"bush":1, "doska":1, "fence":1, "fluger":1, "grass":1, "hay":1, "klumba":1, "kolodec":1, "path":1, "pleten":1, "scare":1, "skirda":1, "table":1, "telega":1, "traktor":1, "tree":1},
   /* Ресурсы держим отдельной группой: «доска» в декоре — это доска почёта,
      а в ресурсах — стопка досок. Одинаковые id, разные картинки. */
@@ -216,6 +219,70 @@ function showQuestDone(q){
 }
 
 /* ---------- интерьер постройки ---------- */
+
+/** Куда поставить живность в комнате: ряды с глубиной, дальние мельче.
+
+    В оригинале постройка — это место: открываешь курятник и видишь сарай
+    изнутри, а по нему ходят твои куры. Список строк ту же самую цифру
+    показывает, но местом не ощущается. */
+function roomSpots(n){
+  var rows = n <= 3 ? 1 : n <= 8 ? 2 : 3;
+  var per = Math.ceil(n / rows);
+  var out = [];
+  for(var i = 0; i < n; i++){
+    var r = Math.floor(i / per), c = i % per;
+    var inRow = Math.min(per, n - r * per);
+    var depth = rows === 1 ? 1 : r / (rows - 1);      // 0 — дальний ряд, 1 — ближний
+    out.push({
+      x: (c + 0.5) / inRow * 86 + 7,
+      y: rows === 1 ? 82 : 60 + depth * 30,
+      w: Math.max(9, Math.min(21, 70 / per)) * (0.76 + 0.24 * depth)
+    });
+  }
+  return out;
+}
+
+/** Комната с живностью. Нажатие делает то, чего ждёт эта голова:
+    голодную кормит, созревшую собирает, растущая отвечает сроком. */
+function renderRoom(k, h, H){
+  var room = el("div", "room");
+  room.style.backgroundImage = "url(" + url("img/iso/room-" + k + ".jpg") + ")";
+  var total = cap(k);
+  var spots = roomSpots(total);
+  h.slots.forEach(function(a, i){
+    var b = breed(a.breed), st = stateOf(a), p = spots[i];
+    if(!p) return;
+    var node = el("button", "pet " + st);
+    node.style.left = p.x + "%"; node.style.top = p.y + "%"; node.style.width = p.w + "%";
+    node.style.zIndex = String(10 + Math.round(p.y));
+    node.title = b.n;
+    node.innerHTML = ic("breed", b.id, b.em) +
+      "<span class='tag'>" + (st === "hungry" ? (H.kind === "plant" ? "💧" : "🍽")
+        : st === "growing" ? gtime(gminLeft(a))
+        : H.prod.em) + "</span>";
+    node.onclick = function(){
+      var now = stateOf(a);
+      if(now === "ready") return act("harvest", {house:k, slot:a.id});
+      if(now === "growing") return toast(b.n + " — осталось " + gtime(gminLeft(a)));
+      var f = cheapestFeed();
+      if(!f) return openShop("feed");
+      act("feed", {house:k, slot:a.id, feed:f.id});
+    };
+    room.appendChild(node);
+  });
+  /* Свободные места видно сразу: пустой загон — это приглашение, а не пустота. */
+  for(var i = h.slots.length; i < total; i++){
+    var p = spots[i];
+    if(!p) continue;
+    var free = el("button", "pet free", "+");
+    free.style.left = p.x + "%"; free.style.top = p.y + "%"; free.style.width = p.w + "%";
+    free.title = "Свободное место";
+    free.onclick = function(){ openShop(H.kind === "plant" ? "plants" : "animals"); };
+    room.appendChild(free);
+  }
+  return room;
+}
+
 function openHouse(k){
   var H = HOUSES[k];
   var w = makeWin(H.n + " — " + HOUSE_TITLES[S.houses[k].lvl - 1]);
@@ -242,6 +309,8 @@ function openHouse(k){
     acts.appendChild(bFeed); acts.appendChild(bHarv); acts.appendChild(bSell); acts.appendChild(bShop);
     hd.appendChild(acts);
     body.appendChild(hd);
+
+    if(ISO.room[k]) body.appendChild(renderRoom(k, h, H));
 
     var inside = el("div", "inside");
     h.slots.forEach(function(a){

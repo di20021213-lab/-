@@ -143,6 +143,47 @@ cute cartoon farm horse with a brown coat, a black mane and tail, and thick shag
 Заодно из игры выпала единственная порода за кристаллы (Брама). Когда дойдут
 руки до «дорогой» живности — верну такую в гусятник или коровник.
 
+## Интерьеры построек
+
+Постройка изнутри — комната, по которой ходит твоя живность, как в
+оригинале. Сейчас фон процедурный, `room()` в `tools/make-scene.py`:
+бревенчатая стена, окно и пол, у каждой постройки свой — солома в
+курятнике, земля в свинарнике, опилки в конюшне. Это заглушка, чтобы
+механика работала; заменяется присланной картинкой.
+
+Файлы: `public/img/iso/room-<id>.jpg`, размер 1200×760. Живность стоит на
+полу, поэтому **пол должен занимать нижнюю половину кадра**, а стена —
+верхнюю: если стена опустится ниже середины, живность окажется стоящей
+на ней. Вид фронтальный, без перспективы в пол.
+
+| Файл | Постройка |
+|---|---|
+| `room-kury.jpg` | Курятник |
+| `room-gusi.jpg` | Гусятник |
+| `room-svini.jpg` | Свинарник |
+| `room-korovy.jpg` | Коровник |
+| `room-koni.jpg` | Конюшня |
+
+```text
+Курятник
+inside a russian village log hen house, front view of the back wall, log walls with a small window, straw covered floor filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
+
+Гусятник
+inside a russian village goose shed, front view of the back wall, weathered plank walls with a low window, straw bedding floor filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
+
+Свинарник
+inside a russian village pig barn, front view of the back wall, log walls with a small window, packed dirt floor with scattered straw filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
+
+Коровник
+inside a russian village cow barn, front view of the back wall, log walls with a hay rack and a window, floor of hay litter filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
+
+Конюшня
+inside a russian village stable, front view of the back wall, log walls with wooden stall dividers and a window, sawdust floor filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
+```
+
+Главное в запросе — `empty room with no animals`: живность рисует игра,
+и нарисованная на фоне будет стоять мёртвым грузом рядом с настоящей.
+
 ## Если генератор отказал
 
 Leonardo иногда отвечает «did not meet content safety guidelines» на совершенно
@@ -277,6 +318,47 @@ python3 tools/import-art.py assets-src/art/houses/kury.jpg   kury   --house --w 
 Верхняя кромка вытоптанной земли в `make-scene.py` держится выше подошв
 заднего ряда (34–39% высоты двора). Если земля не доходит, конюшня с
 коровником стоят половиной на траве.
+
+## Интерьеры построек
+
+Постройка изнутри — комната, по которой ходит твоя живность, как в
+оригинале. Сейчас фон процедурный, `room()` в `tools/make-scene.py`:
+бревенчатая стена, окно и пол, у каждой постройки свой — солома в
+курятнике, земля в свинарнике, опилки в конюшне. Это заглушка, чтобы
+механика работала; заменяется присланной картинкой.
+
+Файлы: `public/img/iso/room-<id>.jpg`, размер 1200×760. Живность стоит на
+полу, поэтому **пол должен занимать нижнюю половину кадра**, а стена —
+верхнюю: если стена опустится ниже середины, живность окажется стоящей
+на ней. Вид фронтальный, без перспективы в пол.
+
+| Файл | Постройка |
+|---|---|
+| `room-kury.jpg` | Курятник |
+| `room-gusi.jpg` | Гусятник |
+| `room-svini.jpg` | Свинарник |
+| `room-korovy.jpg` | Коровник |
+| `room-koni.jpg` | Конюшня |
+
+```text
+Курятник
+inside a russian village log hen house, front view of the back wall, log walls with a small window, straw covered floor filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
+
+Гусятник
+inside a russian village goose shed, front view of the back wall, weathered plank walls with a low window, straw bedding floor filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
+
+Свинарник
+inside a russian village pig barn, front view of the back wall, log walls with a small window, packed dirt floor with scattered straw filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
+
+Коровник
+inside a russian village cow barn, front view of the back wall, log walls with a hay rack and a window, floor of hay litter filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
+
+Конюшня
+inside a russian village stable, front view of the back wall, log walls with wooden stall dividers and a window, sawdust floor filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
+```
+
+Главное в запросе — `empty room with no animals`: живность рисует игра,
+и нарисованная на фоне будет стоять мёртвым грузом рядом с настоящей.
 
 ## Если генератор отказал
 
