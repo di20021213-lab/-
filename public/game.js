@@ -123,7 +123,7 @@ var ISO = {
   /* Интерьеры есть пока только у построек с живностью: у грядок и сада
      «комнаты» нет, там список и остаётся. */
   room: {"kury":1, "gusi":1, "svini":1, "korovy":1, "koni":1},
-  prop: {"bush":1, "doska":1, "fence":1, "fluger":1, "grass":1, "hay":1, "klumba":1, "kolodec":1, "path":1, "pleten":1, "scare":1, "skirda":1, "table":1, "telega":1, "traktor":1, "tree":1},
+  prop: {"bush":1, "doska":1, "nest":1, "fence":1, "fluger":1, "grass":1, "hay":1, "klumba":1, "kolodec":1, "path":1, "pleten":1, "scare":1, "skirda":1, "table":1, "telega":1, "traktor":1, "tree":1},
   /* Ресурсы держим отдельной группой: «доска» в декоре — это доска почёта,
      а в ресурсах — стопка досок. Одинаковые id, разные картинки. */
   res: {"doska":1, "gvozdi":1, "soloma":1}
@@ -251,9 +251,22 @@ function renderRoom(k, h, H){
   room.style.backgroundImage = "url(" + url("img/iso/room-" + k + ".jpg") + ")";
   var total = cap(k);
   var spots = roomSpots(total);
+  /* Подстилка: птица садится в гнездо, скотина стоит у кормушки. Рисуем
+     её отдельным слоем под живностью — гнёзд ровно столько же, сколько
+     мест, и двигаются они вместе с ними. */
+  var bed = (k === "kury" || k === "gusi") ? "nest"
+          : (k === "svini" || k === "korovy" || k === "koni") ? "trough" : null;
+  if(bed && !ISO.prop[bed]) bed = null;
   h.slots.forEach(function(a, i){
     var b = breed(a.breed), st = stateOf(a), p = spots[i];
     if(!p) return;
+    if(bed){
+      var mat = el("div", "bed");
+      mat.style.left = p.x + "%"; mat.style.top = p.y + "%"; mat.style.width = (p.w * 1.25) + "%";
+      mat.style.zIndex = String(9 + Math.round(p.y));
+      mat.innerHTML = "<img src='" + url("img/iso/prop-" + bed + ".png") + "' alt=''>";
+      room.appendChild(mat);
+    }
     var node = el("button", "pet " + st);
     node.style.left = p.x + "%"; node.style.top = p.y + "%"; node.style.width = p.w + "%";
     node.style.zIndex = String(10 + Math.round(p.y));

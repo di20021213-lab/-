@@ -17,6 +17,7 @@
     python3 tools/import-art.py картинка.png farmer --prop      # портрет, реквизит
     python3 tools/import-art.py картинка.png kury --house --w 300   # постройка
     python3 tools/import-art.py картинка.png kury --room            # интерьер
+    python3 tools/import-art.py гнездо.png nest --prop --erase-hue 128  # убрать лишнее
 """
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 from collections import deque
@@ -301,6 +302,56 @@ def house_shadow(im):
     return sh
 
 
+def erase_hue(im, hue, width=14, sat=60):
+    """Стирает с картинки посторонний предмет заданного тона.
+
+    Генератор дорисовывает то, чего не просили: в пустое гнездо положил
+    два бирюзовых яйца. Яйца в гнездо кладёт игра, их число меняется, так
+    что нарисованные там лишние.
+
+    Дыру не оставляем, а затягиваем окружающим цветом: несколько проходов
+    размытия, каждый раз возвращая на место всё, кроме стёртого. Способ
+    грубый, но на однотонной подкладке вроде дна гнезда не виден.
+    """
+    im = im.convert("RGBA")
+    hsv = im.convert("RGB").convert("HSV")
+    hp, sp = hsv.split()[0].load(), hsv.split()[1].load()
+    w, h = im.size
+    mask = Image.new("L", (w, h), 0)
+    mp = mask.load()
+    for y in range(h):
+        for x in range(w):
+            d = abs(hp[x, y] - hue)
+            if min(d, 256 - d) <= width and sp[x, y] > sat:
+                mp[x, y] = 255
+    if not mask.getbbox():
+        return im
+    mask = mask.filter(ImageFilter.MaxFilter(5))
+    rgb = im.convert("RGB")
+
+    # Цвет берём из кольца вокруг пятна: размытие от краёв ползёт по
+    # несколько пикселей за проход и до середины крупного предмета не
+    # доходит — яйца так и оставались бирюзовыми.
+    ring = ImageChops.subtract(mask.filter(ImageFilter.MaxFilter(21)), mask)
+    px, rp = rgb.load(), ring.load()
+    w2, h2 = rgb.size
+    acc, n = [0, 0, 0], 0
+    for y in range(h2):
+        for x in range(w2):
+            if rp[x, y] > 128:
+                c = px[x, y]
+                acc[0] += c[0]; acc[1] += c[1]; acc[2] += c[2]; n += 1
+    if not n:
+        return im
+    fill = tuple(v // n for v in acc)
+    rgb = Image.composite(Image.new("RGB", rgb.size, fill), rgb, mask)
+    seam = mask.filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.GaussianBlur(3))
+    rgb = Image.composite(rgb.filter(ImageFilter.GaussianBlur(3)), rgb, seam)
+    out = rgb.convert("RGBA")
+    out.putalpha(im.split()[3])
+    return out
+
+
 def shadow(im):
     """Общая мягкая тень — такая же, как у отрисованных пород."""
     box = im.getbbox()
@@ -320,8 +371,10 @@ def shadow(im):
 
 
 def prepare(path, keep_shadow=False, flip=False, item=False, palette=None, prop=False,
-            house=False, width=HOUSE):
+            house=False, width=HOUSE, erase=None):
     im = Image.open(path)
+    if erase is not None:
+        im = erase_hue(im, erase)
     if palette:
         import recolor
         im = recolor.recolor(im, recolor.PALETTES[palette])
@@ -385,8 +438,9 @@ if __name__ == "__main__":
     item = "--item" in sys.argv or prop
     flip = "--flip" in sys.argv or needs_flip(key)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    erase = int(sys.argv[sys.argv.index("--erase-hue") + 1]) if "--erase-hue" in sys.argv else None
     im = prepare(src, keep_shadow="--keep-shadow" in sys.argv, flip=flip, item=item,
-                 palette=wanted_palette(key), prop=prop, house=house, width=width)
+                 palette=wanted_palette(key), prop=prop, house=house, width=width, erase=erase)
     os.makedirs(OUT, exist_ok=True)
     dst = os.path.join(OUT, ("house-" if house else "prop-" if prop else
                             "feed-" if item else "breed-") + key + ".png")
