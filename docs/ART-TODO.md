@@ -164,13 +164,33 @@ cute cartoon farm horse with a brown coat, a black mane and tail, and thick shag
 верхнюю: если стена опустится ниже середины, живность окажется стоящей
 на ней. Вид фронтальный, без перспективы в пол.
 
-| Файл | Постройка |
-|---|---|
-| ✅ `room-kury.jpg` | Курятник |
-| ✅ `room-gusi.jpg` | Гусятник |
-| ✅ `room-svini.jpg` | Свинарник |
-| ✅ `room-korovy.jpg` | Коровник |
-| ✅ `room-koni.jpg` | Конюшня |
+В оригинале раскладка у построек **разная**: курятник — вид спереди,
+живность на полу в гнёздах; свинарник — проход посередине и загоны по
+бокам, свиньи лежат мордами внутрь. Это задаётся в `ROOM_STYLE`
+(`floor` или `aisle`) и требует разных фонов.
+
+| Файл | Постройка | Раскладка |
+|---|---|---|
+| ✅ `room-kury.jpg` | Курятник | спереди |
+| ✅ `room-gusi.jpg` | Гусятник | спереди |
+| `room-svini.jpg` | Свинарник | **проход** — нужен новый фон |
+| `room-korovy.jpg` | Коровник | **проход** — нужен новый фон |
+| `room-koni.jpg` | Конюшня | **проход** — нужен новый фон |
+
+Спрайты живности под проход переделывать не надо: в оригинале свиньи
+нарисованы сбоку, как у нас, просто лежат по сторонам от прохода.
+Правую колонку игра отражает сама.
+
+```text
+Свинарник — проход
+top-down view inside a russian village pig barn, a wooden plank walkway running down the middle from the bottom of the frame towards the back wall, straw bedding pens along both sides separated by low wooden rails, empty with no animals, hand-painted 2D casual game background
+
+Коровник — проход
+top-down view inside a russian village cow barn, a wooden plank walkway running down the middle from the bottom of the frame towards the back wall, hay bedding stalls along both sides separated by low wooden rails, empty with no animals, hand-painted 2D casual game background
+
+Конюшня — проход
+top-down view inside a russian village stable, a wooden plank walkway running down the middle from the bottom of the frame towards the back wall, sawdust bedding stalls along both sides separated by wooden partitions, empty with no animals, hand-painted 2D casual game background
+```
 
 ```text
 Курятник
@@ -387,13 +407,33 @@ python3 tools/import-art.py assets-src/art/houses/kury.jpg   kury   --house --w 
 верхнюю: если стена опустится ниже середины, живность окажется стоящей
 на ней. Вид фронтальный, без перспективы в пол.
 
-| Файл | Постройка |
-|---|---|
-| ✅ `room-kury.jpg` | Курятник |
-| ✅ `room-gusi.jpg` | Гусятник |
-| ✅ `room-svini.jpg` | Свинарник |
-| ✅ `room-korovy.jpg` | Коровник |
-| ✅ `room-koni.jpg` | Конюшня |
+В оригинале раскладка у построек **разная**: курятник — вид спереди,
+живность на полу в гнёздах; свинарник — проход посередине и загоны по
+бокам, свиньи лежат мордами внутрь. Это задаётся в `ROOM_STYLE`
+(`floor` или `aisle`) и требует разных фонов.
+
+| Файл | Постройка | Раскладка |
+|---|---|---|
+| ✅ `room-kury.jpg` | Курятник | спереди |
+| ✅ `room-gusi.jpg` | Гусятник | спереди |
+| `room-svini.jpg` | Свинарник | **проход** — нужен новый фон |
+| `room-korovy.jpg` | Коровник | **проход** — нужен новый фон |
+| `room-koni.jpg` | Конюшня | **проход** — нужен новый фон |
+
+Спрайты живности под проход переделывать не надо: в оригинале свиньи
+нарисованы сбоку, как у нас, просто лежат по сторонам от прохода.
+Правую колонку игра отражает сама.
+
+```text
+Свинарник — проход
+top-down view inside a russian village pig barn, a wooden plank walkway running down the middle from the bottom of the frame towards the back wall, straw bedding pens along both sides separated by low wooden rails, empty with no animals, hand-painted 2D casual game background
+
+Коровник — проход
+top-down view inside a russian village cow barn, a wooden plank walkway running down the middle from the bottom of the frame towards the back wall, hay bedding stalls along both sides separated by low wooden rails, empty with no animals, hand-painted 2D casual game background
+
+Конюшня — проход
+top-down view inside a russian village stable, a wooden plank walkway running down the middle from the bottom of the frame towards the back wall, sawdust bedding stalls along both sides separated by wooden partitions, empty with no animals, hand-painted 2D casual game background
+```
 
 ```text
 Курятник

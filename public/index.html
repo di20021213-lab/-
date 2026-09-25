@@ -133,6 +133,9 @@ button,.bld{-webkit-user-select:none;user-select:none}
 .room .bed{position:absolute;transform:translate(-50%,-56%);pointer-events:none;line-height:0}
 .room .bed img{width:100%;height:auto;display:block}
 .room .pet img{width:100%;height:auto;display:block;filter:drop-shadow(0 3px 3px rgba(30,20,10,.45))}
+/* Правая колонка в проходе смотрит влево: спрайты нарисованы мордой
+   вправо, поэтому отражаем картинку, но не бирку над ней. */
+.room .pet.flip img{transform:scaleX(-1)}
 .room .pet .em{font-size:30px;line-height:1}
 .room .pet .tag{position:absolute;left:50%;top:-6px;transform:translate(-50%,-100%);
   padding:2px 8px;border:2px solid var(--wood-dk);border-radius:9px;background:rgba(255,248,230,.95);

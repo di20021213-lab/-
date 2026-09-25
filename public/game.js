@@ -225,20 +225,42 @@ function showQuestDone(q){
     В оригинале постройка — это место: открываешь курятник и видишь сарай
     изнутри, а по нему ходят твои куры. Список строк ту же самую цифру
     показывает, но местом не ощущается. */
-function roomSpots(n){
-  var rows = n <= 3 ? 1 : n <= 8 ? 2 : 3;
-  var per = Math.ceil(n / rows);
+/* Раскладка у каждой постройки своя, как в оригинале: у птицы комната с
+   гнёздами на полу, у скотины проход посередине и загоны по бокам. */
+var ROOM_STYLE = {kury:"floor", gusi:"floor", svini:"aisle", korovy:"aisle", koni:"aisle"};
+
+function roomSpots(n, style){
   var out = [];
-  for(var i = 0; i < n; i++){
-    var r = Math.floor(i / per), c = i % per;
-    var inRow = Math.min(per, n - r * per);
-    var depth = rows === 1 ? 1 : r / (rows - 1);      // 0 — дальний ряд, 1 — ближний
+  if(style === "aisle"){
+    /* Проход по центру, загоны слева и справа, дальние мельче и ближе к
+       середине — так читается глубина. Правая колонка смотрит влево:
+       спрайты у нас все мордой вправо, одну сторону отражаем. */
+    var per = Math.ceil(n / 2);
+    for(var i = 0; i < n; i++){
+      var side = i % 2, row = Math.floor(i / 2);
+      var depth = per < 2 ? 1 : row / (per - 1);       // 0 — дальний, 1 — ближний
+      var edge = 17 + depth * 5;                        // вдаль колонки сходятся
+      out.push({
+        x: side ? 100 - edge : edge,
+        y: 34 + depth * 54,
+        w: (n <= 4 ? 30 : n <= 8 ? 26 : 22) * (0.74 + 0.26 * depth),
+        flip: !!side
+      });
+    }
+    return out;
+  }
+  var rows = n <= 3 ? 1 : n <= 8 ? 2 : 3;
+  var perRow = Math.ceil(n / rows);
+  for(var j = 0; j < n; j++){
+    var r = Math.floor(j / perRow), c = j % perRow;
+    var inRow = Math.min(perRow, n - r * perRow);
+    var d = rows === 1 ? 1 : r / (rows - 1);          // 0 — дальний ряд, 1 — ближний
     /* Ряды прижаты к полу: у присланных интерьеров он начинается на разной
        высоте, и дальний ряд, поставленный повыше, оказывался на стене. */
     out.push({
       x: (c + 0.5) / inRow * 86 + 7,
-      y: rows === 1 ? 92 : 76 + depth * 16,
-      w: Math.max(8, Math.min(19, 64 / per)) * (0.78 + 0.22 * depth)
+      y: rows === 1 ? 92 : 76 + d * 16,
+      w: Math.max(8, Math.min(19, 64 / perRow)) * (0.78 + 0.22 * d)
     });
   }
   return out;
@@ -250,12 +272,14 @@ function renderRoom(k, h, H){
   var room = el("div", "room");
   room.style.backgroundImage = "url(" + url("img/iso/room-" + k + ".jpg") + ")";
   var total = cap(k);
-  var spots = roomSpots(total);
+  var style = ROOM_STYLE[k] || "floor";
+  var spots = roomSpots(total, style);
   /* Подстилка: птица садится в гнездо, скотина стоит у кормушки. Рисуем
      её отдельным слоем под живностью — гнёзд ровно столько же, сколько
      мест, и двигаются они вместе с ними. */
-  var bed = (k === "kury" || k === "gusi") ? "nest"
-          : (k === "svini" || k === "korovy" || k === "koni") ? "trough" : null;
+  /* В проходе подстилка не нужна: она нарисована на фоне, загонами вдоль
+     стен. Гнездо кладём только птице. */
+  var bed = style === "floor" ? "nest" : null;
   if(bed && !ISO.prop[bed]) bed = null;
   h.slots.forEach(function(a, i){
     var b = breed(a.breed), st = stateOf(a), p = spots[i];
@@ -270,6 +294,7 @@ function renderRoom(k, h, H){
     var node = el("button", "pet " + st);
     node.style.left = p.x + "%"; node.style.top = p.y + "%"; node.style.width = p.w + "%";
     node.style.zIndex = String(10 + Math.round(p.y));
+    if(p.flip) node.classList.add("flip");
     node.title = b.n;
     /* Бирка как в оригинале: сверху сколько сезонов осталось, снизу что
        сейчас происходит. Два разных числа, и оба нужны: одно говорит,
