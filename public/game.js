@@ -242,8 +242,10 @@ function roomSpots(n, style){
       var edge = 17 + depth * 5;                        // вдаль колонки сходятся
       out.push({
         x: side ? 100 - edge : edge,
-        y: 34 + depth * 54,
-        w: (n <= 4 ? 30 : n <= 8 ? 26 : 22) * (0.74 + 0.26 * depth),
+        y: 32 + depth * 60,
+        /* Размер падает с числом мест: на полный хлев двенадцать голов, и
+           в прежних 26% они налезали друг на друга рядами. */
+        w: (n <= 4 ? 26 : n <= 8 ? 19 : 13) * (0.84 + 0.16 * depth),
         flip: !!side
       });
     }
@@ -259,8 +261,8 @@ function roomSpots(n, style){
        высоте, и дальний ряд, поставленный повыше, оказывался на стене. */
     out.push({
       x: (c + 0.5) / inRow * 86 + 7,
-      y: rows === 1 ? 92 : 76 + d * 16,
-      w: Math.max(8, Math.min(19, 64 / perRow)) * (0.78 + 0.22 * d)
+      y: rows === 1 ? 92 : 70 + d * 24,
+      w: Math.max(7, Math.min(17, 58 / perRow)) * (0.8 + 0.2 * d)
     });
   }
   return out;
@@ -286,7 +288,7 @@ function renderRoom(k, h, H){
     if(!p) return;
     if(bed){
       var mat = el("div", "bed");
-      mat.style.left = p.x + "%"; mat.style.top = p.y + "%"; mat.style.width = (p.w * 1.25) + "%";
+      mat.style.left = p.x + "%"; mat.style.top = p.y + "%"; mat.style.width = (p.w * 1.05) + "%";
       mat.style.zIndex = String(9 + Math.round(p.y));
       mat.innerHTML = "<img src='" + url("img/iso/prop-" + bed + ".png") + "' alt=''>";
       room.appendChild(mat);
