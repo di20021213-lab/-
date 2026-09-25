@@ -16,6 +16,7 @@
     python3 tools/import-art.py картинка.png bone --item        # иконка предмета
     python3 tools/import-art.py картинка.png farmer --prop      # портрет, реквизит
     python3 tools/import-art.py картинка.png kury --house --w 300   # постройка
+    python3 tools/import-art.py картинка.png kury --room            # интерьер
 """
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 from collections import deque
@@ -366,6 +367,18 @@ if __name__ == "__main__":
     if len(args) < 2:
         raise SystemExit(__doc__)
     src, key = args[0], args[1]
+
+    # Интерьер — обычный фон: ничего не вырезаем и не обводим, он лежит
+    # позади живности целиком. Только ужимаем и кладём как JPEG.
+    if "--room" in sys.argv:
+        im = Image.open(src).convert("RGB")
+        if im.width > 1400:
+            im = im.resize((1400, round(im.height * 1400 / im.width)), Image.LANCZOS)
+        os.makedirs(OUT, exist_ok=True)
+        dst = os.path.join(OUT, "room-" + key + ".jpg")
+        im.save(dst, quality=88, optimize=True)
+        print("готово:", dst, im.size)
+        raise SystemExit(0)
     prop = "--prop" in sys.argv
     house = "--house" in sys.argv
     width = int(sys.argv[sys.argv.index("--w") + 1]) if "--w" in sys.argv else HOUSE

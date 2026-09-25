@@ -631,9 +631,15 @@ if __name__ == "__main__":
         drawn.append(key)
     print("построек отрисовано: " + (", ".join(drawn) if drawn else "ни одной, все присланные"))
 
+    made = []
     for key in ("kury", "gusi", "svini", "korovy", "koni"):
+        # Присланный интерьер не трогаем — та же защита, что у построек.
+        if any(os.path.exists(os.path.join(ROOT, "assets-src", "art", "rooms", key + e))
+               for e in (".jpg", ".jpeg", ".png", ".webp")):
+            continue
         room(key).save(os.path.join(OUT, "room-" + key + ".jpg"), quality=86, optimize=True)
-    print("интерьеры отрисованы: kury, gusi, svini, korovy, koni")
+        made.append(key)
+    print("интерьеров отрисовано: " + (", ".join(made) if made else "ни одного, все присланные"))
 
     save(fit(wattle(), 220), "prop-pleten")
     save(fit(well(), 150), "prop-kolodec")
