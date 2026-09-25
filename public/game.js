@@ -226,45 +226,77 @@ function showQuestDone(q){
     изнутри, а по нему ходят твои куры. Список строк ту же самую цифру
     показывает, но местом не ощущается. */
 /* Раскладка у каждой постройки своя, как в оригинале: у птицы комната с
-   гнёздами на полу, у скотины проход посередине и загоны по бокам. */
+   гнёздами на полу, у скотины проход посередине и подстилка по бокам. */
 var ROOM_STYLE = {kury:"floor", gusi:"floor", svini:"aisle", korovy:"aisle", koni:"aisle"};
 
-function roomSpots(n, style){
+/* Где на фоне лежит подстилка — в процентах панели, снято по сетке с
+   каждой картинки. far — дальний край подстилки (у задней стены), near —
+   ближний; band — от стены до перил прохода по левой стороне, правая
+   зеркальна. У конюшни подстилка треугольником: вверху широкая, у зрителя
+   сужается до перил, поэтому и живность там встаёт по-разному.
+   Сменили картинку — переснимите разметку, иначе скотина встанет на перила. */
+var AISLE_GEO = {
+  svini:  {y0:34, y1:95, far:[5, 40],  near:[2, 38]},
+  koni:   {y0:26, y1:88, far:[13, 38], near:[2, 20]},
+  korovy: {y0:22, y1:95, far:[3, 39],  near:[2, 31]}
+};
+/* Высота спрайта к ширине — чтобы ряды не наезжали: конь вдвое выше свиньи. */
+/* У коня в спрайте поля по бокам (импортёр кладёт всех на холст в 200
+   точек), поэтому видимый конь уже своей рамки и ставить его можно теснее. */
+var SPRITE_TALL = {svini:0.8, korovy:1.05, koni:0.95, kury:1.35, gusi:1.4};
+
+function lerp(a, b, t){ return a + (b - a) * t; }
+
+function roomSpots(n, style, k){
   var out = [];
   if(style === "aisle"){
-    /* Проход по центру, загоны слева и справа, дальние мельче и ближе к
-       середине — так читается глубина. Правая колонка смотрит влево:
-       спрайты у нас все мордой вправо, одну сторону отражаем. */
-    var per = Math.ceil(n / 2);
-    for(var i = 0; i < n; i++){
-      var side = i % 2, row = Math.floor(i / 2);
-      var depth = per < 2 ? 1 : row / (per - 1);       // 0 — дальний, 1 — ближний
-      /* К зрителю проход расширяется, поэтому ближние ряды отходят к
-         стенам, а не к середине. Было наоборот, и ближняя скотина
-         заезжала на настил. */
-      var edge = 21 - depth * 5;
-      out.push({
-        x: side ? 100 - edge : edge,
-        y: 32 + depth * 60,
-        /* Размер падает с числом мест: на полный хлев двенадцать голов, и
-           в прежних 26% они налезали друг на друга рядами. */
-        w: (n <= 4 ? 28 : n <= 8 ? 21 : 14) * (0.84 + 0.16 * depth),
-        flip: !!side
-      });
+    var g = AISLE_GEO[k] || AISLE_GEO.svini;
+    var tall = SPRITE_TALL[k] || 1;
+    /* Подбираем число рядов: самое малое, при котором все помещаются. В
+       широком ряду на стороне двое — у стены и у перил, в узком один. Так
+       двенадцать голов встают тремя-четырьмя рядами, а не столбиком по
+       шесть, как было. */
+    var rows = [], R;
+    for(R = 1; R <= 8; R++){
+      rows = []; var room = 0;
+      for(var r = 0; r < R; r++){
+        var t = R === 1 ? 1 : r / (R - 1);
+        var band = [lerp(g.far[0], g.near[0], t), lerp(g.far[1], g.near[1], t)];
+        var per = (band[1] - band[0]) >= 22 ? 2 : 1;
+        rows.push({t:t, y:R === 1 ? g.y1 : lerp(g.y0, g.y1, t), band:band, per:per});
+        room += per * 2;
+      }
+      if(room >= n) break;
     }
+    /* Размер: по ширине ряда и по шагу между рядами, что теснее. Ближние
+       чуть крупнее дальних — так читается глубина. */
+    var step = R > 1 ? (g.y1 - g.y0) / (R - 1) : 60;
+    var byStep = step / (tall * 16 / 9) * 1.25;
+    var placed = 0;
+    rows.forEach(function(row){
+      for(var side = 0; side < 2 && placed < n; side++){
+        for(var c = 0; c < row.per && placed < n; c++){
+          var bw = row.band[1] - row.band[0];
+          var cx = row.band[0] + bw * (c + 0.5) / row.per;
+          var w = Math.min(bw / row.per * 0.96, byStep, 26) * (0.86 + 0.14 * row.t);
+          out.push({x: side ? 100 - cx : cx, y: row.y, w: w, flip: !!side});
+          placed++;
+        }
+      }
+    });
     return out;
   }
-  var rows = n <= 3 ? 1 : n <= 8 ? 2 : 3;
-  var perRow = Math.ceil(n / rows);
+  var rowsF = n <= 3 ? 1 : n <= 8 ? 2 : 3;
+  var perRow = Math.ceil(n / rowsF);
   for(var j = 0; j < n; j++){
-    var r = Math.floor(j / perRow), c = j % perRow;
-    var inRow = Math.min(perRow, n - r * perRow);
-    var d = rows === 1 ? 1 : r / (rows - 1);          // 0 — дальний ряд, 1 — ближний
+    var rr = Math.floor(j / perRow), cc = j % perRow;
+    var inRow = Math.min(perRow, n - rr * perRow);
+    var d = rowsF === 1 ? 1 : rr / (rowsF - 1);        // 0 — дальний ряд, 1 — ближний
     /* Ряды прижаты к полу: у присланных интерьеров он начинается на разной
        высоте, и дальний ряд, поставленный повыше, оказывался на стене. */
     out.push({
-      x: (c + 0.5) / inRow * 86 + 7,
-      y: rows === 1 ? 92 : 70 + d * 24,
+      x: (cc + 0.5) / inRow * 86 + 7,
+      y: rowsF === 1 ? 92 : 70 + d * 24,
       w: Math.max(7, Math.min(17, 58 / perRow)) * (0.8 + 0.2 * d)
     });
   }
@@ -278,7 +310,7 @@ function renderRoom(k, h, H){
   room.style.backgroundImage = "url(" + url("img/iso/room-" + k + ".jpg") + ")";
   var total = cap(k);
   var style = ROOM_STYLE[k] || "floor";
-  var spots = roomSpots(total, style);
+  var spots = roomSpots(total, style, k);
   /* Подстилка: птица садится в гнездо, скотина стоит у кормушки. Рисуем
      её отдельным слоем под живностью — гнёзд ровно столько же, сколько
      мест, и двигаются они вместе с ними. */
@@ -300,15 +332,19 @@ function renderRoom(k, h, H){
     node.style.left = p.x + "%"; node.style.top = p.y + "%"; node.style.width = p.w + "%";
     node.style.zIndex = String(10 + Math.round(p.y));
     if(p.flip) node.classList.add("flip");
-    node.title = b.n;
-    /* Бирка как в оригинале: сверху сколько сезонов осталось, снизу что
-       сейчас происходит. Два разных числа, и оба нужны: одно говорит,
-       скоро ли покупать замену, другое — когда подходить. */
+    /* Значок — только у того, кому что-то нужно: галочка у готовых, миска
+       у голодных. Бирка с двумя числами над каждой головой при полном
+       хлеве давала двенадцать бирок, и за ними не было видно скотины.
+       Полные сроки — в подсказке при наведении и в списке под комнатой. */
+    node.title = b.n + " · осталось сезонов: " + a.se + " · " +
+      (st === "hungry" ? (H.kind === "plant" ? "нужен полив" : "нужен корм")
+        : st === "growing" ? "созреет через " + gtime(gminLeft(a)) : "готово к сбору");
     node.innerHTML = ic("breed", b.id, b.em) +
-      "<span class='tag'><b>🏅 " + a.se + "</b>" +
-      "<i>" + (st === "hungry" ? (H.kind === "plant" ? "нужен полив" : "нужен корм")
-        : st === "growing" ? gtime(gminLeft(a))
-        : "готово") + "</i></span>";
+      (st === "ready" ? "<span class='need ok'>✓</span>"
+        : st === "hungry" ? "<span class='need'>" + (H.kind === "plant" ? "💧" : "🍽") + "</span>" : "");
+    /* Эмодзи вместо картинки масштабируем по месту, а не держим в 30px:
+       в полном хлеве он был крупнее соседей, в пустом — крошкой. */
+    node.style.setProperty("--w", p.w);
     node.onclick = function(){
       var now = stateOf(a);
       if(now === "ready") return act("harvest", {house:k, slot:a.id});
@@ -343,7 +379,7 @@ function openHouse(k){
     hd.appendChild(el("div", null,
       "<b>Мест:</b> <span class='num'>" + h.slots.length + " / " + cap(k) + "</span> &nbsp; " +
       "<b>На складе:</b> <span class='num'>" + fmt(S.prods[k].n) + "</span> " + H.prod.em +
-      " на " + fmt(S.prods[k].val) + " 🪙" +
+      " на " + fmt(S.prods[k].val) + " <i class='coin'></i>" +
       (S.prods[k].n ? " <small>(по " + (S.prods[k].val / S.prods[k].n).toFixed(1) + " за штуку)</small>" : "")));
     var acts = el("div", "slot-acts");
     acts.style.display = "flex"; acts.style.gap = "5px"; acts.style.flexWrap = "wrap";
@@ -412,7 +448,7 @@ function openHouse(k){
         ? " · " + H.prod.n.toLowerCase() + " ×" + cst.p + " (есть " + fmt(S.prods[k].n) + ")"
         : "";
       up.innerHTML = "<span class='ic'>🔨</span><span class='grow'><b>" + HOUSE_TITLES[h.lvl] + "</b>" +
-        "<small>мест станет " + CAP[h.lvl] + " · " + fmt(cst.s) + " 🪙 или " + priceC(cst.c) + " 💎 · доски ×" + cst.b +
+        "<small>мест станет " + CAP[h.lvl] + " · " + fmt(cst.s) + " <i class='coin'></i> или " + priceC(cst.c) + " 💎 · доски ×" + cst.b +
         " (есть " + S.res.doska + ")" + needProd + "</small></span>";
       var ub = el("button", "mini", "Улучшить");
       ub.onclick = function(){ act("upgrade", {house:k}); };
@@ -883,7 +919,7 @@ function openStore(){
       var row = el("div", "row");
       row.innerHTML = "<span class='ic'>" + HOUSES[k].prod.em + "</span><span class='grow'><b>" + esc(HOUSES[k].prod.n) +
         " — " + fmt(p.n) + " ед.</b><small>из постройки «" + esc(HOUSES[k].n) + "»</small></span>" +
-        "<span class='num'><b>" + fmt(p.val) + "</b> 🪙</span>";
+        "<span class='num'><b>" + fmt(p.val) + "</b> <i class='coin'></i></span>";
       var b = el("button", "mini go", "Сдать");
       b.onclick = function(){ act("sell", {house:k}); };
       row.appendChild(b);
@@ -892,7 +928,7 @@ function openStore(){
     if(!total) rows.appendChild(el("div", "row", "<span class='ic'>📭</span><span class='grow'><small>Продукции нет. Собери урожай.</small></span>"));
     body.appendChild(rows);
     if(total){
-      var all = el("button", "btn go", "Сдать всё — " + fmt(total) + " 🪙");
+      var all = el("button", "btn go", "Сдать всё — " + fmt(total) + " <i class='coin'></i>");
       all.style.marginTop = "8px";
       all.onclick = function(){ act("sellAll", {}); };
       body.appendChild(all);
@@ -932,7 +968,7 @@ function openPets(){
      ["cat","🐈","Кот","Рыбка",140,"+5% к урожайности, пока сыт"]].forEach(function(p){
       var row = el("div", "row");
       row.innerHTML = "<span class='ic'>" + p[1] + "</span><span class='grow'><b>" + p[2] + " — сытость " + Math.round(S[p[0]]) + "%</b><small>" + p[5] + "</small></span>";
-      var b = el("button", "mini go", p[3] + " · " + p[4] + " 🪙");
+      var b = el("button", "mini go", p[3] + " · " + p[4] + " <i class='coin'></i>");
       b.onclick = function(){ act("feedPet", {pet:p[0]}); };
       row.appendChild(b);
       rows.appendChild(row);

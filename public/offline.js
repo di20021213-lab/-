@@ -40,8 +40,15 @@
     C.DECOR.forEach(function(d){ s.decor.push(d.id); });
     C.HELPERS.forEach(function(h){ s.helpers.push(h.id); });
     (C.GIFTS || []).forEach(function(g){ s.gifts[g.id] = 3; });
+    /* Сажаем только тех, у кого есть картинка. Порода без неё рисуется
+       эмодзи, и витрина, набитая ими наполовину, показывала не графику, а
+       её отсутствие. Новые породы появятся здесь сами, как придут картинки. */
+    var IMG = window.IMG || {};
+    function drawn(b){ return !!IMG["img/iso/breed-" + b.id + ".png"]; }
     C.HKEYS.forEach(function(k){
-      var breeds = C.BREEDS.filter(function(b){ return b.h === k; });
+      var all = C.BREEDS.filter(function(b){ return b.h === k; });
+      var breeds = all.filter(drawn);
+      if(!breeds.length) breeds = all;
       var max = C.CAP[C.CAP.length - 1];
       s.houses[k] = {lvl:C.CAP.length, slots:[]};
       for(var i = 0; i < max && breeds.length; i++){
