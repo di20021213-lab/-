@@ -33,7 +33,32 @@ python3 tools/import-art.py картинка.png <id>
 
 ## Список
 
-Все девятнадцать заменены присланными картинками, временных не осталось.
+Всего животных 26, картинки есть у 19. Семь новых пород добавлены в
+`content.js` и пока показываются эмодзи: свинарник вырос с четырёх пород
+до шести, коровник с двух до четырёх, конюшня с одной до четырёх.
+
+```text
+Брейтовская — свинья, ур. 7
+cute cartoon pink pig with soft drooping ears and a heavy belly, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Кемеровская — свинья, ур. 15
+cute cartoon farm pig with black skin and white socks on its legs and a white blaze on its face, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Ярославская — корова, ур. 8
+cute cartoon dairy cow with black coat, a white face, white belly and white legs, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Костромская — корова за кристаллы, ур. 16
+cute cartoon large dairy cow with a light grey and fawn coat and a big udder, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Вятская — конь, ур. 12
+cute cartoon small sturdy pony with a light dun coat, a dark stripe along its back and a thick mane, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Русский тяжеловоз — конь, ур. 16
+cute cartoon stocky draft horse with a warm chestnut coat, a short thick neck and shaggy hair over its hooves, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+
+Орловский рысак — конь, ур. 18
+cute cartoon elegant tall horse with a dapple grey coat and a long flowing mane and tail, 3/4 view facing right, full body standing, hand-painted 2D casual game art, plain flat background
+```
 
 | Готово | Файл | Порода | Постройка | Уровень | Как выглядит |
 |:---:|---|---|---|:---:|---|
@@ -174,8 +199,22 @@ cute cartoon farm horse with a brown coat, a black mane and tail, and thick shag
 | ✅ `room-kury.jpg` | Курятник | спереди |
 | ✅ `room-gusi.jpg` | Гусятник | спереди |
 | ✅ `room-svini.jpg` | Свинарник | проход |
-| ✅ `room-korovy.jpg` | Коровник | проход |
-| ✅ `room-koni.jpg` | Конюшня | проход |
+| `room-korovy.jpg` | Коровник | проход — **переснять без загонов** |
+| `room-koni.jpg` | Конюшня | проход — **переснять без загонов** |
+
+У присланных коровника и конюшни загоны нарисованы намертво, по два-три
+на сторону, а игра ставит живность по своей сетке — до шести на сторону.
+Они не совпадают, и скотина стоит на перилах. Свинарник выглядит
+прилично именно потому, что там сплошная солома без перегородок: нужен
+такой же фон, только сено и опилки.
+
+```text
+Коровник
+wooden barn interior seen from above, a straight plank path down the centre of the image from the bottom edge to the far wall, thick hay bedding filling the left and right sides, no stalls and no railings, empty, no animals, hand-painted 2D casual game background, 16:9
+
+Конюшня
+wooden stable interior seen from above, a straight plank path down the centre of the image from the bottom edge to the far wall, sawdust and straw bedding filling the left and right sides, no stalls and no partitions, empty, no animals, hand-painted 2D casual game background, 16:9
+```
 
 Проход рисует `aisle_room()` в `make-scene.py`: настил трапецией от
 нижнего края к дальней стене, подстилка по бокам. Это заглушка —
@@ -431,8 +470,22 @@ python3 tools/import-art.py assets-src/art/houses/kury.jpg   kury   --house --w 
 | ✅ `room-kury.jpg` | Курятник | спереди |
 | ✅ `room-gusi.jpg` | Гусятник | спереди |
 | ✅ `room-svini.jpg` | Свинарник | проход |
-| ✅ `room-korovy.jpg` | Коровник | проход |
-| ✅ `room-koni.jpg` | Конюшня | проход |
+| `room-korovy.jpg` | Коровник | проход — **переснять без загонов** |
+| `room-koni.jpg` | Конюшня | проход — **переснять без загонов** |
+
+У присланных коровника и конюшни загоны нарисованы намертво, по два-три
+на сторону, а игра ставит живность по своей сетке — до шести на сторону.
+Они не совпадают, и скотина стоит на перилах. Свинарник выглядит
+прилично именно потому, что там сплошная солома без перегородок: нужен
+такой же фон, только сено и опилки.
+
+```text
+Коровник
+wooden barn interior seen from above, a straight plank path down the centre of the image from the bottom edge to the far wall, thick hay bedding filling the left and right sides, no stalls and no railings, empty, no animals, hand-painted 2D casual game background, 16:9
+
+Конюшня
+wooden stable interior seen from above, a straight plank path down the centre of the image from the bottom edge to the far wall, sawdust and straw bedding filling the left and right sides, no stalls and no partitions, empty, no animals, hand-painted 2D casual game background, 16:9
+```
 
 Проход рисует `aisle_room()` в `make-scene.py`: настил трапецией от
 нижнего края к дальней стене, подстилка по бокам. Это заглушка —
