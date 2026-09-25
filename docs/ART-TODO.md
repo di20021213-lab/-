@@ -169,8 +169,8 @@ cute cartoon farm horse with a brown coat, a black mane and tail, and thick shag
 | ✅ `room-kury.jpg` | Курятник |
 | ✅ `room-gusi.jpg` | Гусятник |
 | ✅ `room-svini.jpg` | Свинарник |
-| `room-korovy.jpg` | Коровник |
-| `room-koni.jpg` | Конюшня |
+| ✅ `room-korovy.jpg` | Коровник |
+| ✅ `room-koni.jpg` | Конюшня |
 
 ```text
 Курятник
@@ -363,8 +363,8 @@ python3 tools/import-art.py assets-src/art/houses/kury.jpg   kury   --house --w 
 | ✅ `room-kury.jpg` | Курятник |
 | ✅ `room-gusi.jpg` | Гусятник |
 | ✅ `room-svini.jpg` | Свинарник |
-| `room-korovy.jpg` | Коровник |
-| `room-koni.jpg` | Конюшня |
+| ✅ `room-korovy.jpg` | Коровник |
+| ✅ `room-koni.jpg` | Конюшня |
 
 ```text
 Курятник
