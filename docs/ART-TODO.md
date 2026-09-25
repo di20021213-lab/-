@@ -200,7 +200,7 @@ cute cartoon farm horse with a brown coat, a black mane and tail, and thick shag
 | ✅ `room-gusi.jpg` | Гусятник | спереди |
 | ✅ `room-svini.jpg` | Свинарник | проход |
 | `room-korovy.jpg` | Коровник | проход — **переснять без загонов** |
-| `room-koni.jpg` | Конюшня | проход — **переснять без загонов** |
+| ✅ `room-koni.jpg` | Конюшня | проход |
 
 У присланных коровника и конюшни загоны нарисованы намертво, по два-три
 на сторону, а игра ставит живность по своей сетке — до шести на сторону.
@@ -208,12 +208,12 @@ cute cartoon farm horse with a brown coat, a black mane and tail, and thick shag
 прилично именно потому, что там сплошная солома без перегородок: нужен
 такой же фон, только сено и опилки.
 
+Вид строго сверху, планом, не годится: живность встаёт на нарисованные
+брусья. Нужен взгляд вдоль прохода, как получилось у конюшни.
+
 ```text
 Коровник
-wooden barn interior seen from above, a straight plank path down the centre of the image from the bottom edge to the far wall, thick hay bedding filling the left and right sides, no stalls and no railings, empty, no animals, hand-painted 2D casual game background, 16:9
-
-Конюшня
-wooden stable interior seen from above, a straight plank path down the centre of the image from the bottom edge to the far wall, sawdust and straw bedding filling the left and right sides, no stalls and no partitions, empty, no animals, hand-painted 2D casual game background, 16:9
+wooden barn interior looking along a plank walkway that runs from the bottom edge of the image to the far wall, thick hay bedding covering the floor on both sides of the walkway, no stalls and no railings on the bedding, empty, no animals, hand-painted 2D casual game background, 16:9
 ```
 
 Проход рисует `aisle_room()` в `make-scene.py`: настил трапецией от
@@ -471,7 +471,7 @@ python3 tools/import-art.py assets-src/art/houses/kury.jpg   kury   --house --w 
 | ✅ `room-gusi.jpg` | Гусятник | спереди |
 | ✅ `room-svini.jpg` | Свинарник | проход |
 | `room-korovy.jpg` | Коровник | проход — **переснять без загонов** |
-| `room-koni.jpg` | Конюшня | проход — **переснять без загонов** |
+| ✅ `room-koni.jpg` | Конюшня | проход |
 
 У присланных коровника и конюшни загоны нарисованы намертво, по два-три
 на сторону, а игра ставит живность по своей сетке — до шести на сторону.
@@ -479,12 +479,12 @@ python3 tools/import-art.py assets-src/art/houses/kury.jpg   kury   --house --w 
 прилично именно потому, что там сплошная солома без перегородок: нужен
 такой же фон, только сено и опилки.
 
+Вид строго сверху, планом, не годится: живность встаёт на нарисованные
+брусья. Нужен взгляд вдоль прохода, как получилось у конюшни.
+
 ```text
 Коровник
-wooden barn interior seen from above, a straight plank path down the centre of the image from the bottom edge to the far wall, thick hay bedding filling the left and right sides, no stalls and no railings, empty, no animals, hand-painted 2D casual game background, 16:9
-
-Конюшня
-wooden stable interior seen from above, a straight plank path down the centre of the image from the bottom edge to the far wall, sawdust and straw bedding filling the left and right sides, no stalls and no partitions, empty, no animals, hand-painted 2D casual game background, 16:9
+wooden barn interior looking along a plank walkway that runs from the bottom edge of the image to the far wall, thick hay bedding covering the floor on both sides of the walkway, no stalls and no railings on the bedding, empty, no animals, hand-painted 2D casual game background, 16:9
 ```
 
 Проход рисует `aisle_room()` в `make-scene.py`: настил трапецией от
