@@ -269,7 +269,7 @@ function roomSpots(n, style){
 /** Комната с живностью. Нажатие делает то, чего ждёт эта голова:
     голодную кормит, созревшую собирает, растущая отвечает сроком. */
 function renderRoom(k, h, H){
-  var room = el("div", "room");
+  var room = el("div", "room" + (ROOM_STYLE[k] === "aisle" ? " aisle" : ""));
   room.style.backgroundImage = "url(" + url("img/iso/room-" + k + ".jpg") + ")";
   var total = cap(k);
   var style = ROOM_STYLE[k] || "floor";

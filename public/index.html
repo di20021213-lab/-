@@ -127,6 +127,9 @@ button,.bld{-webkit-user-select:none;user-select:none}
 .room{position:relative;width:100%;aspect-ratio:4/3;margin:0 0 9px;border:4px solid var(--wood-dk);
   border-radius:10px;overflow:hidden;background:#b9905c center bottom/cover no-repeat;
   box-shadow:inset 0 0 26px rgba(40,26,14,.45)}
+/* Проход снят широким кадром: при 4:3 панель срезала бы ему бока вместе
+   со стенами и денниками, а живность стоит как раз вдоль них. */
+.room.aisle{aspect-ratio:16/9}
 .room .pet{position:absolute;transform:translate(-50%,-100%);border:0;background:none;padding:0;line-height:0}
 /* Подстилка под живностью: гнездо у птицы, кормушка у скотины. Лежит
    ниже её по слоям, поэтому живность садится в гнездо, а не рядом. */
