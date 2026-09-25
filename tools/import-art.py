@@ -25,6 +25,7 @@ import os, sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 FLIP_LIST = os.path.join(ROOT, "assets-src", "art", "flip.txt")
+WARM_LIST = os.path.join(ROOT, "assets-src", "art", "white-legs.txt")
 RECOLOR_LIST = os.path.join(ROOT, "assets-src", "art", "recolor.txt")
 OUT = os.path.join(ROOT, "public", "img", "iso")
 WIDTH = 200                       # столько же, сколько у остальных пород
@@ -33,6 +34,14 @@ HEIGHT = 330                      # и не выше самой рослой: в
 ITEM = 150                        # иконки кормов и ресурсов: вписываем в квадрат
 HOUSE = 420                       # постройки: по ширине, как самые крупные из нынешних
 INK = (48, 48, 56)                # контур как у набора: им обведены кусты, забор, реквизит
+
+
+def listed(path, key):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return key in [l.strip() for l in f if l.strip() and not l.startswith("#")]
+    except OSError:
+        return False
 
 
 def needs_flip(key):
@@ -137,7 +146,7 @@ def cut_background(im):
     return im
 
 
-def drop_ground(im, band=0.12):
+def drop_ground(im, band=0.12, warm=False, ref=None):
     """Срезает нарисованную под ногами тень.
 
     Тень бывает не серой, а тёплой — у белого гуся (232,216,206). По цвету её
@@ -153,6 +162,14 @@ def drop_ground(im, band=0.12):
 
     def pale(p):
         r, g, b, a = p
+        # warm — для пород с белыми ногами или носочками. Общее правило гасит
+        # у земли всё бледное, и белая нога уходит вместе с тенью. Но нога
+        # почти белая, а тень темнее: серая у ярославской коровы, бежевая
+        # (210,190,170) у кемеровской свиньи. Поэтому здесь гасим только то,
+        # что не светлее 228 по самому яркому каналу. Общее правило не
+        # трогаем — на нём поменялись бы почти все спрайты.
+        if warm:
+            return a > 40 and min(r, g, b) >= 150 and max(r, g, b) <= 228 and (max(r, g, b) - min(r, g, b)) <= 50
         return a > 40 and min(r, g, b) >= 160 and (max(r, g, b) - min(r, g, b)) <= 38
 
     feet = 0
@@ -178,7 +195,10 @@ def drop_ground(im, band=0.12):
     for y in range(y0, h):
         for x in range(w):
             p = px[x, y]
-            if pale(p) or (p[3] and is_backdrop(p[:3], bright=150, spread=18)):
+            # Между ногами бывает заперт кусок фона, до которого заливка
+            # снаружи не дотягивается. Он того же цвета, что угол картинки.
+            boxed = warm and ref and p[3] and all(abs(p[i] - ref[i]) <= 14 for i in range(3))
+            if pale(p) or boxed or (not warm and p[3] and is_backdrop(p[:3], bright=150, spread=18)):
                 px[x, y] = (p[0], p[1], p[2], 0)
     return im
 
@@ -371,7 +391,7 @@ def shadow(im):
 
 
 def prepare(path, keep_shadow=False, flip=False, item=False, palette=None, prop=False,
-            house=False, width=HOUSE, erase=None):
+            house=False, width=HOUSE, erase=None, warm=False):
     im = Image.open(path)
     if erase is not None:
         im = erase_hue(im, erase)
@@ -382,7 +402,11 @@ def prepare(path, keep_shadow=False, flip=False, item=False, palette=None, prop=
     if flip:
         im = im.transpose(Image.FLIP_LEFT_RIGHT)   # во дворе все смотрят вправо
     if not keep_shadow:
-        im = drop_ground(im)
+        src = Image.open(path).convert("RGB")
+        cw, ch = src.size
+        cs = [src.getpixel(xy) for xy in ((1, 1), (cw - 2, 1), (1, ch - 2), (cw - 2, ch - 2))]
+        ref = tuple(sorted(c[i] for c in cs)[1] for i in range(3))
+        im = drop_ground(im, warm=warm, ref=ref)
     box = im.getbbox()
     if not box:
         raise SystemExit("после обрезки ничего не осталось — проверь картинку")
@@ -440,7 +464,8 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     erase = int(sys.argv[sys.argv.index("--erase-hue") + 1]) if "--erase-hue" in sys.argv else None
     im = prepare(src, keep_shadow="--keep-shadow" in sys.argv, flip=flip, item=item,
-                 palette=wanted_palette(key), prop=prop, house=house, width=width, erase=erase)
+                 palette=wanted_palette(key), prop=prop, house=house, width=width, erase=erase,
+                 warm=listed(WARM_LIST, key))
     os.makedirs(OUT, exist_ok=True)
     dst = os.path.join(OUT, ("house-" if house else "prop-" if prop else
                             "feed-" if item else "breed-") + key + ".png")
