@@ -167,8 +167,8 @@ cute cartoon farm horse with a brown coat, a black mane and tail, and thick shag
 | Файл | Постройка |
 |---|---|
 | ✅ `room-kury.jpg` | Курятник |
-| `room-gusi.jpg` | Гусятник |
-| `room-svini.jpg` | Свинарник |
+| ✅ `room-gusi.jpg` | Гусятник |
+| ✅ `room-svini.jpg` | Свинарник |
 | `room-korovy.jpg` | Коровник |
 | `room-koni.jpg` | Конюшня |
 
@@ -186,11 +186,21 @@ inside a russian village pig barn, front view of the back wall, log walls with a
 inside a russian village cow barn, front view of the back wall, log walls with a hay rack and a window, floor of hay litter filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
 
 Конюшня
-inside a russian village stable, front view of the back wall, log walls with wooden stall dividers and a window, sawdust floor filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
+inside a russian village stable, front view of the back wall, log walls with a window, sawdust floor filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
 ```
 
 Главное в запросе — `empty room with no animals`: живность рисует игра,
 и нарисованная на фоне будет стоять мёртвым грузом рядом с настоящей.
+
+По той же причине в интерьере не должно быть **загонов и станков**.
+Нарисованный загон привязан к картинке намертво, а мест в постройке от
+трёх до двенадцати, смотря сколько раз её улучшили: три нарисованных
+станка развалят картинку сразу после первого улучшения. Места рисует
+игра — пунктирными кружками, и они считаются по уровню постройки.
+Интерьер должен быть пустой коробкой.
+
+Пропорции подходят любые: панель 4:3 подрезает квадрат сверху, а широкий
+кадр — понемногу с боков. Лучше всего сразу 4:3.
 
 ## Если генератор отказал
 
@@ -351,8 +361,8 @@ python3 tools/import-art.py assets-src/art/houses/kury.jpg   kury   --house --w 
 | Файл | Постройка |
 |---|---|
 | ✅ `room-kury.jpg` | Курятник |
-| `room-gusi.jpg` | Гусятник |
-| `room-svini.jpg` | Свинарник |
+| ✅ `room-gusi.jpg` | Гусятник |
+| ✅ `room-svini.jpg` | Свинарник |
 | `room-korovy.jpg` | Коровник |
 | `room-koni.jpg` | Конюшня |
 
@@ -370,11 +380,21 @@ inside a russian village pig barn, front view of the back wall, log walls with a
 inside a russian village cow barn, front view of the back wall, log walls with a hay rack and a window, floor of hay litter filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
 
 Конюшня
-inside a russian village stable, front view of the back wall, log walls with wooden stall dividers and a window, sawdust floor filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
+inside a russian village stable, front view of the back wall, log walls with a window, sawdust floor filling the lower half of the frame, empty room with no animals, hand-painted 2D casual game background, wide 16:10 image
 ```
 
 Главное в запросе — `empty room with no animals`: живность рисует игра,
 и нарисованная на фоне будет стоять мёртвым грузом рядом с настоящей.
+
+По той же причине в интерьере не должно быть **загонов и станков**.
+Нарисованный загон привязан к картинке намертво, а мест в постройке от
+трёх до двенадцати, смотря сколько раз её улучшили: три нарисованных
+станка развалят картинку сразу после первого улучшения. Места рисует
+игра — пунктирными кружками, и они считаются по уровню постройки.
+Интерьер должен быть пустой коробкой.
+
+Пропорции подходят любые: панель 4:3 подрезает квадрат сверху, а широкий
+кадр — понемногу с боков. Лучше всего сразу 4:3.
 
 ## Если генератор отказал
 

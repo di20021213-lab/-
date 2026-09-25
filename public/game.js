@@ -233,10 +233,12 @@ function roomSpots(n){
     var r = Math.floor(i / per), c = i % per;
     var inRow = Math.min(per, n - r * per);
     var depth = rows === 1 ? 1 : r / (rows - 1);      // 0 — дальний ряд, 1 — ближний
+    /* Ряды прижаты к полу: у присланных интерьеров он начинается на разной
+       высоте, и дальний ряд, поставленный повыше, оказывался на стене. */
     out.push({
       x: (c + 0.5) / inRow * 86 + 7,
-      y: rows === 1 ? 82 : 60 + depth * 30,
-      w: Math.max(9, Math.min(21, 70 / per)) * (0.76 + 0.24 * depth)
+      y: rows === 1 ? 92 : 76 + depth * 16,
+      w: Math.max(8, Math.min(19, 64 / per)) * (0.78 + 0.22 * depth)
     });
   }
   return out;
