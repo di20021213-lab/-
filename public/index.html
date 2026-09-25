@@ -131,8 +131,12 @@ button,.bld{-webkit-user-select:none;user-select:none}
 .room .pet img{width:100%;height:auto;display:block;filter:drop-shadow(0 3px 3px rgba(30,20,10,.45))}
 .room .pet .em{font-size:30px;line-height:1}
 .room .pet .tag{position:absolute;left:50%;top:-6px;transform:translate(-50%,-100%);
-  padding:1px 7px;border:2px solid var(--wood-dk);border-radius:9px;background:rgba(255,248,230,.95);
-  font-size:11px;font-weight:700;line-height:1.5;white-space:nowrap;color:var(--ink)}
+  padding:2px 8px;border:2px solid var(--wood-dk);border-radius:9px;background:rgba(255,248,230,.95);
+  font-size:11px;line-height:1.35;white-space:nowrap;color:var(--ink);
+  display:flex;flex-direction:column;align-items:center;box-shadow:var(--sh)}
+.room .pet .tag b{font-size:11px}
+.room .pet .tag i{font-style:normal;font-weight:700;font-size:11px;color:var(--ink-soft)}
+.room .pet.ready .tag i{color:#2f6b1e}
 /* Голодную видно издалека: она подрагивает и помечена миской. */
 .room .pet.hungry{animation:nudge 1.6s ease-in-out infinite}
 .room .pet.ready .tag{background:#cdf0c0;border-color:#3f7a2a}

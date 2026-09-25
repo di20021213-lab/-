@@ -199,6 +199,26 @@ inside a russian village stable, front view of the back wall, log walls with a w
 игра — пунктирными кружками, и они считаются по уровню постройки.
 Интерьер должен быть пустой коробкой.
 
+Подстилку под живностью — гнездо у птицы, кормушку у скотины — тоже
+рисует игра, отдельными спрайтами поверх фона. В оригинале курица сидит
+в соломенном гнезде, и именно это отличает живность в комнате от
+живности, приклеенной к фону.
+
+| Файл | Что это | Под кем |
+|---|---|---|
+| `prop-nest.png` | Соломенное гнездо, вид сбоку-сверху | куры, гуси |
+| `prop-trough.png` | Деревянная кормушка-корыто | свиньи, коровы, кони |
+
+```text
+Гнездо
+cute cartoon round straw nest seen from a low three-quarter angle, empty with no eggs and no bird, hand-painted 2D casual game art, plain flat background
+
+Кормушка
+cute cartoon simple wooden trough of planks seen from a low three-quarter angle, empty, hand-painted 2D casual game art, plain flat background
+```
+
+Пустыми: и яйца, и корм в них кладёт игра — их количество меняется.
+
 Пропорции подходят любые: панель 4:3 подрезает квадрат сверху, а широкий
 кадр — понемногу с боков. Лучше всего сразу 4:3.
 
@@ -392,6 +412,26 @@ inside a russian village stable, front view of the back wall, log walls with a w
 станка развалят картинку сразу после первого улучшения. Места рисует
 игра — пунктирными кружками, и они считаются по уровню постройки.
 Интерьер должен быть пустой коробкой.
+
+Подстилку под живностью — гнездо у птицы, кормушку у скотины — тоже
+рисует игра, отдельными спрайтами поверх фона. В оригинале курица сидит
+в соломенном гнезде, и именно это отличает живность в комнате от
+живности, приклеенной к фону.
+
+| Файл | Что это | Под кем |
+|---|---|---|
+| `prop-nest.png` | Соломенное гнездо, вид сбоку-сверху | куры, гуси |
+| `prop-trough.png` | Деревянная кормушка-корыто | свиньи, коровы, кони |
+
+```text
+Гнездо
+cute cartoon round straw nest seen from a low three-quarter angle, empty with no eggs and no bird, hand-painted 2D casual game art, plain flat background
+
+Кормушка
+cute cartoon simple wooden trough of planks seen from a low three-quarter angle, empty, hand-painted 2D casual game art, plain flat background
+```
+
+Пустыми: и яйца, и корм в них кладёт игра — их количество меняется.
 
 Пропорции подходят любые: панель 4:3 подрезает квадрат сверху, а широкий
 кадр — понемногу с боков. Лучше всего сразу 4:3.

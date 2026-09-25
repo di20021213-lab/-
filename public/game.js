@@ -258,10 +258,14 @@ function renderRoom(k, h, H){
     node.style.left = p.x + "%"; node.style.top = p.y + "%"; node.style.width = p.w + "%";
     node.style.zIndex = String(10 + Math.round(p.y));
     node.title = b.n;
+    /* Бирка как в оригинале: сверху сколько сезонов осталось, снизу что
+       сейчас происходит. Два разных числа, и оба нужны: одно говорит,
+       скоро ли покупать замену, другое — когда подходить. */
     node.innerHTML = ic("breed", b.id, b.em) +
-      "<span class='tag'>" + (st === "hungry" ? (H.kind === "plant" ? "💧" : "🍽")
+      "<span class='tag'><b>🏅 " + a.se + "</b>" +
+      "<i>" + (st === "hungry" ? (H.kind === "plant" ? "нужен полив" : "нужен корм")
         : st === "growing" ? gtime(gminLeft(a))
-        : H.prod.em) + "</span>";
+        : "готово") + "</i></span>";
     node.onclick = function(){
       var now = stateOf(a);
       if(now === "ready") return act("harvest", {house:k, slot:a.id});
