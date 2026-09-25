@@ -604,6 +604,64 @@ def room(kind, w=1200, h=760, seed=41):
     return img.convert("RGB")
 
 
+def aisle_room(kind, w=1200, h=900, seed=57):
+    """Интерьер с проходом: дощатый настил посередине, подстилка по бокам.
+
+    Так устроен свинарник в оригинале: проход от нижнего края к дальней
+    стене, загоны слева и справа, живность лежит мордами внутрь. Заглушка
+    на время, пока нет присланной картинки, — генератор такую композицию
+    берёт плохо.
+    """
+    BED = {"svini":  ((208, 170, 96),  (168, 134, 68)),
+           "korovy": ((202, 172, 104), (160, 132, 74)),
+           "koni":   ((206, 180, 130), (166, 142, 98))}
+    b_lo, b_hi = BED.get(kind, BED["svini"])
+    rnd = random.Random(seed)
+
+    img = blotchy((w, h), b_lo, b_hi, seed=seed, scale=22).convert("RGBA")
+    d = ImageDraw.Draw(img)
+
+    # дальняя стена вверху — иначе подстилка уходит в бесконечность
+    wall_h = int(h * 0.20)
+    img.alpha_composite(blotchy((w, wall_h), (150, 108, 70), (186, 140, 92),
+                                seed=seed + 1, scale=30).convert("RGBA"), (0, 0))
+    for i in range(4):
+        y = wall_h * i / 3
+        d.line([(0, y), (w, y)], fill=(104, 74, 46, 170), width=4)
+
+    # настил: трапеция, сужается вдаль
+    near, far = w * 0.17, w * 0.085
+    path = [(w / 2 - near, h), (w / 2 + near, h), (w / 2 + far, wall_h), (w / 2 - far, wall_h)]
+    d.polygon(path, fill=(190, 150, 104, 255))
+    for i in range(1, 16):                      # поперечные доски, чаще вдаль
+        t = (i / 16) ** 1.5
+        y = h - (h - wall_h) * t
+        half = near + (far - near) * t
+        d.line([(w / 2 - half, y), (w / 2 + half, y)], fill=(128, 94, 60, 200), width=3)
+    for sign in (-1, 1):                        # борта загонов вдоль настила
+        d.line([(w / 2 + sign * near, h), (w / 2 + sign * far, wall_h)],
+               fill=(120, 88, 56, 255), width=7)
+
+    # соломинки по бокам
+    for _ in range(11000):
+        x = rnd.randrange(0, w); y = rnd.randint(wall_h, h - 1)
+        t = (h - y) / (h - wall_h)
+        half = near + (far - near) * t
+        if abs(x - w / 2) < half + 6:
+            continue                            # на настил солому не сыплем
+        ln = rnd.randint(6, 18)
+        c = shade(b_hi if rnd.random() < 0.5 else b_lo, rnd.uniform(0.84, 1.16))
+        d.line([(x, y), (x + rnd.randint(-ln, ln), y - rnd.randint(0, 4))], fill=c + (170,), width=2)
+
+    vig = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(vig).ellipse([-w * 0.25, -h * 0.3, w * 1.25, h * 1.4], fill=255)
+    vig = vig.filter(ImageFilter.GaussianBlur(w * 0.07))
+    dark = Image.new("RGBA", (w, h), (40, 26, 14, 255))
+    dark.putalpha(ImageChops.invert(vig).point(lambda v: int(v * 0.40)))
+    img.alpha_composite(dark)
+    return img.convert("RGB")
+
+
 def supplied(key):
     """Постройку уже заменили присланной картинкой — рисовать её не надо.
 
@@ -632,12 +690,14 @@ if __name__ == "__main__":
     print("построек отрисовано: " + (", ".join(drawn) if drawn else "ни одной, все присланные"))
 
     made = []
+    AISLE = ("svini", "korovy", "koni")          # у скотины проход, у птицы комната
     for key in ("kury", "gusi", "svini", "korovy", "koni"):
         # Присланный интерьер не трогаем — та же защита, что у построек.
         if any(os.path.exists(os.path.join(ROOT, "assets-src", "art", "rooms", key + e))
                for e in (".jpg", ".jpeg", ".png", ".webp")):
             continue
-        room(key).save(os.path.join(OUT, "room-" + key + ".jpg"), quality=86, optimize=True)
+        pic = aisle_room(key) if key in AISLE else room(key)
+        pic.save(os.path.join(OUT, "room-" + key + ".jpg"), quality=86, optimize=True)
         made.append(key)
     print("интерьеров отрисовано: " + (", ".join(made) if made else "ни одного, все присланные"))
 

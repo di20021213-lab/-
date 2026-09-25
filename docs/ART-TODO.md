@@ -173,17 +173,32 @@ cute cartoon farm horse with a brown coat, a black mane and tail, and thick shag
 |---|---|---|
 | ✅ `room-kury.jpg` | Курятник | спереди |
 | ✅ `room-gusi.jpg` | Гусятник | спереди |
-| `room-svini.jpg` | Свинарник | **проход** — нужен новый фон |
-| `room-korovy.jpg` | Коровник | **проход** — нужен новый фон |
-| `room-koni.jpg` | Конюшня | **проход** — нужен новый фон |
+| `room-svini.jpg` | Свинарник | **проход** — пока процедурный |
+| `room-korovy.jpg` | Коровник | **проход** — пока процедурный |
+| `room-koni.jpg` | Конюшня | **проход** — пока процедурный |
+
+Проход рисует `aisle_room()` в `make-scene.py`: настил трапецией от
+нижнего края к дальней стене, подстилка по бокам. Это заглушка —
+генератор такую композицию берёт плохо, и ждать её не стоило.
 
 Спрайты живности под проход переделывать не надо: в оригинале свиньи
 нарисованы сбоку, как у нас, просто лежат по сторонам от прохода.
 Правую колонку игра отражает сама.
 
+Формулировку про «проход» генератор понимает плохо. Лучше заходит
+описание композиции, а не помещения; самый надёжный вариант — третий,
+где про стены не сказано вовсе. Механике от фона нужно ровно одно:
+настил посередине и подстилка по бокам.
+
 ```text
-Свинарник — проход
-top-down view inside a russian village pig barn, a wooden plank walkway running down the middle from the bottom of the frame towards the back wall, straw bedding pens along both sides separated by low wooden rails, empty with no animals, hand-painted 2D casual game background
+Свинарник — через композицию
+wooden farm shed interior seen from above, a straight plank path down the centre of the image from the bottom edge to the far wall, thick straw bedding filling the left and right sides, low wooden rails between the path and the straw, empty, no animals, hand-painted 2D casual game background
+
+Свинарник — через симметрию
+symmetrical interior of a wooden barn, high angle looking along a central wooden aisle that narrows towards the far wall, straw-filled pens on either side, empty, no animals, hand-painted 2D casual game background
+
+Свинарник — только пол
+a straw covered barn floor split down the middle by a wooden plank path running from the bottom edge to the top of the image, seen from above, empty, no animals, hand-painted 2D casual game background
 
 Коровник — проход
 top-down view inside a russian village cow barn, a wooden plank walkway running down the middle from the bottom of the frame towards the back wall, hay bedding stalls along both sides separated by low wooden rails, empty with no animals, hand-painted 2D casual game background
@@ -416,17 +431,32 @@ python3 tools/import-art.py assets-src/art/houses/kury.jpg   kury   --house --w 
 |---|---|---|
 | ✅ `room-kury.jpg` | Курятник | спереди |
 | ✅ `room-gusi.jpg` | Гусятник | спереди |
-| `room-svini.jpg` | Свинарник | **проход** — нужен новый фон |
-| `room-korovy.jpg` | Коровник | **проход** — нужен новый фон |
-| `room-koni.jpg` | Конюшня | **проход** — нужен новый фон |
+| `room-svini.jpg` | Свинарник | **проход** — пока процедурный |
+| `room-korovy.jpg` | Коровник | **проход** — пока процедурный |
+| `room-koni.jpg` | Конюшня | **проход** — пока процедурный |
+
+Проход рисует `aisle_room()` в `make-scene.py`: настил трапецией от
+нижнего края к дальней стене, подстилка по бокам. Это заглушка —
+генератор такую композицию берёт плохо, и ждать её не стоило.
 
 Спрайты живности под проход переделывать не надо: в оригинале свиньи
 нарисованы сбоку, как у нас, просто лежат по сторонам от прохода.
 Правую колонку игра отражает сама.
 
+Формулировку про «проход» генератор понимает плохо. Лучше заходит
+описание композиции, а не помещения; самый надёжный вариант — третий,
+где про стены не сказано вовсе. Механике от фона нужно ровно одно:
+настил посередине и подстилка по бокам.
+
 ```text
-Свинарник — проход
-top-down view inside a russian village pig barn, a wooden plank walkway running down the middle from the bottom of the frame towards the back wall, straw bedding pens along both sides separated by low wooden rails, empty with no animals, hand-painted 2D casual game background
+Свинарник — через композицию
+wooden farm shed interior seen from above, a straight plank path down the centre of the image from the bottom edge to the far wall, thick straw bedding filling the left and right sides, low wooden rails between the path and the straw, empty, no animals, hand-painted 2D casual game background
+
+Свинарник — через симметрию
+symmetrical interior of a wooden barn, high angle looking along a central wooden aisle that narrows towards the far wall, straw-filled pens on either side, empty, no animals, hand-painted 2D casual game background
+
+Свинарник — только пол
+a straw covered barn floor split down the middle by a wooden plank path running from the bottom edge to the top of the image, seen from above, empty, no animals, hand-painted 2D casual game background
 
 Коровник — проход
 top-down view inside a russian village cow barn, a wooden plank walkway running down the middle from the bottom of the frame towards the back wall, hay bedding stalls along both sides separated by low wooden rails, empty with no animals, hand-painted 2D casual game background
