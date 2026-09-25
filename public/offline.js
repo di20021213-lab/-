@@ -4,7 +4,11 @@
    в localStorage, а не в базе. Клиент об этом не знает: он всё так же зовёт api(). */
 (function(){
   var C = window.CONTENT, R = window.RULES;
-  var KEY = "dyshlo-offline-v2";
+  /* Витрина — отдельная сборка для осмотра графики: всё открыто, во всех
+     постройках живность всех пород. Хранится в своей ячейке, чтобы не
+     затирать обычную игру, если открыть обе в одном браузере. */
+  var DEMO = !!window.DEMO_MAX;
+  var KEY = DEMO ? "dyshlo-vitrina-v1" : "dyshlo-offline-v2";
   var uid = 1, S = null;
 
   function fresh(){
@@ -22,6 +26,34 @@
     C.HKEYS.forEach(function(k){ s.houses[k] = {lvl:1, slots:[]}; s.prods[k] = {n:0, val:0}; });
     s.feed.low = 3;
     s.houses.kury.slots = [{id:uid++, breed:"rusbel", se:3, fed:true, ready:t - 1000, feedId:"low"}];
+    return DEMO ? showcase(s, t) : s;
+  }
+
+  /** Заполняет двор по максимуму: предельный уровень построек, все породы
+      на местах и все три состояния сразу — готово, зреет, просит корма.
+      Иначе на снимке видно только одно из трёх. */
+  function showcase(s, t){
+    s.lvl = 20; s.xp = 0; s.silver = 9000000; s.gems = 500;
+    s.energy = 100; s.quest = 4; s.dog = 100; s.cat = 100;
+    C.FEEDS.forEach(function(f){ s.feed[f.id] = 99; });
+    C.RES.forEach(function(r){ s.res[r.id] = 99; });
+    C.DECOR.forEach(function(d){ s.decor.push(d.id); });
+    C.HELPERS.forEach(function(h){ s.helpers.push(h.id); });
+    (C.GIFTS || []).forEach(function(g){ s.gifts[g.id] = 3; });
+    C.HKEYS.forEach(function(k){
+      var breeds = C.BREEDS.filter(function(b){ return b.h === k; });
+      var max = C.CAP[C.CAP.length - 1];
+      s.houses[k] = {lvl:C.CAP.length, slots:[]};
+      for(var i = 0; i < max && breeds.length; i++){
+        var b = breeds[i % breeds.length], st = i % 3;
+        s.houses[k].slots.push({
+          id: uid++, breed: b.id, se: b.se, feedId: "high",
+          fed: st !== 2,                                   // каждый третий просит корма
+          ready: st === 0 ? t - 1000 : t + 3600000 * (1 + st)
+        });
+      }
+      s.prods[k] = {n:250, val:12000};
+    });
     return s;
   }
   function load(){

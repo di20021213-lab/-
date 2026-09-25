@@ -54,4 +54,13 @@ for(const [name, offline] of [["index.html", true], ["client.html", false]]){
   console.log((offline ? "без сервера: " : "для сервера: ") + file +
               " — " + (fs.statSync(file).size / 1048576).toFixed(2) + " МБ");
 }
+/* Витрина: та же страница без сервера, но с включённым DEMO_MAX. Открыл —
+   и сразу видно всю графику: предельный уровень, все постройки улучшены,
+   во всех местах живность всех пород. Хранится в своей ячейке, обычную
+   игру не затирает. */
+const demo = path.join(OUT, "kolhoz-vitrina.html");
+fs.writeFileSync(demo, bundle(true).replace("<!DOCTYPE html>\n",
+  "<!DOCTYPE html>\n<script>window.DEMO_MAX=1;</script>\n"));
+console.log("витрина:      " + demo + " — " + (fs.statSync(demo).size / 1048576).toFixed(2) + " МБ");
+
 console.log("картинок внутри: " + Object.keys(images).length);
