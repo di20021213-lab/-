@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Kinescope Downloader Helper",
+  "version": "2.1",
+  "description": "Ловит видео Kinescope и МТС Линк при просмотре и передаёт ссылку приложению KinescopeDownloader.",
+  "permissions": ["webRequest", "cookies", "tabs", "scripting", "activeTab"],
+  "host_permissions": [
+    "*://kinescope.io/*",
+    "*://*.kinescope.io/*",
+    "*://*.kinescopecdn.net/*",
+    "*://mts-link.ru/*",
+    "*://*.mts-link.ru/*",
+    "*://webinar.ru/*",
+    "*://*.webinar.ru/*",
+    "*://*.webinarcdn.com/*",
+    "http://127.0.0.1/*",
+    "<all_urls>"
+  ],
+  "action": {
+    "default_title": "Kinescope Downloader Helper",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

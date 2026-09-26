@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<style>
+  body {
+    font-family: Tahoma, "Segoe UI", sans-serif;
+    font-size: 12px;
+    width: 260px;
+    margin: 0;
+    padding: 12px;
+    background: #ECE9D8;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 13px; margin: 0 0 8px; }
+  p { margin: 0 0 10px; line-height: 1.35; color: #333; }
+  button {
+    width: 100%;
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    border: 1px solid #7a7a52;
+    border-radius: 4px;
+    background: linear-gradient(#fdfdf6, #dedeb8);
+  }
+  button:disabled { cursor: default; color: #888; }
+  #status {
+    margin-top: 10px;
+    padding: 8px;
+    min-height: 16px;
+    background: #fff;
+    border: 1px solid #b7b795;
+    border-radius: 3px;
+    white-space: pre-wrap;
+  }
+  .hint { color: #666; font-size: 11px; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <h1>Kinescope Downloader</h1>
+  <p>Собрать все видео с открытой страницы и передать их в приложение.</p>
+  <button id="collect">🔍 Собрать со страницы</button>
+  <div id="status"></div>
+  <div class="hint">
+    Плееры Kinescope ловятся сразу. Ролики-каталоги (МТС Линк) по очереди
+    открываются в фоне на пару секунд — не закрывай браузер, пока идёт сбор.
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

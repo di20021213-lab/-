@@ -1,0 +1,65 @@
+name: Build Windows EXE
+
+# Собирает готовый KinescopeDownloader.exe на Windows-раннере со вшитым
+# ffmpeg. Готовый файл лежит в артефактах прогона (вкладка Actions).
+
+on:
+  workflow_dispatch:        # запуск вручную кнопкой в Actions
+  push:
+    branches:
+      - claude/kinescope-video-downloader-g569dw
+    paths:
+      - "kinescope_gui.py"
+      - "kinescope_dl.py"
+      - "capture_server.py"
+      - "assets/watermark.png"
+      - "assets/font.ttf"
+      - "requirements.txt"
+      - ".github/workflows/build-exe.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Download ffmpeg
+        shell: pwsh
+        run: |
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_extract
+          $exe = Get-ChildItem -Path ffmpeg_extract -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          Copy-Item $exe.FullName -Destination ffmpeg.exe
+          Write-Host "ffmpeg скопирован:" (Get-Item ffmpeg.exe).Length "байт"
+
+      - name: Build EXE
+        shell: pwsh
+        run: |
+          pyinstaller --onefile --windowed `
+            --name KinescopeDownloader `
+            --add-binary "ffmpeg.exe;." `
+            --add-data "assets/watermark.png;." `
+            --add-data "assets/font.ttf;." `
+            --hidden-import truststore `
+            --collect-submodules truststore `
+            --collect-submodules cryptography `
+            --collect-submodules PIL `
+            kinescope_gui.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KinescopeDownloader-exe
+          path: dist/KinescopeDownloader.exe
+          if-no-files-found: error
