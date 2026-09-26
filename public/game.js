@@ -237,7 +237,7 @@ var ROOM_STYLE = {kury:"floor", gusi:"floor", svini:"aisle", korovy:"aisle", kon
    сужается до перил, поэтому и живность там встаёт по-разному.
    Сменили картинку — переснимите разметку, иначе скотина встанет на перила. */
 var AISLE_GEO = {
-  svini:  {y0:34, y1:95, far:[5, 40],  near:[2, 38]},
+  svini:  {y0:36, y1:95, far:[21, 43], near:[2, 38]},
   koni:   {y0:26, y1:88, far:[13, 38], near:[2, 20]},
   korovy: {y0:22, y1:95, far:[3, 39],  near:[2, 31]}
 };

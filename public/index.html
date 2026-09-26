@@ -413,6 +413,19 @@ i.coin{display:inline-block;width:.95em;height:.95em;vertical-align:-.12em;borde
   .meters{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;flex:1 1 260px}
   .qstrip{display:none}
   .chair{display:none}
+  /* Окно постройки — во всю высоту, амбар первым и ровно по высоте окна.
+     Иначе над ним стояли счётчики и кнопки, а сам он уезжал вниз и был
+     виден полоской: стены да спины скотины. */
+  .scrim{padding:4px}
+  .win{max-height:calc(100dvh - 8px)}
+  .win-hd{padding:3px 40px}
+  .win-hd h2{font-size:15px}
+  .win-ft{padding:4px 10px}
+  .win-bd{margin:5px;padding:6px}
+  .win-bd:has(>.room){display:flex;flex-direction:column}
+  .win-bd:has(>.room)>*{flex:none}
+  .win-bd>.room{order:-1;align-self:center;width:min(100%, calc((100dvh - 120px) * 4 / 3))}
+  .win-bd>.room.aisle{width:min(100%, calc((100dvh - 120px) * 16 / 9))}
 }
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
