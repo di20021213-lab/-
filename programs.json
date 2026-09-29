@@ -1,0 +1,286 @@
+{
+  "Programs": [
+    {
+      "Name": "Microsoft Visual C++ Redistributable (x64)",
+      "Category": "Системные компоненты",
+      "Files": ["vc_redist.x64*.exe"],
+      "Args": "/install /quiet /norestart",
+      "Detect": ["Microsoft Visual C++ 2015-20* Redistributable (x64)*", "Microsoft Visual C++ v14 Redistributable (x64)*"]
+    },
+    {
+      "Name": "Microsoft Visual C++ Redistributable (x86)",
+      "Category": "Системные компоненты",
+      "Files": ["vc_redist.x86*.exe"],
+      "Args": "/install /quiet /norestart",
+      "Detect": ["Microsoft Visual C++ 2015-20* Redistributable (x86)*", "Microsoft Visual C++ v14 Redistributable (x86)*"]
+    },
+    {
+      "Name": ".NET Desktop Runtime",
+      "Category": "Системные компоненты",
+      "Files": ["windowsdesktop-runtime-*.exe"],
+      "Args": "/install /quiet /norestart",
+      "Detect": ["Microsoft Windows Desktop Runtime*"]
+    },
+    {
+      "Name": "Java (Oracle JRE)",
+      "Category": "Системные компоненты",
+      "Files": ["jre-*.exe"],
+      "Args": "/s",
+      "Detect": ["Java *"]
+    },
+    {
+      "Name": "Eclipse Temurin (OpenJDK)",
+      "Category": "Системные компоненты",
+      "Files": ["OpenJDK*.msi"],
+      "MsiArgs": "/qn /norestart ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome",
+      "Detect": ["Eclipse Temurin*"]
+    },
+    {
+      "Name": "7-Zip",
+      "Category": "Архиваторы",
+      "Files": ["7z*.exe", "7z*.msi"],
+      "Args": "/S",
+      "Detect": ["7-Zip*"]
+    },
+    {
+      "Name": "WinRAR",
+      "Category": "Архиваторы",
+      "Files": ["winrar*.exe", "wrar*.exe"],
+      "Args": "/S",
+      "Detect": ["WinRAR*"]
+    },
+    {
+      "Name": "Google Chrome",
+      "Category": "Браузеры",
+      "Files": ["googlechromestandaloneenterprise*.msi", "ChromeStandaloneSetup*.exe", "ChromeSetup*.exe"],
+      "Args": "/silent /install",
+      "Detect": ["Google Chrome"],
+      "Notes": "Лучше использовать MSI для организаций (googlechromestandaloneenterprise64.msi): ChromeSetup.exe скачивает браузер из интернета."
+    },
+    {
+      "Name": "Mozilla Firefox",
+      "Category": "Браузеры",
+      "Files": ["Firefox*Setup*.exe", "Firefox*.msi"],
+      "Args": "/S",
+      "Detect": ["Mozilla Firefox*"]
+    },
+    {
+      "Name": "Microsoft Edge",
+      "Category": "Браузеры",
+      "Files": ["MicrosoftEdgeEnterprise*.msi"],
+      "Detect": ["Microsoft Edge"]
+    },
+    {
+      "Name": "Adobe Acrobat Reader",
+      "Category": "Офис и документы",
+      "Files": ["AcroRdr*.exe"],
+      "Args": "/sAll /rs /msi EULA_ACCEPT=YES",
+      "Detect": ["Adobe Acrobat*"],
+      "Notes": "Нужен полный (офлайн) установщик AcroRdrDC...exe с сайта Adobe для организаций, а не онлайн-загрузчик."
+    },
+    {
+      "Name": "Adobe Acrobat (Pro/Standard)",
+      "Category": "Офис и документы",
+      "Files": ["Adobe Acrobat\\setup.exe", "Acrobat\\setup.exe"],
+      "Args": "/sAll /rs /msi EULA_ACCEPT=YES",
+      "Detect": ["Adobe Acrobat*"],
+      "Notes": "Распакуйте дистрибутив в папку Distrib\\Adobe Acrobat\\ (там должен лежать setup.exe)."
+    },
+    {
+      "Name": "Foxit PDF Reader",
+      "Category": "Офис и документы",
+      "Files": ["FoxitPDFReader*.exe", "FoxitPDFReader*.msi"],
+      "Detect": ["Foxit PDF Reader*"],
+      "Notes": "Ключи для .exe определяются автоматически по типу установщика."
+    },
+    {
+      "Name": "Sumatra PDF",
+      "Category": "Офис и документы",
+      "Files": ["SumatraPDF*install*.exe"],
+      "Args": "-s -all-users",
+      "Detect": ["SumatraPDF*"]
+    },
+    {
+      "Name": "PDF24 Creator",
+      "Category": "Офис и документы",
+      "Files": ["pdf24-creator-*.msi"],
+      "Detect": ["PDF24 Creator*"]
+    },
+    {
+      "Name": "LibreOffice",
+      "Category": "Офис и документы",
+      "Files": ["LibreOffice_*_Win_x86-64.msi", "LibreOffice_*_Win_aarch64.msi"],
+      "MsiArgs": "/qn /norestart ALLUSERS=1",
+      "Detect": ["LibreOffice*"]
+    },
+    {
+      "Name": "LibreOffice (справка)",
+      "Category": "Офис и документы",
+      "Files": ["LibreOffice_*_helppack_*.msi"],
+      "MsiArgs": "/qn /norestart ALLUSERS=1",
+      "Detect": ["LibreOffice * Help Pack*"]
+    },
+    {
+      "Name": "Microsoft Office (ODT)",
+      "Category": "Офис и документы",
+      "Files": ["Office\\setup.exe"],
+      "Args": "/configure configuration.xml",
+      "Detect": ["Microsoft 365*", "Microsoft Office*"],
+      "TimeoutMinutes": 120,
+      "Notes": "Папка Distrib\\Office\\ с setup.exe из Office Deployment Tool и файлом configuration.xml (создаётся на config.office.com)."
+    },
+    {
+      "Name": "Notepad++",
+      "Category": "Утилиты",
+      "Files": ["npp.*.Installer*.exe"],
+      "Args": "/S",
+      "Detect": ["Notepad++*"]
+    },
+    {
+      "Name": "Total Commander",
+      "Category": "Утилиты",
+      "Files": ["tcmd*.exe"],
+      "Args": "/AHMGDU",
+      "Detect": ["Total Commander*"]
+    },
+    {
+      "Name": "Everything",
+      "Category": "Утилиты",
+      "Files": ["Everything-*.exe"],
+      "Args": "/S",
+      "Detect": ["Everything*"]
+    },
+    {
+      "Name": "ShareX",
+      "Category": "Утилиты",
+      "Files": ["ShareX-*-setup.exe"],
+      "Args": "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES",
+      "Detect": ["ShareX*"]
+    },
+    {
+      "Name": "VLC media player",
+      "Category": "Мультимедиа",
+      "Files": ["vlc-*.exe", "vlc-*.msi"],
+      "Args": "/L=1049 /S",
+      "Detect": ["VLC media player*"]
+    },
+    {
+      "Name": "K-Lite Codec Pack",
+      "Category": "Мультимедиа",
+      "Files": ["K-Lite_Codec_Pack*.exe"],
+      "Args": "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES",
+      "Detect": ["K-Lite Codec Pack*"]
+    },
+    {
+      "Name": "Audacity",
+      "Category": "Мультимедиа",
+      "Files": ["audacity-win-*.exe"],
+      "Args": "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES",
+      "Detect": ["Audacity*"]
+    },
+    {
+      "Name": "GIMP",
+      "Category": "Мультимедиа",
+      "Files": ["gimp-*-setup*.exe"],
+      "Args": "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES /ALLUSERS",
+      "Detect": ["GIMP*"]
+    },
+    {
+      "Name": "paint.net",
+      "Category": "Мультимедиа",
+      "Files": ["paint.net*.install*.exe"],
+      "Args": "/auto",
+      "Detect": ["paint.net*"]
+    },
+    {
+      "Name": "OBS Studio",
+      "Category": "Мультимедиа",
+      "Files": ["OBS-Studio-*.exe"],
+      "Args": "/S",
+      "Detect": ["OBS Studio*"]
+    },
+    {
+      "Name": "AnyDesk",
+      "Category": "Удалённый доступ",
+      "Files": ["AnyDesk*.msi", "AnyDesk*.exe"],
+      "Args": "--install \"C:\\Program Files (x86)\\AnyDesk\" --start-with-win --create-shortcuts --create-desktop-icon --silent",
+      "Detect": ["AnyDesk*"]
+    },
+    {
+      "Name": "TeamViewer",
+      "Category": "Удалённый доступ",
+      "Files": ["TeamViewer_Setup*.exe", "TeamViewer_Full*.msi"],
+      "Args": "/S",
+      "Detect": ["TeamViewer*"]
+    },
+    {
+      "Name": "RustDesk",
+      "Category": "Удалённый доступ",
+      "Files": ["rustdesk-*.msi", "rustdesk-*.exe"],
+      "Args": "--silent-install",
+      "Detect": ["RustDesk*"]
+    },
+    {
+      "Name": "PuTTY",
+      "Category": "Удалённый доступ",
+      "Files": ["putty-*installer.msi"],
+      "Detect": ["PuTTY*"]
+    },
+    {
+      "Name": "WinSCP",
+      "Category": "Удалённый доступ",
+      "Files": ["WinSCP-*-Setup.exe"],
+      "Args": "/VERYSILENT /ALLUSERS /NORESTART",
+      "Detect": ["WinSCP*"]
+    },
+    {
+      "Name": "Telegram Desktop",
+      "Category": "Связь",
+      "Files": ["tsetup*.exe"],
+      "Args": "/VERYSILENT /NORESTART",
+      "Detect": ["Telegram Desktop*"],
+      "Notes": "Устанавливается в профиль пользователя, от имени которого запущена установка."
+    },
+    {
+      "Name": "Zoom Workplace",
+      "Category": "Связь",
+      "Files": ["ZoomInstallerFull*.msi"],
+      "Detect": ["Zoom*"]
+    },
+    {
+      "Name": "Microsoft Teams",
+      "Category": "Связь",
+      "Files": ["teamsbootstrapper*.exe"],
+      "Args": "-p",
+      "Detect": ["Microsoft Teams*"],
+      "Notes": "teamsbootstrapper.exe скачивает Teams из интернета."
+    },
+    {
+      "Name": "Git",
+      "Category": "Разработка",
+      "Files": ["Git-*.exe"],
+      "Args": "/VERYSILENT /NORESTART /NOCANCEL /SP- /SUPPRESSMSGBOXES",
+      "Detect": ["Git", "Git version*"]
+    },
+    {
+      "Name": "Visual Studio Code",
+      "Category": "Разработка",
+      "Files": ["VSCodeSetup*.exe", "VSCodeUserSetup*.exe"],
+      "Args": "/VERYSILENT /NORESTART /MERGETASKS=!runcode",
+      "Detect": ["Microsoft Visual Studio Code*"]
+    },
+    {
+      "Name": "Python 3",
+      "Category": "Разработка",
+      "Files": ["python-3*.exe"],
+      "Args": "/quiet InstallAllUsers=1 PrependPath=1",
+      "Detect": ["Python 3*"]
+    },
+    {
+      "Name": "Node.js",
+      "Category": "Разработка",
+      "Files": ["node-v*.msi"],
+      "Detect": ["Node.js*"]
+    }
+  ]
+}

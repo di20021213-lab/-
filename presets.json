@@ -1,0 +1,7 @@
+{
+  "Presets": {
+    "Базовый набор": ["Microsoft Visual C++ Redistributable (x64)", "Microsoft Visual C++ Redistributable (x86)", "7-Zip", "Google Chrome", "Adobe Acrobat Reader", "VLC media player"],
+    "Офис": ["7-Zip", "Google Chrome", "Adobe Acrobat Reader", "LibreOffice", "LibreOffice (справка)", "Zoom Workplace", "AnyDesk"],
+    "Разработчик": ["7-Zip", "Git", "Visual Studio Code", "Python 3", "Node.js", "Notepad++", "PuTTY", "WinSCP"]
+  }
+}
