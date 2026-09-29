@@ -26,7 +26,7 @@ jobs:
           }
           if ($failed) { exit 1 }
           'programs.json', 'presets.json' | ForEach-Object { Get-Content $_ -Raw -Encoding UTF8 | ConvertFrom-Json | Out-Null }
-          Write-Host 'Синтаксис в порядке'
+          Write-Host 'Syntax OK'
 
       - name: Модульные и сквозные тесты (реальная тихая установка)
         shell: powershell
@@ -37,7 +37,7 @@ jobs:
         run: |
           $out = & powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\SilentInstaller.ps1 -SmokeTest 2>&1 | Out-String
           Write-Host $out
-          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'SMOKE: rows=\d+') { throw 'Окно программы не создалось' }
+          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'SMOKE: rows=\d+') { throw 'GUI smoke test failed' }
 
       - name: Логи установки
         if: always()
