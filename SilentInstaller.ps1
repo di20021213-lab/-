@@ -177,7 +177,7 @@ if ($JobFile) {
     Invoke-JobMode
 }
 
-$cliMode = $List -or $All -or $Preset -or (@($Programs).Count -gt 0) -or $DryRun
+$cliMode = $List -or $All -or $Preset -or (@($Programs | Where-Object { $_ }).Count -gt 0) -or $DryRun
 if ($cliMode) {
     if (-not ($List -or $DryRun -or $NoElevate) -and -not (Test-IsAdmin)) {
         Write-Host 'Для установки нужны права администратора — запрашиваю повышение прав…'
