@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+build/
+dist/
+bundle/
+*.spec
+app.ico
+test_scan.*
+result.docx
