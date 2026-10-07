@@ -37,6 +37,7 @@ class Line:
     xh: float = 0.0          # высота строчных букв, px
     base: float = 0.0        # базовая линия, px
     key: tuple = ()
+    sure: bool = False       # высота измерена надёжно (много строчных букв)
 
     @property
     def x0(self):
@@ -74,6 +75,7 @@ class Para:
     tabs: list = field(default_factory=list)   # [(позиция px, 'left'|'right'|'center')]
     segments: list | None = None  # для строк с табуляцией: список списков слов
     spacing: float = 1.0          # межстрочный интервал (множитель)
+    in_cell: bool = False         # абзац внутри ячейки таблицы
 
     @property
     def y0(self):
@@ -108,10 +110,12 @@ def measure_line(line: Line, ink: np.ndarray) -> None:
     горизонтальной проекции строки."""
     if all(w.fill for w in line.words):
         return              # линия «______» без текста: высоту задали заранее
-    x0, y0, x1, y1 = line.x0, line.y0, line.x1, line.y1
+    H_img, W_img = ink.shape[:2]
+    x0, y0 = max(0, line.x0), max(0, line.y0)
+    x1, y1 = min(W_img, line.x1), min(H_img, line.y1)
     h = max(1, y1 - y0)
-    if x1 <= x0:
-        line.xh, line.base = h * 0.5, y1
+    if x1 <= x0 or y1 <= y0:
+        line.xh, line.base = max(4.0, (line.y1 - line.y0) * 0.5), float(line.y1)
         return
     words = [w for w in line.words if not w.fill]
 
@@ -127,12 +131,12 @@ def measure_line(line: Line, ink: np.ndarray) -> None:
     caps = lowfrac(text) < 0.35
     mask = np.zeros((h, x1 - x0), np.uint8)
     for w in use:
-        mask[max(0, w.y0 - y0):w.y1 - y0, max(0, w.x0 - x0):w.x1 - x0] = 1
+        mask[max(0, w.y0 - y0):max(0, w.y1 - y0), max(0, w.x0 - x0):max(0, w.x1 - x0)] = 1
     crop = (ink[y0:y1, x0:x1] > 0) & (mask > 0)
     prof = crop.sum(axis=1).astype(np.float64)
     k = 1.45 if caps else 1.0       # у заглавных/цифр меряем высоту заглавных
     band, base = 0.5 * h / k, float(y1)
-    if prof.max() > 0 and len(prof) >= 6:
+    if prof.size and prof.max() > 0 and len(prof) >= 6:
         sm = np.convolve(prof, [1, 2, 1], mode="same") / 4.0
         d = np.diff(sm)
         # верх строчных — самый нижний из сильных подъёмов проекции
@@ -160,6 +164,8 @@ def measure_line(line: Line, ink: np.ndarray) -> None:
                 base = float(y0 + rows[-1] + 1)
     line.xh = max(4.0, band)
     line.base = base
+    # по строчным буквам высота меряется надёжно и у короткой строки
+    line.sure = not caps and n_lower >= 6
 
 
 def stroke_width(ink: np.ndarray, w: Word) -> tuple[float, float]:
@@ -235,49 +241,89 @@ def mark_bold(lines: list[Line], ink: np.ndarray) -> None:
             if len(vals) >= 6:
                 local_ref[id(ln)] = min(1.12, max(1.0, float(np.percentile(vals, 40))))
 
-    def score(w: Word, ref_line: float) -> float | None:
-        if w.stroke <= 0:
-            return None
-        n = _alnum(w.text)
-        k = 1.15 if n >= 4 else (1.28 if n == 3 else 1.42)
-        return w.stroke / ref_line / k
+    # Порог «жирности» — между двумя группами слов страницы (обычные и
+    # жирные). Если явной второй группы нет, жирного на странице нет.
+    vals = sorted(w.stroke / local_ref.get(id(ln), 1.0)
+                  for ln in lines for w in ln.words if w.stroke > 0 and _alnum(w.text) >= 4)
+    thr = _bold_threshold(vals)
 
     for ln in lines:
         ws = [w for w in ln.words if not w.fill]
         ref_line = local_ref.get(id(ln), 1.0)
-        sc = [score(w, ref_line) for w in ws]
-        long_sc = [v for w, v in zip(ws, sc) if v is not None and _alnum(w.text) >= 3]
-        uniform = long_sc and sum(v >= 0.93 for v in long_sc) >= 0.8 * len(long_sc) and \
-            median(long_sc) >= 1.0
+        rel = [w.stroke / ref_line if w.stroke > 0 else None for w in ws]
+
+        def need(w: Word) -> float:
+            n = _alnum(w.text)
+            return thr if n >= 4 else (thr + 0.08 if n == 3 else thr + 0.2)
+
+        long_rel = [r for w, r in zip(ws, rel) if r is not None and _alnum(w.text) >= 4]
+        uniform = len(long_rel) >= 3 and \
+            sum(r >= thr - 0.08 for r in long_rel) >= 0.8 * len(long_rel) and \
+            median(long_rel) >= thr
         if uniform:
-            for w, v in zip(ws, sc):            # строка целиком жирная
-                w.bold = v is None or v >= 0.85 or _alnum(w.text) < 3
+            for w, r in zip(ws, rel):            # строка целиком жирная (заголовок)
+                w.bold = r is None or r >= thr - 0.15 or _alnum(w.text) < 3
         else:
-            for w, v in zip(ws, sc):
-                w.bold = v is not None and _alnum(w.text) >= 3 and v >= 1.08
+            for w, r in zip(ws, rel):
+                w.bold = r is not None and _alnum(w.text) >= 3 and r >= need(w)
             changed = True
-            while changed:                      # продлеваем жирные фрагменты
+            while changed:                       # продлеваем жирные фрагменты
                 changed = False
                 for i, w in enumerate(ws):
-                    if w.bold or sc[i] is None:
+                    if w.bold or rel[i] is None or _alnum(w.text) < 3:
                         continue
                     nb = (i > 0 and ws[i - 1].bold) or (i + 1 < len(ws) and ws[i + 1].bold)
-                    if nb and _alnum(w.text) >= 3 and sc[i] >= 1.0:
+                    if nb and rel[i] >= thr - 0.12:
                         w.bold = True
                         changed = True
-            for i, w in enumerate(ws):          # короткие слова рядом с жирными
+            for i, w in enumerate(ws):           # короткие слова рядом с жирными
                 if w.bold or _alnum(w.text) > 2:
                     continue
                 lb = i > 0 and ws[i - 1].bold
                 rb = i + 1 < len(ws) and ws[i + 1].bold
                 edge = (i == 0 and rb) or (i == len(ws) - 1 and lb)
-                if (lb and rb) or (edge and sc[i] is not None and sc[i] >= 0.9):
+                if (lb and rb) or (edge and rel[i] is not None and rel[i] >= thr - 0.1):
                     w.bold = True
-        for i, w in enumerate(ws):              # знаки препинания между жирными
+        for i, w in enumerate(ws):               # знаки препинания между жирными
             if _alnum(w.text) == 0:
                 l_b = ws[i - 1].bold if i > 0 else False
                 r_b = ws[i + 1].bold if i + 1 < len(ws) else l_b
                 w.bold = l_b and r_b
+        # подчёркнутая фраза, большей частью жирная, — жирная целиком
+        i = 0
+        while i < len(ws):
+            if not ws[i].underline:
+                i += 1
+                continue
+            j = i
+            while j < len(ws) and ws[j].underline:
+                j += 1
+            run = ws[i:j]
+            total = sum(_alnum(w.text) for w in run)
+            bold = sum(_alnum(w.text) for w in run if w.bold)
+            if total and bold >= 0.5 * total:
+                for w in run:
+                    w.bold = True
+            i = j
+
+
+def _bold_threshold(vals: list[float]) -> float:
+    """Порог между обычными и жирными словами (1D k-средних на двух группах)."""
+    if len(vals) < 8:
+        return 9.0
+    lo, hi = float(np.percentile(vals, 40)), float(np.percentile(vals, 97))
+    if hi < 1.2:
+        return max(1.32, hi + 0.1)       # жирных слов нет
+    for _ in range(20):
+        mid = (lo + hi) / 2
+        a = [v for v in vals if v < mid]
+        b = [v for v in vals if v >= mid]
+        if not a or not b:
+            break
+        lo, hi = float(np.mean(a)), float(np.mean(b))
+    if hi < 1.22 * lo:
+        return max(1.32, hi + 0.05)      # второй группы нет — жирного нет
+    return float(min(1.42, max(1.18, (lo + hi) / 2)))
 
 
 # --------------------------------------------------------------------------
@@ -291,13 +337,19 @@ def split_line(line: Line) -> list[Line]:
     gaps = [ws[i + 1].x0 - ws[i].x1 for i in range(len(ws) - 1)]
     xh = line.xh or 0.6 * median([w.y1 - w.y0 for w in ws]) or 20
     cuts = []
+    # обычный пробел строки: медиана небольших промежутков (если они есть)
+    small = [g for g in gaps if g < 2.0 * xh]
+    base_gap = float(median(small)) if small else float(min(gaps))
     for i, g in enumerate(gaps):
-        others = gaps[:i] + gaps[i + 1:]
-        typical = median(others) if others else xh * 0.6
         if len(gaps) == 1:
             big = g > 6.0 * xh
         else:
-            big = g > 3.5 * xh and g > 3.0 * max(typical, xh * 0.4)
+            # промежуток намного больше обычного пробела этой строки
+            # (у строки «по ширине» все пробелы одинаково широкие — её не режем)
+            big = g > 3.5 * xh and g > 3.0 * max(base_gap, xh * 0.4)
+        # линии «____» — отдельные поля бланка: режем по промежутку рядом с ними
+        if (ws[i].fill or ws[i + 1].fill) and g > 1.2 * xh:
+            big = True
         if big:
             cuts.append(i + 1)
     if not cuts:
@@ -305,7 +357,11 @@ def split_line(line: Line) -> list[Line]:
         return [line]
     parts, prev = [], 0
     for c in cuts + [len(ws)]:
-        parts.append(Line(ws[prev:c], line.xh, line.base, line.key))
+        part = Line(ws[prev:c], line.xh, line.base, line.key)
+        if all(w.fill for w in part.words):
+            # своя базовая линия у поля «____»: черта чуть ниже строки букв
+            part.base = max(w.y1 for w in part.words) - 0.25 * xh
+        parts.append(part)
         prev = c
     return parts
 
@@ -324,7 +380,10 @@ def group_rows(segs: list[Line]) -> list[list[Line]]:
         for row in rows[-4:]:
             ref = row[0]
             xh = max(ref.xh, s.xh)
-            if abs(ref.base - s.base) < 0.75 * xh and _voverlap(ref, s) > 0.4 and \
+            # у линии «____» нижний край чуть ниже базовой линии текста
+            fill = all(w.fill for w in s.words) or all(w.fill for w in ref.words)
+            tol = 1.3 * xh if fill else 0.75 * xh
+            if abs(ref.base - s.base) < tol and _voverlap(ref, s) > (0.2 if fill else 0.4) and \
                     all(s.x1 <= o.x0 or s.x0 >= o.x1 for o in row):
                 row.append(s)
                 placed = True
@@ -414,10 +473,19 @@ def segment_paragraphs(lines: list[Line], L: float, R: float,
         new = False
         if ln.base - prev.base > 1.55 * pitch:
             new = True
+        elif all(w.fill for w in prev.words) or all(w.fill for w in ln.words):
+            new = True                  # линия «____» — отдельное поле
         elif abs(ln.xh - prev.xh) > 0.35 * xh:
             new = True
         elif _is_list_start(ln):
             new = True
+        elif cell and prev.words and ln.words and \
+                re.search(r"[а-яёa-z]-$", prev.words[-1].text) and \
+                re.match(r"[а-яёa-z]", ln.words[0].text):
+            new = False                 # перенос слова в узкой ячейке: «Коли-» / «чество»
+        elif cell and (cen_p or cen_c) and ln.words and re.match(r"[а-яё]", ln.words[0].text) \
+                and prev.words and not re.search(r"[.:;!?]$", prev.words[-1].text):
+            new = False                 # продолжение заголовка ячейки с маленькой буквы
         else:
             # Если первое слово следующей строки поместилось бы в предыдущую,
             # значит, предыдущая строка была последней в абзаце.
@@ -437,7 +505,10 @@ def segment_paragraphs(lines: list[Line], L: float, R: float,
             paras.append([ln])
         else:
             cur.append(ln)
-    return [_make_para(group, L, R, width, centered_mode, cell) for group in paras]
+    result = [_make_para(group, L, R, width, centered_mode, cell) for group in paras]
+    for p in result:
+        p.in_cell = cell
+    return result
 
 
 def _make_para(group: list[Line], L: float, R: float, width: float,
@@ -513,6 +584,8 @@ def layout_region(lines: list[Line], L: float, R: float) -> list:
     for k, row in enumerate(rows):
         if len(row) < 2:
             continue
+        if any(w.fill for sg in row for w in sg.words):
+            continue                    # строка бланка с полями — не текст «по ширине»
         xh = median([sg.xh for sg in row]) or 20
         gaps = [b.x0 - a.x1 for a, b in zip(row, row[1:])]
         spans = row[0].x0 - L < 2.5 * xh and R - row[-1].x1 < 2.5 * xh
@@ -714,8 +787,11 @@ def para_runs(p: Para) -> list[tuple[str, bool, bool]]:
         ws = ln.words
         if li > 0 and ws and runs:
             prev_text = runs[-1][0]
-            joined_hyphen = prev_text.endswith(("-", "­")) and \
+            joined_hyphen = prev_text.endswith(("-", "\u00ad")) and \
                 bool(re.match(r"[a-zа-яё]", ws[0].text))
+            if joined_hyphen and p.in_cell and re.search(r"[а-яёa-z]-$", prev_text):
+                # в ячейке это перенос слова: мягкий дефис виден только на краю строки
+                runs[-1][0] = prev_text[:-1] + "\u00ad"
             if not joined_hyphen:
                 prev_w = p.lines[li - 1].words[-1] if p.lines[li - 1].words else None
                 ul = bool(prev_w and prev_w.underline and ws[0].underline)
@@ -745,3 +821,7 @@ def fix_words(lines: list[Line]) -> None:
             if not w.fill:
                 w.text = textfix.fix_word(w.text)
                 w.text = textfix.fix_case(w.text, w.y1 - w.y0, ln.xh)
+        ws = [w for w in ln.words if not w.fill]
+        for i, w in enumerate(ws):
+            near = [o.text for o in ws[max(0, i - 1):i + 2] if o is not w]
+            w.text = textfix.latin_code(w.text, near)

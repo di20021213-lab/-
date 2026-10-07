@@ -36,6 +36,8 @@ class GridCell:
     x1: int = 0
     y1: int = 0
     paragraphs: list = field(default_factory=list)
+    borderless: bool = False      # столбец подписей слева от таблицы бланка
+    valign: str = ""              # "", "top", "center", "bottom"
 
 
 @dataclass
@@ -47,6 +49,8 @@ class Table:
     bordered: bool = True
     segments: list = field(default_factory=list)   # отрезки линий сетки
     frame: bool = False                            # рамка листа, а не таблица
+    place: tuple = ("center", 0)                   # выравнивание на листе и отступ, px
+    beside_text: bool = False                      # рядом с таблицей стоит текст
 
     @property
     def x0(self):
@@ -271,8 +275,13 @@ def _build_table(hs: list[Segment], vs: list[Segment], tol: int, xh: float,
 
     H, W = shape
     mask = np.zeros((H, W), np.uint8)
-    for s in hs + vs:
-        cv2.rectangle(mask, (s.x0 - 2, s.y0 - 2), (s.x1 + 2, s.y1 + 2), 255, -1)
+    # линию, продолжающуюся за пределы таблицы (поле бланка на одном уровне
+    # с границей строки), к таблице относим только в её пределах
+    gx0, gx1, gy0, gy1 = xs[0] - tol, xs[-1] + tol, ys[0] - tol, ys[-1] + tol
+    for s in hs:
+        cv2.rectangle(mask, (max(s.x0, gx0) - 2, s.y0 - 2), (min(s.x1, gx1) + 2, s.y1 + 2), 255, -1)
+    for s in vs:
+        cv2.rectangle(mask, (s.x0 - 2, max(s.y0, gy0) - 2), (s.x1 + 2, min(s.y1, gy1) + 2), 255, -1)
     return Table(xs, ys, cells, mask, segments=list(hs) + list(vs))
 
 

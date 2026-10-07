@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
+import math
 from statistics import median
 
 from docx import Document
 from docx.enum.section import WD_ORIENT, WD_SECTION
-from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_ROW_HEIGHT_RULE, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Emu, Pt
 
-from . import layout
+from . import layout, metrics
 from . import tables as tbl
 from .layout import ColumnGroup, Para
 
@@ -107,8 +108,13 @@ def _apply_section(section, pages, ctx: Ctx):
         vals = [v for v in vals if v is not None]
         return median(vals) if vals else default
 
-    lefts = [p.body[0] / p.dpi for p in pages]
-    rights = [(p.width_px - p.body[2]) / p.dpi for p in pages]
+    # левое и правое поля — по заполненным страницам: на последней странице
+    # с одной подписью текст обычно не доходит до правого края
+    from .pipeline import _all_paras, _text_len
+    chars = [sum(_text_len(q) for q in _all_paras(p.elements)) for p in pages]
+    full = [p for p, n in zip(pages, chars) if n >= 0.5 * max(chars)] or pages
+    lefts = [p.body[0] / p.dpi for p in full]
+    rights = [(p.width_px - p.body[2]) / p.dpi for p in full]
     tops = [p.body[1] / p.dpi for p in pages]
     # нижнее поле: по самой заполненной странице
     bottoms = [(p.height_px - p.body[3]) / p.dpi for p in pages]
@@ -144,17 +150,63 @@ def _fill_paragraph(par, p: Para, ctx: Ctx, max_indent_px: float | None = None):
         fmt.first_line_indent = ctx.emu(first)
     if p.space_before > 0:
         fmt.space_before = Pt(round(min(ctx.pt(p.space_before), 200.0), 1))
+    if p.spacing and abs(p.spacing - 1.0) > 0.01:
+        fmt.line_spacing = p.spacing          # полуторный, двойной интервал
     for pos, kind in p.tabs:
         fmt.tab_stops.add_tab_stop(ctx.emu(pos), TAB[kind])
     size = None if abs(p.size - ctx.body_size) < 0.25 else p.size
     for text, bold, underline in layout.para_runs(p):
-        run = par.add_run(text)
+        parts = text.split("\u00ad")
+        run = par.add_run(parts[0])
+        for part in parts[1:]:
+            # мягкий перенос: дефис появится только если слово разорвётся на краю
+            run._r.append(OxmlElement("w:softHyphen"))
+            t = OxmlElement("w:t")
+            t.text = part
+            t.set(qn("xml:space"), "preserve")
+            run._r.append(t)
         if bold:
             run.bold = True
         if underline:
             run.underline = True
         if size:
             run.font.size = Pt(size)
+    if size:
+        _mark_size(par, size)
+
+
+def _mark_size(par, size: float) -> None:
+    """Кегль знака абзаца: от него зависит высота пустой строки и строки таблицы."""
+    pPr = par._p.get_or_add_pPr()
+    rPr = pPr.find(qn("w:rPr"))
+    if rPr is None:
+        rPr = OxmlElement("w:rPr")
+        sect = pPr.find(qn("w:sectPr"))
+        if sect is not None:
+            sect.addprevious(rPr)
+        else:
+            pPr.append(rPr)
+    for tag in ("w:sz", "w:szCs"):
+        el = rPr.find(qn(tag))
+        if el is None:
+            el = OxmlElement(tag)
+            rPr.append(el)
+        el.set(qn("w:val"), str(int(round(size * 2))))
+
+
+def _empty_cells_size(table, sizes: list[float], ctx: Ctx) -> None:
+    """Пустые ячейки — тем же кеглем, что текст таблицы, иначе строки
+    выйдут выше, чем на скане."""
+    if not sizes:
+        return
+    size = median(sizes)
+    if abs(size - ctx.body_size) < 0.25:
+        return
+    for row in table.rows:
+        for cell in row.cells:
+            pars = cell.paragraphs
+            if len(pars) == 1 and not pars[0].text:
+                _mark_size(pars[0], size)
 
 
 def _set_col_widths(table, widths_tw: list[int]):
@@ -209,6 +261,33 @@ def _cell_margins(table, tw: int = CELL_MARGIN_TW):
         el.set(qn("w:type"), "dxa")
 
 
+def _cell_borders(cell_obj, right: bool = False):
+    """Ячейка без рамки (правая граница — это левая граница самой таблицы)."""
+    tcPr = cell_obj._tc.get_or_add_tcPr()
+    borders = tcPr.find(qn("w:tcBorders"))
+    if borders is None:
+        borders = OxmlElement("w:tcBorders")
+        # порядок в tcPr: tcW, gridSpan, vMerge, tcBorders, shd, ..., vAlign
+        after = [qn("w:tcW"), qn("w:gridSpan"), qn("w:hMerge"), qn("w:vMerge")]
+        anchor = None
+        for child in tcPr:
+            if child.tag in after:
+                anchor = child
+        if anchor is not None:
+            anchor.addnext(borders)
+        else:
+            tcPr.insert(0, borders)
+    for edge in ("top", "left", "bottom", "right"):
+        el = OxmlElement(f"w:{edge}")
+        if edge == "right" and right:
+            el.set(qn("w:val"), "single")
+            el.set(qn("w:sz"), "4")
+            el.set(qn("w:color"), "000000")
+        else:
+            el.set(qn("w:val"), "nil")
+        borders.append(el)
+
+
 def _no_borders(table):
     tblPr = table._tbl.tblPr
     borders = OxmlElement("w:tblBorders")
@@ -223,9 +302,25 @@ def _cell_widths_merged(cell_obj, width_tw: int):
     cell_obj.width = Emu(int(width_tw * 635))
 
 
+def _fit_size(p: Para, ctx: Ctx, width_px: float) -> None:
+    """Надпись, которая на скане умещалась в ячейке одной строкой, не должна
+    переноситься в Word: при нехватке места чуть уменьшаем кегль (до 12 %)."""
+    if len(p.lines) != 1 or p.segments is not None or not p.lines[0].words:
+        return
+    ws = p.lines[0].words
+    em = sum(metrics.advance_width(w.text, w.bold) for w in ws) + metrics.SPACE * (len(ws) - 1)
+    avail = width_px - 2 * CELL_MARGIN_TW / 1440 * ctx.dpi - p.left - max(0.0, p.first)
+    need = em * p.size * ctx.dpi / 72.0
+    if need > avail > 0:
+        size = math.floor(2 * p.size * avail / need) / 2      # шаг 0,5 пт
+        if size >= 0.88 * p.size:
+            p.size = size
+
+
 def _write_cell(cell_obj, paras: list[Para], ctx: Ctx, width_px: float):
     first = True
     for p in paras:
+        _fit_size(p, ctx, width_px)
         if first:
             par = cell_obj.paragraphs[0]
             first = False
@@ -245,23 +340,48 @@ def _add_table(doc, t: tbl.Table, ctx: Ctx, max_width_px: float):
     except KeyError:
         pass
     table.autofit = False
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    where, indent = getattr(t, "place", ("center", 0))
+    table.alignment = {"left": WD_TABLE_ALIGNMENT.LEFT, "right": WD_TABLE_ALIGNMENT.RIGHT}.get(
+        where, WD_TABLE_ALIGNMENT.CENTER)
+    if where == "left" and indent > 0:
+        ind = OxmlElement("w:tblInd")
+        ind.set(qn("w:w"), str(ctx.tw(min(indent, max(0.0, max_width_px - total)))))
+        ind.set(qn("w:type"), "dxa")
+        _put_tblpr(table._tbl.tblPr, ind)
     _cell_margins(table)
     _set_col_widths(table, widths_tw)
+    if not t.beside_text:
+        # строки не ниже, чем на скане: пустые строки бланка остаются
+        # местом для записи, высокая шапка — высокой
+        for r, row in enumerate(table.rows):
+            h = t.ys[r + 1] - t.ys[r]
+            if h > 0:
+                row.height = ctx.emu(0.97 * h)
+                row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
     for c in t.cells:
         a = table.cell(c.r0, c.c0)
         if c.r1 - c.r0 > 1 or c.c1 - c.c0 > 1:
             a = a.merge(table.cell(c.r1 - 1, c.c1 - 1))
             _cell_widths_merged(a, sum(widths_tw[c.c0:c.c1]))
+    _empty_cells_size(table, [p.size for c in t.cells for p in c.paragraphs], ctx)
     for c in t.cells:
         cell_obj = table.cell(c.r0, c.c0)
         _write_cell(cell_obj, c.paragraphs, ctx, (c.x1 - c.x0) * scale)
+        if c.borderless:
+            _cell_borders(cell_obj, right=True)
+        if c.valign:
+            cell_obj.vertical_alignment = {
+                "top": WD_CELL_VERTICAL_ALIGNMENT.TOP, "bottom": WD_CELL_VERTICAL_ALIGNMENT.BOTTOM,
+                "center": WD_CELL_VERTICAL_ALIGNMENT.CENTER}[c.valign]
+            continue
         if c.paragraphs:
             top_gap = c.paragraphs[0].y0 - c.y0
             bottom_gap = c.y1 - c.paragraphs[-1].y1
             h = c.y1 - c.y0
             if h > 0 and top_gap > 0.2 * h and abs(top_gap - bottom_gap) < 0.25 * h:
                 cell_obj.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+            elif h > 0 and top_gap > 0.4 * h and bottom_gap < 0.2 * h:
+                cell_obj.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.BOTTOM
     return table
 
 
@@ -279,6 +399,7 @@ def _add_columns(doc, g: ColumnGroup, ctx: Ctx, max_width_px: float):
     _no_borders(table)
     _cell_margins(table)
     _set_col_widths(table, widths_tw)
+    _empty_cells_size(table, [p.size for paras in g.cells for p in paras], ctx)
     for k, paras in enumerate(g.cells):
         _write_cell(table.cell(0, k), paras, ctx, widths_px[k] * scale)
     return table

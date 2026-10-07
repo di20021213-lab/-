@@ -33,9 +33,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y tesseract-ocr fonts-liberation
           mkdir -p tessdata
-          for l in rus eng osd; do
+          # те же модели, что в программе для Windows
+          for l in rus osd; do
             curl -sSfL -o tessdata/$l.traineddata https://github.com/tesseract-ocr/tessdata_best/raw/main/$l.traineddata
           done
+          curl -sSfL -o tessdata/eng.traineddata https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 

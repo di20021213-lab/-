@@ -36,6 +36,20 @@ def fix_word(text: str) -> str:
     return text
 
 
+_HOMOGLYPH_CODE = re.compile(r"[АВЕКМНОРСТХ0-9./\-–]+")
+
+
+def latin_code(text: str, neighbours: list[str]) -> str:
+    """«КВ-300» рядом с «A4Tech» — это артикул латиницей: русские буквы,
+    похожие на латинские, вместе с цифрами меняем на латинские."""
+    if not (_HOMOGLYPH_CODE.fullmatch(text) and CYR.search(text) and
+            any(ch.isdigit() for ch in text)):
+        return text
+    if any(LAT.search(n) and not CYR.search(n) for n in neighbours):
+        return text.translate(CYR2LAT)
+    return text
+
+
 def is_dash_only(text: str) -> bool:
     return bool(text) and all(ch in DASHES for ch in text)
 
@@ -73,3 +87,21 @@ def fix_case(text: str, height: float, xh: float) -> str:
         if height < 1.18 * xh and not any(ch in tall for ch in rest.lower()):
             return first.lower() + rest
     return text
+
+
+# как выглядят русские буквы, если читать их английской моделью
+_LOOK = str.maketrans({
+    "а": "a", "б": "6", "в": "b", "г": "r", "д": "a", "е": "e", "ё": "e", "ж": "x", "з": "3",
+    "и": "u", "й": "u", "к": "k", "л": "n", "м": "m", "н": "h", "о": "o", "п": "n", "р": "p",
+    "с": "c", "т": "t", "у": "y", "ф": "o", "х": "x", "ц": "u", "ч": "4", "ш": "w", "щ": "w",
+    "ъ": "b", "ы": "bi", "ь": "b", "э": "3", "ю": "io", "я": "r", "№": "no",
+})
+
+
+def looks_same(rus: str, eng: str) -> float:
+    """Насколько английское прочтение — это те же буквы «в латинице»
+    (тогда исходный текст русский и менять его не нужно)."""
+    import difflib
+    a = rus.lower().translate(_LOOK)
+    b = eng.lower()
+    return difflib.SequenceMatcher(None, a, b).ratio()
