@@ -102,8 +102,15 @@ jobs:
           pip install pefile
           python tools/bundle_tesseract.py "$dest" bundle\tesseract
           New-Item -ItemType Directory -Force -Path bundle\tesseract\tessdata | Out-Null
-          foreach ($l in @("rus", "eng", "osd")) {
-            Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_best/raw/main/$l.traineddata" -OutFile "bundle\tesseract\tessdata\$l.traineddata"
+          # Russian and orientation: the most accurate "best" models;
+          # English (rarely needed) - the compact "fast" model
+          $models = @{
+            "rus" = "https://github.com/tesseract-ocr/tessdata_best/raw/main/rus.traineddata";
+            "osd" = "https://github.com/tesseract-ocr/tessdata_best/raw/main/osd.traineddata";
+            "eng" = "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata"
+          }
+          foreach ($l in $models.Keys) {
+            Invoke-WebRequest -Uri $models[$l] -OutFile "bundle\tesseract\tessdata\$l.traineddata"
           }
           Get-ChildItem bundle\tesseract, bundle\tesseract\tessdata | Format-Table Name, Length
 
@@ -121,6 +128,10 @@ jobs:
         shell: pwsh
         timeout-minutes: 20
         run: |
+          # OpenCV's video module (ffmpeg, ~25 MB) is not needed for images
+          $cv2dir = python -c "import cv2, os; print(os.path.dirname(cv2.__file__))"
+          Get-ChildItem $cv2dir -Filter "opencv_videoio_ffmpeg*.dll" | Remove-Item -Verbose
+          python -c "import cv2; print('cv2', cv2.__version__)"
           python tools/make_icon.py app.ico
           $common = @(
             "--noconfirm", "--windowed", "--icon", "app.ico",
