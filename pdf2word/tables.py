@@ -46,6 +46,7 @@ class Table:
     line_mask: np.ndarray | None = None  # маска линий (в координатах страницы)
     bordered: bool = True
     segments: list = field(default_factory=list)   # отрезки линий сетки
+    frame: bool = False                            # рамка листа, а не таблица
 
     @property
     def x0(self):
@@ -174,8 +175,14 @@ def detect_tables(ink: np.ndarray, xh: float) -> list[Table]:
         if len(hs) < 2 or len(vs) < 2:
             continue
         table = _build_table(hs, vs, tol, xh, (H, W))
-        if table is not None:
-            tables.append(table)
+        if table is None:
+            continue
+        # рамка вокруг всего листа (тень копира, рамка бланка) — не таблица
+        area = (table.x1 - table.x0) * (table.y1 - table.y0)
+        if len(table.cells) == 1 and area > 0.45 * H * W:
+            table.bordered = False
+            table.frame = True
+        tables.append(table)
     tables.sort(key=lambda t: t.y0)
     return tables
 

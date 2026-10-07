@@ -481,6 +481,7 @@ def process_page(engine: Engine, src: imageops.PageSource, index: int,
     grid_mask = np.zeros_like(ink)
     for t in tables:
         grid_mask |= t.line_mask
+    tables = [t for t in tables if not t.frame]   # линии рамки стираем, текст — обычный
 
     segs = _short_segments(ink, xh, grid_mask)
     # обрывки линий таблицы (продолжение границы) — не подчёркивания:
