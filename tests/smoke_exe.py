@@ -19,6 +19,11 @@ import make_scan  # noqa: E402
 
 
 def main() -> int:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
     exe = os.path.abspath(sys.argv[1])
     base = os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()
     folder = os.path.join(base, "Тестовая папка со сканами")

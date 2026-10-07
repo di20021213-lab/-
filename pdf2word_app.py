@@ -132,10 +132,19 @@ class App:
         self.status = ttk.Label(outer, text="Готов к работе", style="Hint.TLabel")
         self.status.pack(anchor="w")
 
+        root.protocol("WM_DELETE_WINDOW", self.on_close)
         root.after(100, self.poll)
         if files:
             self.set_files(files)
             root.after(300, self.start)
+
+    def on_close(self):
+        if self.busy:
+            if not messagebox.askyesno(APP_TITLE, "Распознавание ещё идёт. Прервать и закрыть?"):
+                return
+            if self.engine:
+                self.engine.cancel()        # не оставляем висеть процессы Tesseract
+        self.root.destroy()
 
     # ------------------------------------------------------------- файлы
     def on_drop(self, event):

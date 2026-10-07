@@ -170,18 +170,36 @@ def _set_col_widths(table, widths_tw: list[int]):
     tblPr = tbl_el.tblPr
     tblW = tblPr.find(qn("w:tblW"))
     if tblW is None:
-        tblW = OxmlElement("w:tblW")
-        tblPr.append(tblW)
+        tblW = _put_tblpr(tblPr, OxmlElement("w:tblW"))
     tblW.set(qn("w:w"), str(sum(widths_tw)))
     tblW.set(qn("w:type"), "dxa")
+
+
+TBLPR_ORDER = ["tblStyle", "tblpPr", "tblOverlap", "bidiVisual", "tblStyleRowBandSize",
+               "tblStyleColBandSize", "tblW", "jc", "tblCellSpacing", "tblInd", "tblBorders",
+               "shd", "tblLayout", "tblCellMar", "tblLook", "tblCaption", "tblDescription"]
+
+
+def _put_tblpr(tblPr, el):
+    """Вставляет элемент в w:tblPr в порядке, которого требует схема Word."""
+    name = el.tag.split("}")[1]
+    old = tblPr.find(qn(f"w:{name}"))
+    if old is not None:
+        tblPr.remove(old)
+    later = TBLPR_ORDER[TBLPR_ORDER.index(name) + 1:]
+    for child in tblPr:
+        if child.tag.split("}")[1] in later:
+            child.addprevious(el)
+            return el
+    tblPr.append(el)
+    return el
 
 
 def _cell_margins(table, tw: int = CELL_MARGIN_TW):
     tblPr = table._tbl.tblPr
     mar = tblPr.find(qn("w:tblCellMar"))
     if mar is None:
-        mar = OxmlElement("w:tblCellMar")
-        tblPr.append(mar)
+        mar = _put_tblpr(tblPr, OxmlElement("w:tblCellMar"))
     for side in ("left", "right"):
         el = mar.find(qn(f"w:{side}"))
         if el is None:
@@ -198,10 +216,7 @@ def _no_borders(table):
         el = OxmlElement(f"w:{edge}")
         el.set(qn("w:val"), "nil")
         borders.append(el)
-    old = tblPr.find(qn("w:tblBorders"))
-    if old is not None:
-        tblPr.remove(old)
-    tblPr.append(borders)
+    _put_tblpr(tblPr, borders)
 
 
 def _cell_widths_merged(cell_obj, width_tw: int):
@@ -298,6 +313,9 @@ def write(pages, flow, out_path: str, title: str = ""):
     dpi = median([p.dpi for p in pages])
     ctx = Ctx(dpi, body_size)
     _setup_styles(doc, body_size)
+    zoom = doc.settings.element.find(qn("w:zoom"))
+    if zoom is not None and zoom.get(qn("w:percent")) is None:
+        zoom.set(qn("w:percent"), "100")
     doc.core_properties.title = title
     doc.core_properties.author = "PDF в Word"
 

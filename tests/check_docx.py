@@ -24,6 +24,11 @@ def words_of(path: str) -> list[str]:
 
 
 def main() -> int:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
     docx_path, truth_path = sys.argv[1], sys.argv[2]
     need = float(sys.argv[3]) if len(sys.argv) > 3 else 0.9
     truth = open(truth_path, encoding="utf-8").read().split()

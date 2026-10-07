@@ -8,7 +8,18 @@ import time
 from .pipeline import Options, convert
 
 
+def _utf8_console():
+    """В консоли Windows с кодировкой cp1251/cp866 русские буквы не должны
+    ронять программу."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main(argv=None):
+    _utf8_console()
     ap = argparse.ArgumentParser(prog="pdf2word", description="Распознать PDF/скан в Word (.docx)")
     ap.add_argument("files", nargs="+", help="PDF или картинки (JPG, PNG, TIFF)")
     ap.add_argument("-o", "--output", help="имя выходного .docx (для одного файла)")
@@ -24,7 +35,10 @@ def main(argv=None):
         t0 = time.time()
 
         def progress(frac, msg):
-            print(f"\r[{frac * 100:5.1f}%] {msg}        ", end="", flush=True)
+            try:
+                print(f"\r[{frac * 100:5.1f}%] {msg}        ", end="", flush=True)
+            except (OSError, UnicodeError):
+                pass
 
         try:
             convert(path, out, opts, progress)
