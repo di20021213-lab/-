@@ -20,6 +20,7 @@ on:
 jobs:
   test-linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -48,6 +49,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -63,34 +65,41 @@ jobs:
 
       - name: Install Tesseract OCR (UB Mannheim build)
         shell: pwsh
+        timeout-minutes: 15
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $ok = $false
+          $ProgressPreference = "SilentlyContinue"
+          $dest = "C:\Tesseract-OCR"
           try {
+            # the installer is unpacked with 7-Zip instead of being run:
+            # a silent NSIS install can hang on a hidden dialog
             $headers = @{ "User-Agent" = "pdf2word-ci"; "Authorization" = "Bearer $env:GH_TOKEN" }
             $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/UB-Mannheim/tesseract/releases/latest" -Headers $headers
             $asset = $rel.assets | Where-Object { $_.name -like "*w64-setup*.exe" } | Select-Object -First 1
-            Write-Host "Installer:" $asset.name
+            Write-Host "Installer:" $asset.name $asset.size
             Invoke-WebRequest -Uri $asset.browser_download_url -OutFile tesseract-setup.exe
-            Start-Process -FilePath .\tesseract-setup.exe -ArgumentList "/S", "/D=C:\Tesseract-OCR" -Wait
-            $ok = Test-Path "C:\Tesseract-OCR\tesseract.exe"
+            7z x -y "-o$dest" tesseract-setup.exe | Out-Null
+            $found = Get-ChildItem $dest -Recurse -Filter tesseract.exe | Select-Object -First 1
+            if ($found) { $dest = $found.DirectoryName }
           } catch {
-            Write-Host "GitHub release download failed: $_"
+            Write-Host "Download or unpack failed: $_"
           }
-          if (-not $ok) {
-            choco install tesseract -y --no-progress
+          if (-not (Test-Path "$dest\tesseract.exe")) {
+            Write-Host "Falling back to chocolatey"
+            $p = Start-Process choco -ArgumentList "install", "tesseract", "-y", "--no-progress" -PassThru -NoNewWindow
+            if (-not $p.WaitForExit(600000)) { $p.Kill(); throw "choco install timed out" }
+            $dest = "C:\Program Files\Tesseract-OCR"
           }
-          $dirs = @("C:\Tesseract-OCR", "C:\Program Files\Tesseract-OCR")
-          $src = $dirs | Where-Object { Test-Path (Join-Path $_ "tesseract.exe") } | Select-Object -First 1
-          if (-not $src) { throw "tesseract.exe not found" }
-          Write-Host "Tesseract installed in" $src
-          & (Join-Path $src "tesseract.exe") --version
+          if (-not (Test-Path "$dest\tesseract.exe")) { throw "tesseract.exe not found" }
+          Write-Host "Tesseract in" $dest
+          Get-ChildItem $dest | Format-Table Name, Length
+          & "$dest\tesseract.exe" --version
 
           # bundle: tesseract.exe + DLLs + our models
           New-Item -ItemType Directory -Force -Path bundle\tesseract\tessdata | Out-Null
-          Copy-Item (Join-Path $src "tesseract.exe") bundle\tesseract\
-          Copy-Item (Join-Path $src "*.dll") bundle\tesseract\
+          Copy-Item "$dest\tesseract.exe" bundle\tesseract\
+          Copy-Item "$dest\*.dll" bundle\tesseract\
           foreach ($l in @("rus", "eng", "osd")) {
             Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_best/raw/main/$l.traineddata" -OutFile "bundle\tesseract\tessdata\$l.traineddata"
           }
@@ -98,6 +107,7 @@ jobs:
 
       - name: Check the engine from the bundle
         shell: pwsh
+        timeout-minutes: 10
         run: |
           $env:PDF2WORD_TESSERACT = (Resolve-Path bundle\tesseract\tesseract.exe).Path
           $env:PDF2WORD_TESSDATA = (Resolve-Path bundle\tesseract\tessdata).Path
@@ -107,6 +117,7 @@ jobs:
 
       - name: Build EXE
         shell: pwsh
+        timeout-minutes: 20
         run: |
           python tools/make_icon.py app.ico
           $common = @(
@@ -127,6 +138,7 @@ jobs:
           Get-ChildItem dist | Format-Table Name, Length
 
       - name: Smoke test of the EXE
+        timeout-minutes: 15
         run: |
           python tests/smoke_exe.py dist/PDFtoWord.exe
 

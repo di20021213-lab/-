@@ -110,6 +110,55 @@ def _lines_from_words(twords: list[TWord], offset=(0, 0), key_prefix=()) -> list
     return lines
 
 
+def _retry_short_cells(engine: Engine, words: list[TWord], crops: list[np.ndarray],
+                       jobs: list, dpi: int, langs: str, xh: float) -> list[TWord]:
+    """Ячейки с одной короткой строкой («1», «шт.», «500») распознаём ещё раз
+    как одну строку по плотной обрезке — так одиночные знаки читаются надёжнее."""
+    by_page: dict[int, list[TWord]] = {}
+    for w in words:
+        by_page.setdefault(w.page, []).append(w)
+    retry, tight = [], []
+    for i, crop in enumerate(crops):
+        ws = by_page.get(i + 1, [])
+        chars = sum(len(w.text) for w in ws)
+        weak = any(w.conf < 80 for w in ws)
+        if ws and chars > 3 and not (weak and chars <= 12):
+            continue
+        ink = cv2.threshold(crop, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+        ink[crop > 200] = 0
+        pts = cv2.findNonZero(ink)
+        if pts is None:
+            continue
+        x, y, w, h = cv2.boundingRect(pts)
+        if h > 2.2 * xh or h < 0.3 * xh:
+            continue                    # несколько строк или пылинка
+        pad = int(max(10, 0.6 * xh))
+        y0, y1 = max(0, y - pad), min(crop.shape[0], y + h + pad)
+        x0, x1 = max(0, x - pad), min(crop.shape[1], x + w + pad)
+        retry.append((i, x0, y0))
+        tight.append(crop[y0:y1, x0:x1])
+    if not tight:
+        return words
+    second = engine.tsv(imageops.tiff_stack(tight, dpi), 7, dpi, langs)
+    sec_by: dict[int, list[TWord]] = {}
+    for w in second:
+        sec_by.setdefault(w.page, []).append(w)
+    for k, (i, ox, oy) in enumerate(retry):
+        new = sec_by.get(k + 1, [])
+        old = by_page.get(i + 1, [])
+        if not new:
+            continue
+        new_conf = float(np.mean([w.conf for w in new]))
+        old_conf = float(np.mean([w.conf for w in old])) if old else -1.0
+        if new_conf > old_conf + 3:
+            by_page[i + 1] = [TWord(i + 1, 1, 1, 1, w.x0 + ox, w.y0 + oy, w.x1 + ox, w.y1 + oy,
+                                    w.conf, w.text) for w in new]
+    out: list[TWord] = []
+    for page in sorted(by_page):
+        out.extend(by_page[page])
+    return out
+
+
 def _smooth_xh(lines: list[Line], page_xh: float) -> None:
     if not lines:
         return
@@ -508,6 +557,8 @@ def process_page(engine: Engine, src: imageops.PageSource, index: int,
         f_cells = pool.submit(ocr_cells)
         text_words = f_text.result()
         cell_words = f_cells.result()
+    step(0.8)
+    cell_words = _retry_short_cells(engine, cell_words, crops, cell_jobs, dpi, langs, xh)
     step(0.85)
 
     # --- строки
@@ -715,17 +766,38 @@ def _append_table(a: tbl.Table, b: tbl.Table) -> None:
         return [" ".join(layout.para_text(p) for p in c.paragraphs) for c in cells]
 
     skip_first = b.nrows > 1 and row_text(a, 0) == row_text(b, 0)
-    shift = a.nrows - (1 if skip_first else 0)
-    offset_y = a.ys[-1] - b.ys[1 if skip_first else 0]
+    start = 1 if skip_first else 0
+    # строка, разорванная переходом страницы: в первом столбце пусто, а
+    # в других столбцах есть продолжение текста — доклеиваем к последней
+    first_cells = [c for c in b.cells if c.r0 == start]
+    last_cells = {c.c0: c for c in a.cells if c.r1 == a.nrows}
+    continuation = (
+        first_cells and b.nrows - start >= 1 and
+        all(c.r1 == start + 1 for c in first_cells) and
+        not any(c.paragraphs for c in first_cells if c.c0 == 0) and
+        any(c.paragraphs for c in first_cells) and
+        all(c.c0 in last_cells for c in first_cells if c.paragraphs))
+    if continuation:
+        for c in first_cells:
+            if not c.paragraphs:
+                continue
+            target = last_cells[c.c0]
+            if target.paragraphs and c.paragraphs and \
+                    _continues(target.paragraphs[-1], c.paragraphs[0]):
+                target.paragraphs[-1].lines.extend(c.paragraphs[0].lines)
+                target.paragraphs.extend(c.paragraphs[1:])
+            else:
+                target.paragraphs.extend(c.paragraphs)
+        start += 1
+    shift = a.nrows - start
+    offset_y = a.ys[-1] - b.ys[start] if start < len(b.ys) else 0
     for c in b.cells:
-        if skip_first and c.r0 == 0:
+        if c.r0 < start:
             continue
         c.r0 += shift
         c.r1 += shift
         a.cells.append(c)
-    new_ys = b.ys[(2 if skip_first else 1):]
-    a.ys = a.ys + [y + offset_y for y in new_ys]
-    # колонки — по первой таблице
+    a.ys = a.ys + [y + offset_y for y in b.ys[start + 1:]]
     a.cells.sort(key=lambda c: (c.r0, c.c0))
 
 
