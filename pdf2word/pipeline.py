@@ -164,6 +164,7 @@ def _glyph_crop(crop: np.ndarray, xh: float, scale: float = 1.5):
     c[c > thr] = 255
     ink = (c < thr).astype(np.uint8)
     n, lab, st, _ = cv2.connectedComponentsWithStats(ink, connectivity=8)
+    strong = dark + 0.35 * (255 - dark)
     keep = []
     for i in range(1, n):
         x, y, w, h, area = st[i]
@@ -173,6 +174,8 @@ def _glyph_crop(crop: np.ndarray, xh: float, scale: float = 1.5):
             continue            # горизонтальный обрывок линии
         if w <= 6 and h >= 2.5 * xh:
             continue            # вертикальный обрывок линии
+        if c[y:y + h, x:x + w][lab[y:y + h, x:x + w] == i].min() > strong:
+            continue            # бледный след линии рядом с чёткой цифрой
         keep.append(i)
     if not keep:
         return None
@@ -190,7 +193,7 @@ def _glyph_crop(crop: np.ndarray, xh: float, scale: float = 1.5):
                              cv2.BORDER_CONSTANT, value=255)
     if scale != 1.0:
         out = cv2.resize(out, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-    return out, (x0 - pad, y0 - pad, scale)
+    return out, (int(x0) - pad, int(y0) - pad, scale)
 
 
 def _alnum_count(words) -> int:
