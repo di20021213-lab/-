@@ -14,7 +14,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Emu, Pt
 
-from . import layout, metrics
+from . import BUILD, __version__, layout, metrics
 from . import tables as tbl
 from .layout import ColumnGroup, Para, Picture
 
@@ -587,6 +587,9 @@ def write(pages, flow, out_path: str, title: str = "", hyphenate: bool = False):
         zoom.set(qn("w:percent"), "100")
     doc.core_properties.title = title
     doc.core_properties.author = "PDF в Word"
+    # какой версией сделан файл (видно в «Файл → Сведения» у Word)
+    doc.core_properties.version = __version__
+    doc.core_properties.comments = f"PDF в Word {__version__}" + (f", сборка {BUILD}" if BUILD else "")
     if hyphenate:
         _auto_hyphenation(doc)
 

@@ -15,7 +15,7 @@ import traceback
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from pdf2word import __version__
+from pdf2word import BUILD, __version__
 from pdf2word.engine import Cancelled, Engine, OcrError
 from pdf2word.imageops import IMAGE_EXT
 from pdf2word.pipeline import Options, convert
@@ -81,7 +81,8 @@ class App:
         self.engine: Engine | None = None
         self.busy = False
 
-        root.title(f"{APP_TITLE} {__version__}")
+        # версия и дата сборки в заголовке: по ним видно, новая ли программа
+        root.title(f"{APP_TITLE} {__version__}" + (f" (сборка {BUILD})" if BUILD else ""))
         root.geometry("620x430")
         root.minsize(520, 380)
         style = ttk.Style(root)

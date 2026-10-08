@@ -7,3 +7,4 @@ bundle/
 app.ico
 test_scan.*
 result.docx
+pdf2word/_build.py

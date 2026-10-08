@@ -152,6 +152,7 @@ jobs:
           Get-ChildItem $cv2dir -Filter "opencv_videoio_ffmpeg*.dll" | Remove-Item -Verbose
           python -c "import cv2; print('cv2', cv2.__version__)"
           python tools/make_icon.py app.ico
+          python tools/stamp_build.py
           $common = @(
             "--noconfirm", "--windowed", "--icon", "app.ico",
             "--add-data", "app.ico;.",
