@@ -815,12 +815,12 @@ def para_text(p: Para) -> str:
     return "".join(r[0] for r in para_runs(p))
 
 
-def fix_words(lines: list[Line]) -> None:
+def fix_words(lines: list[Line], ref_xh: float = 0.0) -> None:
     for ln in lines:
         for w in ln.words:
             if not w.fill:
                 w.text = textfix.fix_word(w.text)
-                w.text = textfix.fix_case(w.text, w.y1 - w.y0, ln.xh)
+                w.text = textfix.fix_case(w.text, w.y1 - w.y0, ln.xh, ref_xh)
         ws = [w for w in ln.words if not w.fill]
         for i, w in enumerate(ws):
             near = [o.text for o in ws[max(0, i - 1):i + 2] if o is not w]

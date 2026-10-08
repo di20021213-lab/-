@@ -3,7 +3,7 @@
 Страница 1 — книжная: заголовок, абзацы по ширине, таблица 3×4, подпись.
 Страница 2 — альбомная, но отсканирована боком (повёрнута на 90°).
 
-    python tests/make_scan.py out.pdf  → создаёт out.pdf и out.txt (эталонные слова)
+    python tests/make_scan.py out.pdf [размытие]  → создаёт out.pdf и out.txt (эталонные слова)
 """
 
 from __future__ import annotations
@@ -145,9 +145,9 @@ def page2() -> Image.Image:
     return img.rotate(90, expand=True, fillcolor=255)   # отсканировано боком
 
 
-def scanify(img: Image.Image, angle: float, seed: int) -> Image.Image:
+def scanify(img: Image.Image, angle: float, seed: int, blur: float = 0.6) -> Image.Image:
     img = img.rotate(angle, resample=Image.BICUBIC, fillcolor=255)
-    img = img.filter(ImageFilter.GaussianBlur(0.6))
+    img = img.filter(ImageFilter.GaussianBlur(blur))
     arr = np.asarray(img).astype(np.float32)
     rng = np.random.default_rng(seed)
     arr = np.clip(arr * 0.92 + 14 + rng.normal(0, 7, arr.shape), 0, 255).astype(np.uint8)
@@ -167,12 +167,14 @@ def expected_words() -> list[str]:
     return words
 
 
-def main(out: str) -> None:
-    pages = [scanify(page1(), 0.6, 1), scanify(page2(), -0.4, 2)]
+def main(out: str, blur: float = 0.6) -> None:
+    pages = [scanify(page1(), 0.6, 1, blur), scanify(page2(), -0.4, 2, blur)]
     pages[0].save(out, save_all=True, append_images=pages[1:], resolution=DPI)
     with open(os.path.splitext(out)[0] + ".txt", "w", encoding="utf-8") as fh:
         fh.write(" ".join(expected_words()))
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "test_scan.pdf")
+    # второй аргумент — размытие в пикселях (по умолчанию лёгкое, как у сканера)
+    main(sys.argv[1] if len(sys.argv) > 1 else "test_scan.pdf",
+         float(sys.argv[2]) if len(sys.argv) > 2 else 0.6)

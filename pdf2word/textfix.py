@@ -75,17 +75,25 @@ def is_noise(text: str, conf: float) -> bool:
 SAME_SHAPE = set("ВЖЗИКЛМНОПСТХЦЧШЩЪЫЬЭЮЯ")
 
 
-def fix_case(text: str, height: float, xh: float) -> str:
-    """«Шт.» → «шт.»: заглавная буква высотой со строчную — на самом деле строчная."""
+def fix_case(text: str, height: float, xh: float, ref_xh: float = 0.0) -> str:
+    """«Шт.» → «шт.»: заглавная буква высотой со строчную — на самом деле строчная.
+
+    ref_xh — высота строчных у соседнего текста (той же таблицы или
+    страницы): по ней узнаётся и слово целиком из «заглавных» («ШТ.»), у
+    которого собственная высота строчных измерена как у заглавных."""
     if not text or not xh:
         return text
     first = text[0]
     rest = text[1:]
     letters_rest = [ch for ch in rest if ch.isalpha()]
+    tall = set("бдруфйёцщ")    # у этих строчных есть выносные элементы
     if first in SAME_SHAPE and (not letters_rest or all(ch.islower() for ch in letters_rest)):
-        tall = set("бдруфйёцщ")    # у этих строчных есть выносные элементы
         if height < 1.18 * xh and not any(ch in tall for ch in rest.lower()):
             return first.lower() + rest
+    letters = [ch for ch in text if ch.isalpha()]
+    if ref_xh and 2 <= len(letters) <= 4 and all(ch in SAME_SHAPE for ch in letters) and \
+            height < 1.15 * ref_xh:
+        return text.lower()
     return text
 
 

@@ -115,6 +115,59 @@ def remove_color_ink(bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray | None]:
     return out, strong.astype(np.uint8) * 255
 
 
+def estimate_blur(gray: np.ndarray, dpi: float = RENDER_DPI) -> float:
+    """Размытость текста — ширина размытия краёв штрихов в пикселях при
+    300 dpi (как сигма гауссова размытия). У чёткого скана около 1.
+
+    У размытого края перепад яркости растянут: наибольший градиент на краю
+    штриха равен контрасту, делённому на сигму·√(2π)."""
+    g = gray.astype(np.float32)
+    dark = g < 200
+    if dark.mean() < 0.002:
+        return 0.0                      # почти пустая страница
+    contrast = 255.0 - float(np.percentile(g[dark], 2))
+    if contrast < 40:
+        return 0.0
+    gx = cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3) / 8.0
+    gy = cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=3) / 8.0
+    mag = cv2.magnitude(gx, gy)
+    # локальные максимумы градиента — середины краёв штрихов
+    peaks = (mag > 0.15 * contrast) & (mag >= cv2.dilate(mag, np.ones((3, 3), np.uint8)) - 1e-3)
+    vals = mag[peaks]
+    if vals.size < 100:
+        return 0.0
+    sigma = contrast / (float(np.median(vals)) * np.sqrt(2 * np.pi))
+    return sigma * RENDER_DPI / dpi
+
+
+def sharpen_amount(blur: float) -> float:
+    """Сила повышения резкости по размытости: чем сильнее размытие, тем
+    сильнее; чёткие сканы не трогаем — им это вредит."""
+    return min(2.5, max(0.0, 2.5 * (blur - 1.15)))
+
+
+def estimate_noise(gray: np.ndarray) -> float:
+    """Зернистость фона (шум сканера, бумаги) — разброс яркости на чистой бумаге."""
+    paper = cv2.erode((gray > 180).astype(np.uint8), np.ones((9, 9), np.uint8))
+    g = gray.astype(np.float32)
+    v = (g - cv2.GaussianBlur(g, (0, 0), 1.5))[paper > 0]
+    if v.size < 1000:
+        return 0.0
+    return float(1.4826 * np.median(np.abs(v - np.median(v))))
+
+
+def sharpen(gray: np.ndarray, amount: float, dpi: float = RENDER_DPI,
+            noise: float = 0.0) -> np.ndarray:
+    """Повышение резкости (нерезкое маскирование). Зернистый скан сначала
+    слегка сглаживаем, иначе усиленное зерно распознаётся как буквы."""
+    if amount < 0.1:
+        return gray
+    g = gray.astype(np.float32)
+    base = cv2.GaussianBlur(g, (0, 0), 0.8 * dpi / RENDER_DPI) if noise >= 1.0 else g
+    soft = cv2.GaussianBlur(g, (0, 0), 3.0 * dpi / RENDER_DPI)
+    return np.clip(base + amount * (base - soft), 0, 255).astype(np.uint8)
+
+
 def to_gray(bgr: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if bgr.ndim == 3 else bgr
 

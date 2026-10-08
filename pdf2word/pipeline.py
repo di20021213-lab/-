@@ -20,6 +20,7 @@ from .layout import ColumnGroup, Line, Para, Word
 XH_RATIO = 0.447         # высота строчных / кегль (Times New Roman)
 LINE_H = 1.149           # высота строки при одинарном интервале / кегль (TNR)
 COMMON_SIZES = [6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72]
+DUAL_PASS = 0.375        # с такой силы повышения резкости сверяем с вариантом без неё
 
 
 @dataclass
@@ -39,6 +40,7 @@ class PageResult:
     body: tuple = (0, 0, 0, 0)                     # x0, y0, x1, y1 содержимого
     body_size: float = 12.0
     rotated: int = 0
+    ocr_score: float = 0.0                         # сколько текста прочитано уверенно
 
 
 ProgressFn = Callable[[float, str], None]
@@ -46,28 +48,45 @@ ProgressFn = Callable[[float, str], None]
 
 # --------------------------------------------------------------------------
 
-def _orient(engine: Engine, gray: np.ndarray, dpi: int) -> tuple[int, str]:
+def _orient(engine: Engine, gray: np.ndarray, dpi: int, blurred: bool = False) -> tuple[int, str]:
     """На сколько градусов (по часовой) повернуть страницу и какая письменность."""
     rot, conf, script, sconf = engine.osd(imageops.png_bytes(gray, dpi), dpi)
     script = script if sconf >= 1.0 else ""
-    if conf >= 1.5:
+    # на размытом скане определитель поворота ошибается уверенно (и видит
+    # «иврит» в русском тексте) — ему верим только при большом запасе,
+    # иначе проверяем распознаванием
+    if blurred:
+        trusted = conf >= 5.0 and script in ("Cyrillic", "Latin")
+    else:
+        trusted = conf >= 1.5
+    if trusted:
         return rot, script
     ink = imageops.binarize(gray)
     vertical = imageops.text_is_vertical(ink)
-    candidates = [90, 270] if vertical else [0, 180]
     if vertical is None:
-        return 0, script
-    # сравниваем уверенность распознавания центрального фрагмента
+        return (rot if conf >= 1.5 else 0), script
+    candidates = [90, 270] if vertical else [0, 180]
+    # сравниваем, сколько текста читается уверенно в фрагменте в полстраницы
+    # вокруг середины текста; зерно и соринки убираем — на них Tesseract
+    # ищет буквы долго и впустую
     h, w = gray.shape
-    crop = gray[h // 4: 3 * h // 4, w // 4: 3 * w // 4]
-    best, best_score = candidates[0], -1.0
+    ys, xs = np.nonzero(ink[::4, ::4])
+    if len(ys) < 50:
+        return (rot if conf >= 1.5 else 0), script
+    y0 = int(min(max(0, 4 * np.median(ys) - h // 4), h - h // 2))
+    x0 = int(min(max(0, 4 * np.median(xs) - w // 4), w - w // 2))
+    cink = ink[y0:y0 + h // 2, x0:x0 + w // 2]
+    n, lab, st, _ = cv2.connectedComponentsWithStats(cink, connectivity=8)
+    specks = np.where(st[:, cv2.CC_STAT_AREA] < max(12, int(30 * (dpi / 300.0) ** 2)))[0]
+    crop = np.where(cink > 0, 0, 255).astype(np.uint8)
+    crop[np.isin(lab, specks[specks > 0])] = 255
+    scores = {}
     for c in candidates:
-        img = imageops.rotate90(crop, c)
-        words = engine.tsv(imageops.png_bytes(img, dpi), 6, dpi)
-        good = [wd.conf for wd in words if len(wd.text) >= 3]
-        score = float(np.mean(good)) * min(1.0, len(good) / 10) if good else 0.0
-        if score > best_score:
-            best, best_score = c, score
+        words = engine.tsv(imageops.png_bytes(imageops.rotate90(crop, c), dpi), 6, dpi)
+        scores[c] = sum(len(wd.text) for wd in words if len(wd.text) >= 3 and wd.conf >= 60)
+    best, other = sorted(candidates, key=lambda c: -scores[c])
+    if scores[best] < max(15, 1.3 * scores[other]) and rot in candidates and conf >= 1.5:
+        return rot, script          # распознавание не решило — слово за определителем
     return best, script
 
 
@@ -828,7 +847,15 @@ def process_page(engine: Engine, src: imageops.PageSource, index: int,
     step(0.05)
 
     gray0 = imageops.to_gray(bgr)
-    rot, script = _orient(engine, gray0, dpi)
+    # размытый скан (не в фокусе, смаз, низкое разрешение): перед
+    # распознаванием повышаем резкость
+    flat0 = imageops.flatten_background(gray0)
+    blur = imageops.estimate_blur(flat0, dpi)
+    amount = imageops.sharpen_amount(blur)
+    noise = imageops.estimate_noise(flat0) if amount >= 0.1 else 0.0
+    del flat0
+    rot, script = _orient(engine, imageops.sharpen(gray0, amount, dpi, noise), dpi,
+                          blurred=blur >= 1.5)
     langs = opts.langs
     if script == "Latin" and "eng" not in langs and engine.has_lang("eng"):
         langs = "eng+" + langs          # английский документ
@@ -840,6 +867,29 @@ def process_page(engine: Engine, src: imageops.PageSource, index: int,
         bgr, color_mask = imageops.remove_color_ink(bgr)
     gray = imageops.flatten_background(imageops.to_gray(bgr))
     del bgr, gray0
+
+    def part(f0: float, f1: float) -> Callable[[float], None]:
+        return lambda f: step(f0 + (f1 - f0) * (f - 0.15) / 0.85)
+
+    if amount < DUAL_PASS:
+        return _recognize(engine, imageops.sharpen(gray, amount, dpi, noise), color_mask, index,
+                          rot, dpi, langs, blur, step)
+    # заметно размытый скан: резкость помогает не всегда (смазанному при
+    # съёмке может и навредить) — распознаём оба варианта, берём тот,
+    # где уверенно прочитано больше текста
+    sharp = _recognize(engine, imageops.sharpen(gray, amount, dpi, noise),
+                       None if color_mask is None else color_mask.copy(), index, rot, dpi, langs,
+                       blur, part(0.15, 0.57))
+    plain = _recognize(engine, gray, color_mask, index, rot, dpi, langs, blur, part(0.57, 1.0))
+    if plain.ocr_score - sharp.ocr_score > max(20.0, 0.1 * abs(sharp.ocr_score)):
+        return plain
+    return sharp
+
+
+def _recognize(engine: Engine, gray: np.ndarray, color_mask: np.ndarray | None, index: int,
+               rot: int, dpi: int, langs: str, blur: float,
+               step: Callable[[float], None]) -> PageResult:
+    """Распознавание подготовленной (повёрнутой, без печатей) страницы."""
     ink = imageops.binarize(gray)
     angle = imageops.estimate_skew(ink)
     if abs(angle) >= 0.08:
@@ -901,7 +951,10 @@ def process_page(engine: Engine, src: imageops.PageSource, index: int,
         y_top = max(0, int(s.y0 - 1.1 * xh))
         band = clean_ink[y_top:max(y_top + 1, s.y0 - 1), s.x0:s.x1]
         dens = cv2.countNonZero(band) / max(1, band.size)
-        (unders if dens > 0.035 else fills).append(s)
+        # подчёркнутый текст стоит над всей линией, а у поля с надписью в
+        # начале («Организация: АО ... ______») текст занимает лишь часть
+        cover = float((band.max(axis=0) > 0).mean()) if band.size else 0.0
+        (unders if dens > 0.035 and cover >= 0.5 else fills).append(s)
 
     # --- распознавание текста вне таблиц
     text_img = clean.copy()
@@ -961,6 +1014,11 @@ def process_page(engine: Engine, src: imageops.PageSource, index: int,
                                  lambda page: crops[page - 1] if 0 < page <= len(crops) else None,
                                  dpi, xh)
     step(0.85)
+    # уверенно прочитанные знаки минус сомнительные — мера качества прочтения
+    ocr_score = 0.0
+    for w in text_words + cell_words:
+        if len(w.text) >= 2:
+            ocr_score += len(w.text) if w.conf >= 75 else (-len(w.text) if w.conf < 50 else 0)
 
     # --- строки
     text_lines = _lines_from_words(text_words, key_prefix=("text",))
@@ -1011,8 +1069,22 @@ def process_page(engine: Engine, src: imageops.PageSource, index: int,
     for v in cell_lines.values():
         all_lines.extend(v)
     _mark_underlines(all_lines, unders)
-    layout.mark_bold(all_lines, clean_ink)
-    layout.fix_words(all_lines)
+    stroke_ink = clean_ink
+    if blur >= 1.5:
+        # на размытом скане штрихи после порога Оцу толще настоящих, а у
+        # мелкого шрифта — заметно толще (ложный жирный): толщину меряем по
+        # середине перепада между чернилами и бумагой
+        dark = clean[clean < 200]
+        if dark.size:
+            mid = (float(np.percentile(dark, 5)) + 255.0) / 2.0
+            stroke_ink = np.where((clean < mid) & (lines_removed == 0), 255, 0).astype(np.uint8)
+    layout.mark_bold(all_lines, stroke_ink)
+    # высота строчных у соседнего текста: у страницы и у каждой таблицы своя
+    layout.fix_words(text_lines, page_xh)
+    for t in tables:
+        lines = [ln for c in t.cells for ln in cell_lines.get(id(c), [])]
+        ref = [ln.xh for ln in lines if ln.sure or len(ln.words) >= 3]
+        layout.fix_words(lines, float(median(ref)) if ref else 0.0)
 
     # --- границы содержимого
     xs0 = [ln.x0 for ln in text_lines] + [t.x0 for t in tables]
@@ -1081,7 +1153,7 @@ def process_page(engine: Engine, src: imageops.PageSource, index: int,
         elif isinstance(el, ColumnGroup):
             for cell in el.cells:
                 _space_before(cell, dpi, el.y0)
-    return PageResult(index, W, H, dpi, elements, body, body_size, rot)
+    return PageResult(index, W, H, dpi, elements, body, body_size, rot, ocr_score)
 
 
 def _harmonize_alignment(paras: list[Para], L: float | None) -> None:

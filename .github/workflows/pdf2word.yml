@@ -49,6 +49,14 @@ jobs:
           python -m pdf2word test_scan.pdf -o result.docx
           python tests/check_docx.py result.docx test_scan.txt
 
+      - name: Recognize a blurred scan
+        env:
+          PDF2WORD_TESSDATA: ${{ github.workspace }}/tessdata
+        run: |
+          python tests/make_scan.py blurred_scan.pdf 1.8
+          python -m pdf2word blurred_scan.pdf -o blurred.docx
+          python tests/check_docx.py blurred.docx blurred_scan.txt
+
   build-windows:
     runs-on: windows-latest
     timeout-minutes: 60
