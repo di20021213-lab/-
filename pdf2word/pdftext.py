@@ -358,26 +358,12 @@ def build_lines(words: list[Word], scale: float) -> list[Line]:
     """Слова → строки по положению на странице (порядок в файле бывает любым:
     номер страницы нередко записан первым). Мелкие слова над и под базовой
     линией — верхние и нижние индексы своей строки. scale — пикселей в пункте."""
-    rows: list[list[Word]] = []
-    for w in sorted(words, key=lambda q: (q.base, q.x0)):
-        best, best_ov = None, 0.0
-        for row in rows[-6:]:
-            ry0 = min(q.y0 for q in row)
-            ry1 = max(q.y1 for q in row)
-            ov = min(ry1, w.y1) - max(ry0, w.y0)
-            h = min(ry1 - ry0, w.y1 - w.y0)
-            if h > 0 and ov / h > best_ov:
-                best, best_ov = row, ov / h
-        if best is not None and best_ov >= 0.5:
-            best.append(w)
-        else:
-            rows.append([w])
     def em_of(q: Word) -> float:
         # кегль слова в пикселях; без размера из PDF — оценка по высоте букв
         # (одна на страницу: иначе строки с «у», «д», «б» казались бы крупнее)
         return q.size * scale if q.size else (q.em or (q.y1 - q.y0) / 0.75)
 
-    rows = _attach_scripts(rows, em_of)
+    rows = _attach_scripts(_group_rows(words, em_of), em_of)
     lines = []
     for row in rows:
         row.sort(key=lambda q: q.x0)
@@ -398,10 +384,51 @@ def build_lines(words: list[Word], scale: float) -> list[Line]:
                     abs(q.base - base) > 0.2 * em:
                 q.script = "super" if q.base < base else "sub"
         row[0].glue = False
+        for a, b in zip(row, row[1:]):
+            gap = b.x0 - a.x1
+            # знак препинания отдельным словом («ABH ,»): пробел перед ним лишний
+            if gap < 0.5 * em and (b.text[:1] in ",.;:!?)»" or a.text[-1:] in "(«"):
+                b.glue = True
+            # индекс вплотную к своей букве: f⁻¹(U), a₁
+            elif (b.script or a.script) and gap < 0.3 * em:
+                b.glue = True
         ln = Line(row, xh=XH * em, base=base)
         ln.sure = True
         lines.append(ln)
     return lines
+
+
+def _group_rows(words: list[Word], em_of) -> list[list[Word]]:
+    """Слова → строки. Главное — общая базовая линия (у запятой рамка уходит
+    под строку, а слово с «у» и «р» выше и ниже соседей); слова на своей
+    линии (индексы) — по перекрытию по высоте."""
+    rows: list[list[Word]] = []
+    bases: list[float] = []
+    for w in sorted(words, key=lambda q: (q.base, q.x0)):
+        tol = 0.25 * em_of(w)
+        best, best_d = None, None
+        for k in range(max(0, len(rows) - 6), len(rows)):
+            d = abs(bases[k] - w.base)
+            if d <= tol and (best_d is None or d < best_d):
+                best, best_d = k, d
+        if best is None:
+            best_ov = 0.0
+            for k in range(max(0, len(rows) - 6), len(rows)):
+                row = rows[k]
+                ry0 = min(q.y0 for q in row)
+                ry1 = max(q.y1 for q in row)
+                ov = min(ry1, w.y1) - max(ry0, w.y0)
+                h = min(ry1 - ry0, w.y1 - w.y0)
+                if h > 0 and ov / h > best_ov:
+                    best, best_ov = k, ov / h
+            if best_ov < 0.5:
+                best = None
+        if best is None:
+            rows.append([w])
+            bases.append(w.base)
+        else:
+            rows[best].append(w)
+    return rows
 
 
 def _attach_scripts(rows: list[list[Word]], em_of) -> list[list[Word]]:
@@ -809,20 +836,7 @@ def figure_boxes(page, scale: float, words: list[Word]) -> list[tuple[int, int, 
 def row_segments(words: list[Word]) -> list[list[Word]]:
     """Слова → куски строк: слова одной строки, стоящие рядом (подпись на
     чертеже и строка текста рядом с ним — разные куски)."""
-    rows: list[list[Word]] = []
-    for w in sorted(words, key=lambda q: (q.base, q.x0)):
-        best, best_ov = None, 0.0
-        for row in rows[-6:]:
-            ry0 = min(q.y0 for q in row)
-            ry1 = max(q.y1 for q in row)
-            h = min(ry1 - ry0, w.y1 - w.y0)
-            ov = min(ry1, w.y1) - max(ry0, w.y0)
-            if h > 0 and ov / h > best_ov:
-                best, best_ov = row, ov / h
-        if best is not None and best_ov >= 0.5:
-            best.append(w)
-        else:
-            rows.append([w])
+    rows = _group_rows(words, lambda q: q.em or (q.y1 - q.y0) / 0.75)
     out = []
     for row in rows:
         row.sort(key=lambda q: q.x0)
