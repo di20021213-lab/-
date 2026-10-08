@@ -260,8 +260,9 @@ def _pick_reading(cands: list[tuple], numeric: bool):
                 continue        # «п/п» → «n/n»: те же буквы латиницей
             if any(r[1] >= 60 for r in rus):
                 continue        # «шт.» → «LUT.»: русское прочтение уверенное
-        if old is not None and c is not old and _alnum_count(c[2]) < _alnum_count(old[2]):
-            continue            # «1» не меняем на «|»
+        if old is not None and c is not old and _is_number(old[0]) and \
+                sum(ch.isdigit() for ch in c[0]) < sum(ch.isdigit() for ch in old[0]):
+            continue            # «1» не меняем на «l», «12» — на «1»
         ok.append(c)
     if not ok:
         return None
