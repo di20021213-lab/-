@@ -29,6 +29,14 @@ class Word:
     underline: bool = False
     fill: bool = False      # линия для заполнения «______»
     stroke: float = 0.0     # относительная толщина штриха
+    # из текстового слоя электронного PDF (у распознанного скана пусто):
+    italic: bool = False
+    font: str = ""          # шрифт для Word, "" — основной шрифт документа
+    size: float = 0.0       # кегль, pt
+    script: str = ""        # "super" / "sub" — верхний или нижний индекс
+    glue: bool = False      # стоит вплотную к предыдущему слову (без пробела)
+    base: float = 0.0       # базовая линия, px
+    em: float = 0.0         # кегль в пикселях (оценка, если size неизвестен)
 
 
 @dataclass
@@ -76,6 +84,7 @@ class Para:
     segments: list | None = None  # для строк с табуляцией: список списков слов
     spacing: float = 1.0          # межстрочный интервал (множитель)
     in_cell: bool = False         # абзац внутри ячейки таблицы
+    exact: bool = False           # кегль взят из PDF, а не оценён по картинке
 
     @property
     def y0(self):
@@ -88,6 +97,21 @@ class Para:
     @property
     def xh(self):
         return median([ln.xh for ln in self.lines])
+
+
+@dataclass
+class Picture:
+    """Рисунок со страницы электронного PDF — вырезка отрисованной страницы."""
+    x0: int
+    y0: int
+    x1: int
+    y1: int
+    png: bytes
+    space_before: float = 0.0
+    align: str = "center"         # left / center / right
+    left: float = 0.0             # отступ слева, px (при align == "left")
+    wrap: str = ""                # left / right — плавающий у края, текст обтекает
+    gap: float = 0.0              # промежуток между рисунком и текстом, px
 
 
 @dataclass
@@ -437,7 +461,8 @@ def _is_centered(ln: Line, L: float, R: float, centered_mode: bool,
         return False
     if centered_mode:
         return True
-    need = 0.5 * xh if cell else 2.5 * xh
+    # у крупного заголовка во всю строку поля по краям меньше 2,5 высоты букв
+    need = 0.5 * xh if cell else min(2.5 * xh, 0.04 * width)
     return lg > need and rg > need
 
 
@@ -453,6 +478,45 @@ def _expected_x0(cur: list[Line], L: float, width: float) -> float | None:
     if 1.0 * xh < indent < 0.15 * width:
         return L                    # была красная строка
     return first.x0
+
+
+def _toc_tail(ln: Line, R: float) -> int | None:
+    """Строка оглавления «Название . . . . 37» (номер страницы у правого края):
+    индекс первого слова отточия перед номером (или None, если это не она)."""
+    ws = ln.words
+    if len(ws) < 2 or not re.fullmatch(r"\d{1,4}|[IVXLC]{1,6}", ws[-1].text):
+        return None
+    if R - ws[-1].x1 > 2.0 * (ln.xh or 20):
+        return None
+    k = len(ws) - 1
+    while k > 0 and re.fullmatch(r"[.…·]+", ws[k - 1].text):
+        k -= 1
+    dots = sum(len(w.text) for w in ws[k:-1])
+    if k > 0 and re.search(r"[^.…·]\.{3,}$", ws[k - 1].text):
+        dots += 3                       # отточие вплотную к последнему слову
+    return k if dots >= 3 else None
+
+
+def _toc_leaders(p: Para, L: float, R: float) -> None:
+    """Отточие из точек → табуляция с заполнителем у правого края: в Word
+    номер страницы останется у края при любом переносе строк."""
+    done = False
+    for ln in p.lines:
+        k = _toc_tail(ln, R)
+        if k is None:
+            continue
+        num = ln.words[-1]
+        words = ln.words[:k]
+        if words:
+            words[-1].text = re.sub(r"\.{3,}$", "", words[-1].text) or words[-1].text
+        num.text = "\t" + num.text
+        num.glue = True
+        ln.words = words + [num]
+        done = True
+    if done:
+        p.tabs = [(R - L, "right", "dots")]
+        if p.align == "justify":
+            p.align = "left"            # растягивать строку с отточием незачем
 
 
 def segment_paragraphs(lines: list[Line], L: float, R: float,
@@ -479,6 +543,8 @@ def segment_paragraphs(lines: list[Line], L: float, R: float,
             new = True
         elif _is_list_start(ln):
             new = True
+        elif _toc_tail(prev, R) is not None:
+            new = True                  # пункт оглавления кончается номером страницы
         elif cell and prev.words and ln.words and \
                 re.search(r"[а-яёa-z]-$", prev.words[-1].text) and \
                 re.match(r"[а-яёa-z]", ln.words[0].text):
@@ -508,6 +574,8 @@ def segment_paragraphs(lines: list[Line], L: float, R: float,
     result = [_make_para(group, L, R, width, centered_mode, cell) for group in paras]
     for p in result:
         p.in_cell = cell
+        if p.segments is None:
+            _toc_leaders(p, L, R)
     return result
 
 
@@ -519,9 +587,17 @@ def _make_para(group: list[Line], L: float, R: float, width: float,
     rights = [R - ln.x1 for ln in group]
     edge = max(1.5 * xh, 0.03 * width)
     if all(_is_centered(ln, L, R, centered_mode, cell) for ln in group) and \
-            (centered_mode or max(lefts) > (0.5 if cell else 2.5) * xh):
+            (centered_mode or max(lefts) > (0.5 * xh if cell else min(2.5 * xh, 0.04 * width))):
         p.align = "center"
         return p
+    if len(group) >= 2:
+        # строки по центру, часть которых занимает всю ширину: поля у всех
+        # строк симметричны, а у коротких — большие с обеих сторон
+        tol = max(0.8 * xh, 0.08 * width) if cell else max(1.5 * xh, 0.025 * width)
+        if all(abs(a - b) < tol for a, b in zip(lefts, rights)) and \
+                max(min(a, b) for a, b in zip(lefts, rights)) > (1.5 if cell else 2.5) * xh:
+            p.align = "center"
+            return p
     if len(group) == 1:
         lg, rg = lefts[0], rights[0]
         if rg < edge and lg > 0.3 * width:
@@ -573,7 +649,7 @@ def layout_region(lines: list[Line], L: float, R: float) -> list:
     for ln in lines:
         for seg in split_line(ln):
             if any(w.fill for w in seg.words) or \
-                    any(ch.isalnum() for w in seg.words for ch in w.text):
+                    any(ch.isalnum() or ch in BULLETS for w in seg.words for ch in w.text):
                 segs.append(seg)
     if not segs:
         return []
@@ -766,49 +842,67 @@ def _make_columns(rows: list[list[Line]], cols: list[list[float]], L: float, R: 
 # --------------------------------------------------------------------------
 # Текст абзаца с учётом форматирования
 
-def para_runs(p: Para) -> list[tuple[str, bool, bool]]:
-    """Собирает текст абзаца в фрагменты (текст, жирный, подчёркнутый)."""
+# частицы, перед которыми дефис в конце строки настоящий: «что-|то», «кое-|как»
+BULLETS = "•●○◦▪■□➢❖✓→"     # маркеры пунктов списка
+PARTICLES = re.compile(r"^(то|либо|нибудь|ка|таки|де|с|тка)\b")
+
+
+def _style(w: Word) -> tuple:
+    return (w.bold, w.underline, w.italic, w.font, w.script)
+
+
+def para_runs(p: Para) -> list[tuple]:
+    """Собирает текст абзаца в фрагменты одного оформления:
+    (текст, жирный, подчёркнутый, курсив, шрифт, индекс)."""
     runs: list[list] = []
 
-    def add(text, bold, underline):
-        if runs and runs[-1][1] == bold and runs[-1][2] == underline:
+    def add(text: str, style: tuple):
+        if runs and tuple(runs[-1][1:]) == style:
             runs[-1][0] += text
         else:
-            runs.append([text, bold, underline])
+            runs.append([text, *style])
+
+    def gap_style(a: Word | None, b: Word) -> tuple:
+        # пробел между словами оформлен общими у обоих чертами
+        if a is None:
+            return (False, False, False, b.font, "")
+        return (a.bold and b.bold, a.underline and b.underline, a.italic and b.italic,
+                b.font if a.font == b.font else "", "")
 
     if p.segments is not None:
         for k, seg in enumerate(p.segments):
             if k:
-                add("\t", False, False)
-            _add_words(seg, add)
+                add("\t", (False, False, False, "", ""))
+            _add_words(seg, add, gap_style)
         return [tuple(r) for r in runs]
 
     for li, ln in enumerate(p.lines):
         ws = ln.words
         if li > 0 and ws and runs:
             prev_text = runs[-1][0]
-            joined_hyphen = prev_text.endswith(("-", "\u00ad")) and \
-                bool(re.match(r"[a-zа-яё]", ws[0].text))
-            if joined_hyphen and p.in_cell and re.search(r"[а-яёa-z]-$", prev_text):
-                # в ячейке это перенос слова: мягкий дефис виден только на краю строки
-                runs[-1][0] = prev_text[:-1] + "\u00ad"
-            if not joined_hyphen:
+            first = ws[0].text
+            lower = bool(re.match(r"[a-zа-яё]", first))
+            if prev_text.endswith("\u00ad"):
+                pass                    # перенос из PDF: мягкий дефис, слово продолжается
+            elif re.search(r"\d-$", prev_text) and re.match(r"\d", first):
+                pass                    # «ГОСТ 19003-|80»: номер с дефисом не разрываем
+            elif prev_text.endswith("-") and lower and re.search(r"[A-Za-zА-Яа-яЁё]-$", prev_text):
+                if not PARTICLES.match(first):
+                    # перенос слова по слогам: дефис нужен, только если Word
+                    # снова разорвёт слово на краю строки
+                    runs[-1][0] = prev_text[:-1] + "\u00ad"
+            else:
                 prev_w = p.lines[li - 1].words[-1] if p.lines[li - 1].words else None
-                ul = bool(prev_w and prev_w.underline and ws[0].underline)
-                bold = bool(prev_w and prev_w.bold and ws[0].bold)
-                add(" ", bold, ul)
-        _add_words(ws, add)
+                add(" ", gap_style(prev_w, ws[0]))
+        _add_words(ws, add, gap_style)
     return [tuple(r) for r in runs]
 
 
-def _add_words(ws: list[Word], add) -> None:
+def _add_words(ws: list[Word], add, gap_style) -> None:
     for i, w in enumerate(ws):
-        if i:
-            prev = ws[i - 1]
-            ul = prev.underline and w.underline
-            bold = prev.bold and w.bold
-            add(" ", bold, ul)
-        add(w.text, w.bold, w.underline)
+        if i and not w.glue:
+            add(" ", gap_style(ws[i - 1], w))
+        add(w.text, _style(w))
 
 
 def para_text(p: Para) -> str:

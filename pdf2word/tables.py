@@ -38,6 +38,7 @@ class GridCell:
     paragraphs: list = field(default_factory=list)
     borderless: bool = False      # столбец подписей слева от таблицы бланка
     valign: str = ""              # "", "top", "center", "bottom"
+    pictures: list = field(default_factory=list)   # рисунки в ячейке (layout.Picture)
 
 
 @dataclass

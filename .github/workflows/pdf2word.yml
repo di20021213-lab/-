@@ -57,6 +57,15 @@ jobs:
           python -m pdf2word blurred_scan.pdf -o blurred.docx
           python tests/check_docx.py blurred.docx blurred_scan.txt
 
+      - name: Convert an electronic PDF (text layer)
+        env:
+          PDF2WORD_TESSDATA: ${{ github.workspace }}/tessdata
+        run: |
+          pip install reportlab
+          python tests/make_digital.py digital.pdf
+          python -m pdf2word digital.pdf -o digital.docx
+          python tests/check_digital.py digital.docx digital.txt
+
   build-windows:
     runs-on: windows-latest
     timeout-minutes: 60

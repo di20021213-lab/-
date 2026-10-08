@@ -58,16 +58,44 @@ class PageSource:
                 self._pdf.close()
             self._pdf = None
 
+    def _scale(self, page) -> float:
+        w_pt, h_pt = page.get_size()
+        scale = self.dpi / 72.0
+        # огромные листы (чертежи) ограничиваем по длинной стороне
+        longest = max(w_pt, h_pt) * scale
+        if longest > 7000:
+            scale *= 7000 / longest
+        return scale
+
+    def layer(self, index: int):
+        """Текстовый слой, рамки рисунков и векторные линии электронного PDF
+        (в пикселях той же отрисовки, что render) или None, если страницу
+        надо распознавать."""
+        if self.kind != "pdf":
+            return None
+        from . import pdftext
+        with _pdfium_lock:
+            page = self._pdf[index]
+            try:
+                scale = self._scale(page)
+                words = pdftext.page_words(page, scale)
+                if words is None:
+                    return None
+                boxes = pdftext.merge_boxes(pdftext.picture_boxes(page, scale) +
+                                            pdftext.figure_boxes(page, scale, words))
+                boxes = pdftext.fit_boxes(boxes, words)
+                return words, boxes, pdftext.rule_lines(page, scale), scale
+            except Exception:
+                return None       # не разобрали слой — страница пойдёт на распознавание
+            finally:
+                page.close()
+
     def render(self, index: int) -> tuple[np.ndarray, SourcePage]:
         if self.kind == "pdf":
             with _pdfium_lock:
                 page = self._pdf[index]
                 w_pt, h_pt = page.get_size()
-                scale = self.dpi / 72.0
-                # огромные листы (чертежи) ограничиваем по длинной стороне
-                longest = max(w_pt, h_pt) * scale
-                if longest > 7000:
-                    scale *= 7000 / longest
+                scale = self._scale(page)
                 bitmap = page.render(scale=scale, rotation=0)
                 pil = bitmap.to_pil().convert("RGB")
                 page.close()
@@ -267,6 +295,32 @@ def png_bytes(img: np.ndarray, dpi: int) -> bytes:
     buf = io.BytesIO()
     pil.save(buf, format="PNG", dpi=(dpi, dpi), compress_level=1)
     return buf.getvalue()
+
+
+def picture_bytes(bgr: np.ndarray, dpi: int) -> bytes | None:
+    """Рисунок для Word: белые поля обрезаются; фото — JPEG, чертежи — PNG.
+    None — если в вырезке почти ничего нет."""
+    gray = to_gray(bgr)
+    rows = np.where((gray < 245).any(axis=1))[0]
+    cols = np.where((gray < 245).any(axis=0))[0]
+    if len(rows) < 4 or len(cols) < 4:
+        return None
+    bgr = bgr[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1]
+    if bgr.ndim == 3:
+        small = cv2.resize(bgr, (96, 96), interpolation=cv2.INTER_AREA).astype(np.int16)
+        if int((small.max(axis=2) - small.min(axis=2)).max()) < 16:
+            bgr = to_gray(bgr)              # серая картинка: один канал вместо трёх
+    pil = Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB) if bgr.ndim == 3 else bgr)
+    buf = io.BytesIO()
+    pil.save(buf, format="PNG", dpi=(dpi, dpi), optimize=True)
+    png = buf.getvalue()
+    if len(png) > 40_000:
+        # фото и полутона: JPEG намного меньше, а чертёж в JPEG крупнее PNG
+        buf = io.BytesIO()
+        pil.save(buf, format="JPEG", quality=85, dpi=(dpi, dpi))
+        if len(buf.getvalue()) < 0.5 * len(png):
+            return buf.getvalue()
+    return png
 
 
 def tiff_stack(images: list[np.ndarray], dpi: int) -> bytes:

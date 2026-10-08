@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
+import io
 import math
 from statistics import median
 
 from docx import Document
 from docx.enum.section import WD_ORIENT, WD_SECTION
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_ROW_HEIGHT_RULE, WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT, WD_TAB_LEADER
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Emu, Pt
 
 from . import layout, metrics
 from . import tables as tbl
-from .layout import ColumnGroup, Para
+from .layout import ColumnGroup, Para, Picture
 
 FONT = "Times New Roman"
 ALIGN = {
@@ -39,9 +40,10 @@ PAPER = {  # дюймы
 
 
 class Ctx:
-    def __init__(self, dpi: float, body_size: float):
+    def __init__(self, dpi: float, body_size: float, font: str = FONT):
         self.dpi = dpi
         self.body_size = body_size
+        self.font = font           # шрифт стиля «Обычный»
 
     def emu(self, px: float) -> Emu:
         return Emu(int(round(px / self.dpi * 914400)))
@@ -55,26 +57,28 @@ class Ctx:
 
 # --------------------------------------------------------------------------
 
-def _set_fonts(rpr_parent, size: float | None = None):
+def _set_fonts(rpr_parent, font: str = FONT, lang: bool = True):
     rpr = rpr_parent.get_or_add_rPr()
     fonts = rpr.find(qn("w:rFonts"))
     if fonts is None:
         fonts = OxmlElement("w:rFonts")
         rpr.insert(0, fonts)
     for attr in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
-        fonts.set(qn(attr), FONT)
-    lang = rpr.find(qn("w:lang"))
-    if lang is None:
-        lang = OxmlElement("w:lang")
-        rpr.append(lang)
-    lang.set(qn("w:val"), "ru-RU")
+        fonts.set(qn(attr), font)
+    if not lang:
+        return
+    el = rpr.find(qn("w:lang"))
+    if el is None:
+        el = OxmlElement("w:lang")
+        rpr.append(el)
+    el.set(qn("w:val"), "ru-RU")
 
 
-def _setup_styles(doc, body_size: float):
+def _setup_styles(doc, body_size: float, font: str = FONT):
     normal = doc.styles["Normal"]
-    normal.font.name = FONT
+    normal.font.name = font
     normal.font.size = Pt(body_size)
-    _set_fonts(normal.element)
+    _set_fonts(normal.element, font)
     pf = normal.paragraph_format
     pf.space_before = Pt(0)
     pf.space_after = Pt(0)
@@ -152,10 +156,11 @@ def _fill_paragraph(par, p: Para, ctx: Ctx, max_indent_px: float | None = None):
         fmt.space_before = Pt(round(min(ctx.pt(p.space_before), 200.0), 1))
     if p.spacing and abs(p.spacing - 1.0) > 0.01:
         fmt.line_spacing = p.spacing          # полуторный, двойной интервал
-    for pos, kind in p.tabs:
-        fmt.tab_stops.add_tab_stop(ctx.emu(pos), TAB[kind])
+    for pos, kind, *leader in p.tabs:
+        fmt.tab_stops.add_tab_stop(ctx.emu(pos), TAB[kind],
+                                   WD_TAB_LEADER.DOTS if leader else WD_TAB_LEADER.SPACES)
     size = None if abs(p.size - ctx.body_size) < 0.25 else p.size
-    for text, bold, underline in layout.para_runs(p):
+    for text, bold, underline, italic, font, script in layout.para_runs(p):
         parts = text.split("\u00ad")
         run = par.add_run(parts[0])
         for part in parts[1:]:
@@ -167,12 +172,40 @@ def _fill_paragraph(par, p: Para, ctx: Ctx, max_indent_px: float | None = None):
             run._r.append(t)
         if bold:
             run.bold = True
+        if italic:
+            run.italic = True
         if underline:
             run.underline = True
+        if (font or FONT) != ctx.font:
+            _set_fonts(run._r, font or FONT, lang=False)
+        if script == "super":
+            run.font.superscript = True
+        elif script == "sub":
+            run.font.subscript = True
         if size:
             run.font.size = Pt(size)
     if size:
         _mark_size(par, size)
+
+
+def _add_picture(par, pic: Picture, ctx: Ctx, max_width_px: float) -> None:
+    """Рисунок в абзаце: размер как на странице, но не шире места под текст."""
+    fmt = par.paragraph_format
+    width = min(pic.x1 - pic.x0, max_width_px)
+    left = 0.0
+    if pic.align == "left":
+        left = min(pic.left, max(0.0, max_width_px - width))
+        if left > 0:
+            fmt.left_indent = ctx.emu(left)
+    fmt.alignment = ALIGN.get(pic.align, WD_ALIGN_PARAGRAPH.CENTER)
+    if pic.space_before > 0:
+        fmt.space_before = Pt(round(min(ctx.pt(pic.space_before), 200.0), 1))
+    if width < 2:
+        return
+    try:
+        par.add_run().add_picture(io.BytesIO(pic.png), width=ctx.emu(width))
+    except Exception:              # испорченная картинка не должна сорвать документ
+        return
 
 
 def _mark_size(par, size: float) -> None:
@@ -317,15 +350,74 @@ def _fit_size(p: Para, ctx: Ctx, width_px: float) -> None:
             p.size = size
 
 
-def _write_cell(cell_obj, paras: list[Para], ctx: Ctx, width_px: float):
+def _float_picture(par, pic: Picture, ctx: Ctx, max_width_px: float, top_px: float) -> bool:
+    """Рисунок, обтекаемый текстом: плавающий, привязан к абзацу par (его
+    верх на странице — top_px), стоит у своего края колонки."""
+    width = min(pic.x1 - pic.x0, 0.6 * max_width_px)
+    if width < 2:
+        return False
+    run = par.add_run()
+    try:
+        inline = run.add_picture(io.BytesIO(pic.png), width=ctx.emu(width))._inline
+    except Exception:
+        par._p.remove(run._r)
+        return False
+    # рисунок — в начало абзаца, чтобы он вставал рядом с первой строкой
+    first = par._p.find(qn("w:r"))
+    if first is not None and first is not run._r:
+        first.addprevious(run._r)
+    gap = str(int(ctx.emu(max(0.0, pic.gap))))
+    anchor = OxmlElement("wp:anchor")
+    for key, val in (("distT", "0"), ("distB", "0"),
+                     ("distL", gap if pic.wrap == "right" else "0"),
+                     ("distR", gap if pic.wrap == "left" else "0"),
+                     ("simplePos", "0"), ("relativeHeight", "251658240"), ("behindDoc", "0"),
+                     ("locked", "0"), ("layoutInCell", "1"), ("allowOverlap", "1")):
+        anchor.set(key, val)
+    simple = OxmlElement("wp:simplePos")
+    simple.set("x", "0")
+    simple.set("y", "0")
+    anchor.append(simple)
+    x = min(max(0.0, pic.left), max(0.0, max_width_px - width))
+    for tag, rel, off in (("wp:positionH", "column", x), ("wp:positionV", "paragraph", pic.y0 - top_px)):
+        pos = OxmlElement(tag)
+        pos.set("relativeFrom", rel)
+        val = OxmlElement("wp:posOffset")
+        val.text = str(int(ctx.emu(off)) if off >= 0 else -int(ctx.emu(-off)))
+        pos.append(val)
+        anchor.append(pos)
+    anchor.append(inline.find(qn("wp:extent")))
+    effect = OxmlElement("wp:effectExtent")
+    for side in "ltrb":
+        effect.set(side, "0")
+    anchor.append(effect)
+    wrap = OxmlElement("wp:wrapSquare")
+    wrap.set("wrapText", "bothSides")
+    anchor.append(wrap)
+    for tag in ("wp:docPr", "wp:cNvGraphicFramePr", "a:graphic"):
+        el = inline.find(qn(tag))
+        if el is not None:
+            anchor.append(el)
+    inline.getparent().replace(inline, anchor)
+    return True
+
+
+def _write_cell(cell_obj, paras: list[Para], ctx: Ctx, width_px: float, pictures=()):
     first = True
-    for p in paras:
-        _fit_size(p, ctx, width_px)
+    items = sorted([*paras, *pictures], key=lambda e: e.y0) if pictures else paras
+    for p in items:
         if first:
             par = cell_obj.paragraphs[0]
             first = False
         else:
             par = cell_obj.add_paragraph()
+        if isinstance(p, Picture):
+            p.space_before = 0.0
+            p.align, p.left = "center", 0.0
+            # с небольшим запасом: иначе Word расширит столбец под рисунок
+            _add_picture(par, p, ctx, 0.96 * (width_px - 2 * CELL_MARGIN_TW / 1440 * ctx.dpi))
+            continue
+        _fit_size(p, ctx, width_px)
         _fill_paragraph(par, p, ctx, max_indent_px=width_px)
 
 
@@ -366,7 +458,7 @@ def _add_table(doc, t: tbl.Table, ctx: Ctx, max_width_px: float):
     _empty_cells_size(table, [p.size for c in t.cells for p in c.paragraphs], ctx)
     for c in t.cells:
         cell_obj = table.cell(c.r0, c.c0)
-        _write_cell(cell_obj, c.paragraphs, ctx, (c.x1 - c.x0) * scale)
+        _write_cell(cell_obj, c.paragraphs, ctx, (c.x1 - c.x0) * scale, c.pictures)
         if c.borderless:
             _cell_borders(cell_obj, right=True)
         if c.valign:
@@ -387,6 +479,19 @@ def _add_table(doc, t: tbl.Table, ctx: Ctx, max_width_px: float):
 
 def _add_columns(doc, g: ColumnGroup, ctx: Ctx, max_width_px: float):
     widths_px = [b - a for a, b in g.bounds]
+    # колонка не уже своей самой длинной строки вместе с полями ячейки, иначе
+    # Word перенесёт строку; недостающее место берём у соседней колонки
+    pad = 2 * CELL_MARGIN_TW / 1440 * ctx.dpi + 0.03 * ctx.dpi
+    need = [max((ln.x1 for p in paras for ln in p.lines), default=a) - a + pad if paras else 0.0
+            for (a, _), paras in zip(g.bounds, g.cells)]
+    for k in range(len(widths_px)):
+        short = need[k] - widths_px[k]
+        for j in (k + 1, k - 1):
+            if short > 0 and 0 <= j < len(widths_px) and widths_px[j] > need[j]:
+                d = min(widths_px[j] - need[j], short)
+                widths_px[j] -= d
+                widths_px[k] += d
+                short -= d
     total = sum(widths_px)
     if 0 < total < max_width_px:
         # колонки растягиваем до полной ширины текста (запас справа)
@@ -420,10 +525,52 @@ def _spacer(doc, ctx: Ctx, gap_px: float):
     return par
 
 
+def _main_font(flow) -> str:
+    """Шрифт, которым набрана большая часть текста (у сканов — Times New Roman)."""
+    count: dict[str, int] = {}
+
+    def add(paras):
+        for p in paras:
+            for ln in p.lines:
+                for w in ln.words:
+                    f = w.font or FONT
+                    count[f] = count.get(f, 0) + len(w.text)
+
+    for el in flow:
+        if isinstance(el, Para):
+            add([el])
+        elif isinstance(el, ColumnGroup):
+            for paras in el.cells:
+                add(paras)
+        elif isinstance(el, tbl.Table):
+            for c in el.cells:
+                add(c.paragraphs)
+    return max(count, key=count.get) if count else FONT
+
+
 # --------------------------------------------------------------------------
 
-def write(pages, flow, out_path: str, title: str = ""):
-    from .pipeline import SectionBreak
+def _auto_hyphenation(doc) -> None:
+    """Автоматический перенос слов (по правилам языка текста)."""
+    settings = doc.settings.element
+    if settings.find(qn("w:autoHyphenation")) is not None:
+        return
+    el = OxmlElement("w:autoHyphenation")
+    # место в w:settings задано схемой: сразу после w:defaultTabStop
+    anchor = settings.find(qn("w:defaultTabStop"))
+    if anchor is not None:
+        anchor.addnext(el)
+        return
+    for tag in ("w:characterSpacingControl", "w:compat", "w:rsids", "w:themeFontLang"):
+        nxt = settings.find(qn(tag))
+        if nxt is not None:
+            nxt.addprevious(el)
+            return
+    settings.append(el)
+
+
+def write(pages, flow, out_path: str, title: str = "", hyphenate: bool = False):
+    from .pipeline import PageBreak, SectionBreak
 
     doc = Document()
     if not pages:
@@ -432,13 +579,16 @@ def write(pages, flow, out_path: str, title: str = ""):
     sizes = [p.body_size for p in pages]
     body_size = median(sizes)
     dpi = median([p.dpi for p in pages])
-    ctx = Ctx(dpi, body_size)
-    _setup_styles(doc, body_size)
+    font = _main_font(flow)
+    ctx = Ctx(dpi, body_size, font)
+    _setup_styles(doc, body_size, font)
     zoom = doc.settings.element.find(qn("w:zoom"))
     if zoom is not None and zoom.get(qn("w:percent")) is None:
         zoom.set(qn("w:percent"), "100")
     doc.core_properties.title = title
     doc.core_properties.author = "PDF в Word"
+    if hyphenate:
+        _auto_hyphenation(doc)
 
     # группы страниц с одинаковой ориентацией → разделы
     groups = [[pages[0]]]
@@ -463,7 +613,13 @@ def write(pages, flow, out_path: str, title: str = ""):
             body.remove(par._p)
 
     prev_kind = None
+    new_page = False
+    floating = None                     # рисунок с обтеканием ждёт своего абзаца
     for el in flow:
+        if floating is not None and not isinstance(el, Para) and \
+                not (isinstance(el, Picture) and el.wrap):
+            _add_picture(doc.add_paragraph(), floating, ctx, max_w)
+            floating = None
         if isinstance(el, SectionBreak):
             grp = next(group_iter, None)
             section = doc.add_section(WD_SECTION.NEW_PAGE)
@@ -471,14 +627,35 @@ def write(pages, flow, out_path: str, title: str = ""):
                 _apply_section(section, grp, ctx)
             max_w = text_width_px(section)
             prev_kind = None
+            new_page = False
+            continue
+        if isinstance(el, PageBreak):
+            new_page = prev_kind is not None
             continue
         if isinstance(el, Para):
             par = doc.add_paragraph()
             _fill_paragraph(par, el, ctx, max_indent_px=max_w)
+            par.paragraph_format.page_break_before = new_page or None
+            if floating is not None:
+                if not _float_picture(par, floating, ctx, max_w, el.y0):
+                    _add_picture(doc.add_paragraph(), floating, ctx, max_w)
+                floating = None
+            prev_kind = "para"
+        elif isinstance(el, Picture) and el.wrap:
+            if floating is not None:
+                _add_picture(doc.add_paragraph(), floating, ctx, max_w)
+            floating = el
+            continue
+        elif isinstance(el, Picture):
+            par = doc.add_paragraph()
+            _add_picture(par, el, ctx, max_w)
+            par.paragraph_format.page_break_before = new_page or None
             prev_kind = "para"
         elif isinstance(el, (tbl.Table, ColumnGroup)):
             gap = getattr(el, "space_before", 0.0) or 0.0
-            if prev_kind in ("table", "cols"):
+            if new_page:
+                _spacer(doc, ctx, 1.0).paragraph_format.page_break_before = True
+            elif prev_kind in ("table", "cols"):
                 _spacer(doc, ctx, max(gap, 2.0))
             elif gap > 0.6 * ctx.body_size * dpi / 72:
                 _spacer(doc, ctx, gap)
@@ -488,6 +665,10 @@ def write(pages, flow, out_path: str, title: str = ""):
             else:
                 _add_columns(doc, el, ctx, max_w)
                 prev_kind = "cols"
+        new_page = False
+    if floating is not None:
+        _add_picture(doc.add_paragraph(), floating, ctx, max_w)
+        prev_kind = "para"
     # Word требует абзац после таблицы в конце документа
     if prev_kind in ("table", "cols"):
         _spacer(doc, ctx, 2.0)

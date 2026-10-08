@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import re
 import threading
@@ -12,10 +13,11 @@ from typing import Callable
 
 import cv2
 import numpy as np
+from PIL import Image
 
-from . import imageops, layout, metrics, tables as tbl, textfix
+from . import imageops, layout, metrics, pdftext, tables as tbl, textfix
 from .engine import Cancelled, Engine, OcrError, TWord
-from .layout import ColumnGroup, Line, Para, Word
+from .layout import ColumnGroup, Line, Para, Picture, Word
 
 XH_RATIO = 0.447         # высота строчных / кегль (Times New Roman)
 LINE_H = 1.149           # высота строки при одинарном интервале / кегль (TNR)
@@ -41,6 +43,7 @@ class PageResult:
     body_size: float = 12.0
     rotated: int = 0
     ocr_score: float = 0.0                         # сколько текста прочитано уверенно
+    layer: bool = False                            # текст взят из PDF, а не распознан
 
 
 ProgressFn = Callable[[float, str], None]
@@ -725,11 +728,31 @@ def _assign_sizes(paras: list[Para], dpi: float) -> None:
     k = min(1.1, max(0.8, float(median(ratios)))) if ratios else 1.0
     for p, sw in zip(paras, by_width):
         p.size = sw if sw else p.size * k
+        # электронный PDF: кегль известен точно — берём самый частый по буквам
+        known: dict[float, int] = {}
+        for ln in p.lines:
+            for w in ln.words:
+                if w.size and not w.script and not w.fill:
+                    key = round(w.size * 2) / 2
+                    known[key] = known.get(key, 0) + len(w.text)
+        p.exact = bool(known)
+        if known:
+            p.size = max(known, key=known.get)
         p.spacing = 1.0
         if len(p.lines) >= 2:
             pitches = [b.base - a.base for a, b in zip(p.lines, p.lines[1:])]
             m = median(pitches) / (LINE_H * p.size * dpi / 72.0)
-            if m < 1.07:
+            if p.exact or any(w.em for ln in p.lines for w in ln.words):
+                # в электронном PDF шаг строк точный — повторяем его как есть;
+                # строки с крупной формулой Word и сам сделает выше
+                plain = {id(ln) for ln in p.lines
+                         if max((w.size for w in ln.words if w.size and not w.script),
+                                default=p.size) <= 1.1 * p.size}
+                pitches = [b.base - a.base for a, b in zip(p.lines, p.lines[1:])
+                           if id(a) in plain and id(b) in plain]
+                m = median(pitches) / (LINE_H * p.size * dpi / 72.0) if pitches else 0.0
+                p.spacing = round(m, 2) if 0.9 <= m <= 3.0 else 0.0
+            elif m < 1.07:
                 p.spacing = 1.0
             elif m < 1.3:
                 p.spacing = 1.15
@@ -737,6 +760,17 @@ def _assign_sizes(paras: list[Para], dpi: float) -> None:
                 p.spacing = 1.5
             elif m < 2.3:
                 p.spacing = 2.0
+    # однострочным абзацам электронного PDF (и тем, где шаг строк не измерить) —
+    # интервал соседних абзацев того же кегля
+    by_size: dict[float, list[float]] = {}
+    for p in paras:
+        if p.exact and len(p.lines) >= 2 and p.spacing:
+            by_size.setdefault(p.size, []).append(p.spacing)
+    for p in paras:
+        if p.exact and (len(p.lines) == 1 or not p.spacing):
+            p.spacing = float(median(by_size[p.size])) if by_size.get(p.size) else 1.0
+        elif not p.spacing:
+            p.spacing = 1.0
 
 
 def _all_paras(elements) -> list[Para]:
@@ -772,7 +806,7 @@ def _dominant(paras: list[Para]) -> float | None:
     for p in paras:
         if _text_len(p) <= 4 or _is_caption(p):
             continue
-        s = _snap(p.size)
+        s = p.size if p.exact else _snap(p.size)
         weights[s] = weights.get(s, 0) + _text_len(p)
     return max(weights, key=weights.get) if weights else None
 
@@ -797,6 +831,8 @@ def finalize_sizes(pages: list["PageResult"]) -> float:
 
     def settle(p: Para, ref: float, tol: float):
         raw = p.size
+        if p.exact:
+            return                # кегль из PDF точный — не подгоняем
         if abs(raw - ref) <= tol * ref:
             p.size = ref
         elif _text_len(p) < 8:
@@ -810,7 +846,7 @@ def finalize_sizes(pages: list["PageResult"]) -> float:
     # совсем короткие надписи («1», «шт.», «Сдал») меряются ненадёжно —
     # им достаётся кегль соседей
     for p in flow_paras:
-        if _text_len(p) <= 4:
+        if _text_len(p) <= 4 and not p.exact:
             p.size = body
         else:
             settle(p, body, 0.08)
@@ -825,7 +861,7 @@ def finalize_sizes(pages: list["PageResult"]) -> float:
                      for p in o.paragraphs if _text_len(p) >= 8]
             short_ref = max(set(mates), key=mates.count) if mates else ref
             for p in c.paragraphs:
-                if _text_len(p) <= 4:
+                if _text_len(p) <= 4 and not p.exact:
                     p.size = short_ref
     for page in pages:
         page.body_size = body
@@ -850,10 +886,12 @@ def _space_before(seq: list, dpi: float, start_y: float | None) -> None:
     prev_bottom = start_y
     prev_base = None
     for el in seq:
+        if getattr(el, "wrap", ""):
+            continue                       # плавающий рисунок места в потоке не занимает
         top = el.y0
         if isinstance(el, Para):
             first = el.lines[0]
-            pitch = 1.15 * el.size * dpi / 72.0
+            pitch = LINE_H * max(1.0, el.spacing or 1.0) * el.size * dpi / 72.0
             if prev_base is not None:
                 extra = (first.base - prev_base) - pitch
             elif prev_bottom is not None:
@@ -880,6 +918,24 @@ def process_page(engine: Engine, src: imageops.PageSource, index: int,
     dpi = int(round(info.dpi))
     engine.check()
     step(0.05)
+
+    layer = src.layer(index)
+    if layer is not None:
+        # электронный PDF: текст в файле уже есть, распознавать не нужно;
+        # картинка страницы нужна только для таблиц, линий и рисунков
+        try:
+            words, boxes, rules, scale = layer
+            pictures = []
+            for x0, y0, x1, y1 in boxes:
+                data = imageops.picture_bytes(bgr[y0:y1, x0:x1], dpi)
+                if data:
+                    pictures.append(Picture(x0, y0, x1, y1, data))
+            return _recognize(engine, imageops.to_gray(bgr), None, index, 0, dpi, opts.langs,
+                              0.0, step, layer=(words, pictures, scale, rules))
+        except Cancelled:
+            raise
+        except Exception:
+            pass                  # необычный файл: страницу просто распознаём
 
     gray0 = imageops.to_gray(bgr)
     # размытый скан (не в фокусе, смаз, низкое разрешение): перед
@@ -923,20 +979,46 @@ def process_page(engine: Engine, src: imageops.PageSource, index: int,
 
 def _recognize(engine: Engine, gray: np.ndarray, color_mask: np.ndarray | None, index: int,
                rot: int, dpi: int, langs: str, blur: float,
-               step: Callable[[float], None]) -> PageResult:
-    """Распознавание подготовленной (повёрнутой, без печатей) страницы."""
+               step: Callable[[float], None], layer=None) -> PageResult:
+    """Распознавание подготовленной (повёрнутой, без печатей) страницы.
+
+    layer — (слова, рисунки, масштаб, линии) текстового слоя электронного
+    PDF: тогда текст берётся из него, а картинка нужна только для линий."""
+    pictures: list[Picture] = layer[1] if layer is not None else []
     ink = imageops.binarize(gray)
-    angle = imageops.estimate_skew(ink)
-    if abs(angle) >= 0.08:
-        gray = imageops.rotate_small(gray, angle)
-        ink = imageops.binarize(gray)
-        if color_mask is not None:
-            color_mask = imageops.rotate_small(color_mask, angle, 0)
+    line_ink = ink                                # где искать линии таблиц и полей
+    if layer is not None:
+        # электронный PDF: где буквы, известно точно — крупный жирный шрифт
+        # не примем за линии таблицы; бледные векторные линии добавляем
+        line_ink = ink.copy()
+        for w in layer[0]:
+            if not set(w.text) <= {"_"}:
+                line_ink[w.y0:w.y1, w.x0:w.x1] = 0
+        for x0, y0, x1, y1 in layer[3]:
+            ink[y0:y1, x0:x1] = 255
+            line_ink[y0:y1, x0:x1] = 255
+    for pic in pictures:
+        # линии рисунка — не таблица и не поле для заполнения; рамку ячейки
+        # вплотную к рисунку не задеваем
+        for im in (ink, line_ink):
+            im[max(0, pic.y0 - 1):pic.y1 + 1, max(0, pic.x0 - 1):pic.x1 + 1] = 0
+    if layer is None:
+        angle = imageops.estimate_skew(ink)
+        if abs(angle) >= 0.08:
+            gray = imageops.rotate_small(gray, angle)
+            ink = imageops.binarize(gray)
+            if color_mask is not None:
+                color_mask = imageops.rotate_small(color_mask, angle, 0)
+        line_ink = ink
     engine.check()
 
     step(0.25)
     H, W = gray.shape
     xh = imageops.estimate_xheight(ink)
+    if layer is not None:
+        sizes = [w.size for w in layer[0] if w.size and not w.fill]
+        if sizes:
+            xh = pdftext.XH * float(median(sizes)) * layer[2]
     zone = None
     if color_mask is not None:
         color_mask[color_mask < 128] = 0
@@ -944,13 +1026,13 @@ def _recognize(engine: Engine, gray: np.ndarray, color_mask: np.ndarray | None, 
         zone = cv2.dilate(color_mask, np.ones((k, k), np.uint8))
     _remove_specks(gray, ink, max(3, int((dpi / 300.0) ** 2 * 6)))
 
-    tables = tbl.detect_tables(ink, xh)
+    tables = tbl.detect_tables(line_ink, xh)
     grid_mask = np.zeros_like(ink)
     for t in tables:
         grid_mask |= t.line_mask
     tables = [t for t in tables if not t.frame]   # линии рамки стираем, текст — обычный
 
-    segs = _short_segments(ink, xh, grid_mask)
+    segs = _short_segments(line_ink, xh, grid_mask)
     # обрывки линий таблицы (продолжение границы) — не подчёркивания:
     # они лежат на линии сетки и упираются в вертикальную линию или край
     tol = max(6, int(0.35 * xh))
@@ -991,108 +1073,125 @@ def _recognize(engine: Engine, gray: np.ndarray, color_mask: np.ndarray | None, 
         cover = float((band.max(axis=0) > 0).mean()) if band.size else 0.0
         (unders if dens > 0.035 and cover >= 0.5 else fills).append(s)
 
-    # --- распознавание текста вне таблиц
-    text_img = clean.copy()
-    for t in tables:
-        cv2.rectangle(text_img, (t.x0 - 4, t.y0 - 4), (t.x1 + 4, t.y1 + 4), 255, -1)
-
-    cell_jobs = []   # (table_idx, cell, crop_offset)
-    crops = []
-    pad = 20
-    for ti, t in enumerate(tables):
-        for cell in t.cells:
-            inset = max(5, int(0.25 * xh))
-            x0, y0 = cell.x0 + inset, cell.y0 + inset
-            x1, y1 = cell.x1 - inset, cell.y1 - inset
-            if x1 - x0 < 8 or y1 - y0 < 8:
-                continue
-            region_ink = clean_ink[y0:y1, x0:x1]
-            if cv2.countNonZero(region_ink) < 15:
-                continue
-            crop = np.full((y1 - y0 + 2 * pad, x1 - x0 + 2 * pad), 255, np.uint8)
-            crop[pad:-pad, pad:-pad] = clean[y0:y1, x0:x1]
-            _clean_cell_crop(crop, pad)
-            cell_jobs.append((ti, cell, (x0 - pad, y0 - pad)))
-            crops.append(crop)
-
-    step(0.3)
-
-    def ocr_text():
-        if cv2.countNonZero(cv2.threshold(text_img, 200, 255, cv2.THRESH_BINARY_INV)[1]) < 30:
-            return []
-        return engine.tsv(imageops.png_bytes(text_img, dpi), 3, dpi, langs)
-
-    def ocr_cells():
-        if not crops:
-            return []
-        return engine.tsv(imageops.tiff_stack(crops, dpi), 6, dpi, langs)
-
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        f_text = pool.submit(ocr_text)
-        f_cells = pool.submit(ocr_cells)
-        text_words = f_text.result()
-        cell_words = f_cells.result()
-    step(0.8)
-    # «настоящая» краска — темнее середины между чернилами и бумагой
-    dark = clean[clean < 200]
-    faint = min(200.0, (float(np.percentile(dark, 5)) + 255.0) / 2.0) if dark.size else 140.0
-    cell_words = _retry_short_cells(engine, cell_words, crops, cell_jobs, dpi, langs, xh, faint)
-    if "eng" not in langs:
-        # английские названия и артикулы внутри русского текста
-        def in_stamp(run):
-            if zone is None:
-                return False
-            x0, y0 = min(w.x0 for w in run), min(w.y0 for w in run)
-            x1, y1 = max(w.x1 for w in run), max(w.y1 for w in run)
-            crop = zone[max(0, y0):y1, max(0, x0):x1]
-            return crop.size > 0 and cv2.countNonZero(crop) > 0.2 * crop.size
-
-        text_words = _latin_pass(engine, text_words, lambda page: text_img, dpi, xh, in_stamp)
-        cell_words = _latin_pass(engine, cell_words,
-                                 lambda page: crops[page - 1] if 0 < page <= len(crops) else None,
-                                 dpi, xh)
-    step(0.85)
-    # уверенно прочитанные знаки минус сомнительные — мера качества прочтения
-    ocr_score = 0.0
-    for w in text_words + cell_words:
-        if len(w.text) >= 2:
-            ocr_score += len(w.text) if w.conf >= 75 else (-len(w.text) if w.conf < 50 else 0)
-
-    # --- строки
-    text_lines = _lines_from_words(text_words, key_prefix=("text",))
-    cell_lines: dict[int, list[Line]] = {}
-    by_page: dict[int, list[TWord]] = {}
-    for t in cell_words:
-        by_page.setdefault(t.page, []).append(t)
-    for job_i, (ti, cell, off) in enumerate(cell_jobs):
-        ws = by_page.get(job_i + 1, [])
-        if ws:
-            cell_lines[id(cell)] = _lines_from_words(ws, offset=off, key_prefix=("cell", job_i))
-
     def in_any_table(s: tbl.Segment):
         for t in tables:
             if t.x0 <= s.x0 and s.x1 <= t.x1 and t.y0 <= s.y0 <= t.y1:
                 return t
         return None
 
-    # строки, слитые Tesseract из разных колонок, режем сразу и меряем
-    text_lines = [seg for ln in text_lines for seg in layout.split_line(ln)]
-    for k in list(cell_lines):
-        cell_lines[k] = [seg for ln in cell_lines[k] for seg in layout.split_line(ln)]
-    for ln in text_lines:
-        layout.measure_line(ln, clean_ink)
-    for v in cell_lines.values():
-        for ln in v:
+    if layer is None:
+        # --- распознавание текста вне таблиц
+        text_img = clean.copy()
+        for t in tables:
+            cv2.rectangle(text_img, (t.x0 - 4, t.y0 - 4), (t.x1 + 4, t.y1 + 4), 255, -1)
+
+        cell_jobs = []   # (table_idx, cell, crop_offset)
+        crops = []
+        pad = 20
+        for ti, t in enumerate(tables):
+            for cell in t.cells:
+                inset = max(5, int(0.25 * xh))
+                x0, y0 = cell.x0 + inset, cell.y0 + inset
+                x1, y1 = cell.x1 - inset, cell.y1 - inset
+                if x1 - x0 < 8 or y1 - y0 < 8:
+                    continue
+                region_ink = clean_ink[y0:y1, x0:x1]
+                if cv2.countNonZero(region_ink) < 15:
+                    continue
+                crop = np.full((y1 - y0 + 2 * pad, x1 - x0 + 2 * pad), 255, np.uint8)
+                crop[pad:-pad, pad:-pad] = clean[y0:y1, x0:x1]
+                _clean_cell_crop(crop, pad)
+                cell_jobs.append((ti, cell, (x0 - pad, y0 - pad)))
+                crops.append(crop)
+
+        step(0.3)
+
+        def ocr_text():
+            if cv2.countNonZero(cv2.threshold(text_img, 200, 255, cv2.THRESH_BINARY_INV)[1]) < 30:
+                return []
+            return engine.tsv(imageops.png_bytes(text_img, dpi), 3, dpi, langs)
+
+        def ocr_cells():
+            if not crops:
+                return []
+            return engine.tsv(imageops.tiff_stack(crops, dpi), 6, dpi, langs)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f_text = pool.submit(ocr_text)
+            f_cells = pool.submit(ocr_cells)
+            text_words = f_text.result()
+            cell_words = f_cells.result()
+        step(0.8)
+        # «настоящая» краска — темнее середины между чернилами и бумагой
+        dark = clean[clean < 200]
+        faint = min(200.0, (float(np.percentile(dark, 5)) + 255.0) / 2.0) if dark.size else 140.0
+        cell_words = _retry_short_cells(engine, cell_words, crops, cell_jobs, dpi, langs, xh, faint)
+        if "eng" not in langs:
+            # английские названия и артикулы внутри русского текста
+            def in_stamp(run):
+                if zone is None:
+                    return False
+                x0, y0 = min(w.x0 for w in run), min(w.y0 for w in run)
+                x1, y1 = max(w.x1 for w in run), max(w.y1 for w in run)
+                crop = zone[max(0, y0):y1, max(0, x0):x1]
+                return crop.size > 0 and cv2.countNonZero(crop) > 0.2 * crop.size
+
+            text_words = _latin_pass(engine, text_words, lambda page: text_img, dpi, xh, in_stamp)
+            cell_words = _latin_pass(engine, cell_words,
+                                     lambda page: crops[page - 1] if 0 < page <= len(crops) else None,
+                                     dpi, xh)
+        step(0.85)
+        # уверенно прочитанные знаки минус сомнительные — мера качества прочтения
+        ocr_score = 0.0
+        for w in text_words + cell_words:
+            if len(w.text) >= 2:
+                ocr_score += len(w.text) if w.conf >= 75 else (-len(w.text) if w.conf < 50 else 0)
+
+        # --- строки
+        text_lines = _lines_from_words(text_words, key_prefix=("text",))
+        cell_lines: dict[int, list[Line]] = {}
+        by_page: dict[int, list[TWord]] = {}
+        for t in cell_words:
+            by_page.setdefault(t.page, []).append(t)
+        for job_i, (ti, cell, off) in enumerate(cell_jobs):
+            ws = by_page.get(job_i + 1, [])
+            if ws:
+                cell_lines[id(cell)] = _lines_from_words(ws, offset=off, key_prefix=("cell", job_i))
+
+        # строки, слитые Tesseract из разных колонок, режем сразу и меряем
+        text_lines = [seg for ln in text_lines for seg in layout.split_line(ln)]
+        for k in list(cell_lines):
+            cell_lines[k] = [seg for ln in cell_lines[k] for seg in layout.split_line(ln)]
+        for ln in text_lines:
             layout.measure_line(ln, clean_ink)
-    xhs = [ln.xh for ln in text_lines + [l for v in cell_lines.values() for l in v]
-           if len(ln.words) >= 3]
-    page_xh = float(median(xhs)) if xhs else xh
-    # у коротких строк высота меряется ненадёжно: сверяем с соседями
-    for group in [text_lines] + list(cell_lines.values()):
-        _smooth_xh(group, page_xh)
-    text_lines = _clean_lines(text_lines, clean_ink, page_xh, zone)
-    for k in list(cell_lines):
-        cell_lines[k] = _clean_lines(cell_lines[k], clean_ink, page_xh, zone)
+        for v in cell_lines.values():
+            for ln in v:
+                layout.measure_line(ln, clean_ink)
+        xhs = [ln.xh for ln in text_lines + [l for v in cell_lines.values() for l in v]
+               if len(ln.words) >= 3]
+        page_xh = float(median(xhs)) if xhs else xh
+        # у коротких строк высота меряется ненадёжно: сверяем с соседями
+        for group in [text_lines] + list(cell_lines.values()):
+            _smooth_xh(group, page_xh)
+        text_lines = _clean_lines(text_lines, clean_ink, page_xh, zone)
+        for k in list(cell_lines):
+            cell_lines[k] = _clean_lines(cell_lines[k], clean_ink, page_xh, zone)
+
+    else:
+        ocr_score = 0.0
+        text_lines, cell_lines = _layer_lines(layer[0], pictures, tables, layer[2])
+        # линии «____», набранные знаками подчёркивания, уже есть в тексте
+        typed = [w for ln in text_lines + [l for v in cell_lines.values() for l in v]
+                 for w in ln.words if w.fill]
+        fills = [sg for sg in fills if not any(
+            w.x0 - 4 <= sg.x1 and sg.x0 <= w.x1 + 4 and w.y0 - 4 <= sg.y1 and sg.y0 <= w.y1 + 4
+            for w in typed)]
+        text_lines = [seg for ln in text_lines for seg in layout.split_line(ln)]
+        for k in list(cell_lines):
+            cell_lines[k] = [seg for ln in cell_lines[k] for seg in layout.split_line(ln)]
+        xhs = [ln.xh for ln in text_lines + [l for v in cell_lines.values() for l in v]
+               if len(ln.words) >= 3]
+        page_xh = float(median(xhs)) if xhs else xh
 
     fills = _merge_fills(fills, page_xh)
     text_fills = [s for s in fills if in_any_table(s) is None]
@@ -1108,7 +1207,9 @@ def _recognize(engine: Engine, gray: np.ndarray, color_mask: np.ndarray | None, 
         all_lines.extend(v)
     _mark_underlines(all_lines, unders)
     stroke_ink = clean_ink
-    if blur >= 1.5:
+    if layer is not None:
+        pass                  # жирный и курсив известны из шрифтов PDF
+    elif blur >= 1.5:
         # на размытом скане штрихи после порога Оцу толще настоящих, а у
         # мелкого шрифта — заметно толще (ложный жирный): толщину меряем по
         # середине перепада между чернилами и бумагой
@@ -1116,13 +1217,14 @@ def _recognize(engine: Engine, gray: np.ndarray, color_mask: np.ndarray | None, 
         if dark.size:
             mid = (float(np.percentile(dark, 5)) + 255.0) / 2.0
             stroke_ink = np.where((clean < mid) & (lines_removed == 0), 255, 0).astype(np.uint8)
-    layout.mark_bold(all_lines, stroke_ink)
-    # высота строчных у соседнего текста: у страницы и у каждой таблицы своя
-    layout.fix_words(text_lines, page_xh)
-    for t in tables:
-        lines = [ln for c in t.cells for ln in cell_lines.get(id(c), [])]
-        ref = [ln.xh for ln in lines if ln.sure or len(ln.words) >= 3]
-        layout.fix_words(lines, float(median(ref)) if ref else 0.0)
+    if layer is None:
+        layout.mark_bold(all_lines, stroke_ink)
+        # высота строчных у соседнего текста: у страницы и у каждой таблицы своя
+        layout.fix_words(text_lines, page_xh)
+        for t in tables:
+            lines = [ln for c in t.cells for ln in cell_lines.get(id(c), [])]
+            ref = [ln.xh for ln in lines if ln.sure or len(ln.words) >= 3]
+            layout.fix_words(lines, float(median(ref)) if ref else 0.0)
 
     # --- границы содержимого
     xs0 = [ln.x0 for ln in text_lines] + [t.x0 for t in tables]
@@ -1152,7 +1254,13 @@ def _recognize(engine: Engine, gray: np.ndarray, color_mask: np.ndarray | None, 
 
     # --- раскладка
     elements: list = []
+    wrapped: list = []
+    if pictures:
+        text_lines, wrapped = _wrap_pictures(pictures, tables, text_lines, L, R)
     elements.extend(layout.layout_region(text_lines, L, R))
+    for lines, l2, r2 in wrapped:
+        # текст сбоку от рисунка — абзацы по ширине оставшегося места
+        elements.extend(layout.segment_paragraphs(lines, l2, r2))
     cell_pad = 0.19 / 2.54 * dpi          # поле ячейки Word по умолчанию
     for t in tables:
         for cell in t.cells:
@@ -1170,7 +1278,9 @@ def _recognize(engine: Engine, gray: np.ndarray, color_mask: np.ndarray | None, 
                     p.align, p.left, p.first = "right", 0.0, 0.0
             _assign_sizes(cell.paragraphs, dpi)
         elements.append(t)
-    _drop_page_numbers(elements, H)
+    _place_pictures(pictures, tables, elements, L, R)
+    # в книгах номер страницы часто стоит дальше от края, чем в документах
+    _drop_page_numbers(elements, H, 0.12 if layer is not None else 0.08)
     _harmonize_alignment([e for e in elements if isinstance(e, Para)], L)
     for t in tables:
         for cell in t.cells:
@@ -1179,6 +1289,8 @@ def _recognize(engine: Engine, gray: np.ndarray, color_mask: np.ndarray | None, 
     _assign_sizes(paras, dpi)
     body_size = 12.0
     elements.sort(key=lambda e: e.y0)
+    if wrapped:
+        _join_wrapped(elements, wrapped)
 
     # интервалы между элементами (в основном потоке и внутри ячеек/колонок)
     _space_before(elements, dpi, None)
@@ -1191,7 +1303,113 @@ def _recognize(engine: Engine, gray: np.ndarray, color_mask: np.ndarray | None, 
         elif isinstance(el, ColumnGroup):
             for cell in el.cells:
                 _space_before(cell, dpi, el.y0)
-    return PageResult(index, W, H, dpi, elements, body, body_size, rot, ocr_score)
+    return PageResult(index, W, H, dpi, elements, body, body_size, rot, ocr_score,
+                      layer is not None)
+
+
+def _layer_lines(words: list[Word], pictures: list[Picture], tables: list[tbl.Table],
+                 scale: float) -> tuple[list[Line], dict[int, list[Line]]]:
+    """Слова текстового слоя → строки основного текста и строки ячеек таблиц."""
+    def inside(w: Word, box) -> bool:
+        cx, cy = (w.x0 + w.x1) / 2, (w.y0 + w.y1) / 2
+        return box.x0 <= cx <= box.x1 and box.y0 <= cy <= box.y1
+
+    # подписи на рисунке остаются на картинке; строка текста, лишь задевшая
+    # рисунок, остаётся текстом
+    boxes = [(p.x0, p.y0, p.x1, p.y1) for p in pictures]
+    drop = {id(w) for seg in pdftext.row_segments(words)
+            if any(pdftext.inside_share(seg, b) >= 0.6 for b in boxes) for w in seg}
+    text: list[Word] = []
+    cells: dict[int, list[Word]] = {}
+    for w in words:
+        if id(w) in drop:
+            continue
+        if w.text and set(w.text) <= {"_"}:
+            w.fill = True         # поле «____», набранное знаками подчёркивания
+        cell = next((c for t in tables for c in t.cells if inside(w, c)), None)
+        if cell is None:
+            text.append(w)
+        else:
+            cells.setdefault(id(cell), []).append(w)
+    return (pdftext.build_lines(text, scale),
+            {k: pdftext.build_lines(v, scale) for k, v in cells.items()})
+
+
+def _wrap_pictures(pictures: list[Picture], tables: list[tbl.Table], lines: list[Line],
+                   L: float, R: float) -> tuple[list[Line], list]:
+    """Рисунок у края колонки, обтекаемый текстом (фото автора и т. п.): строки
+    сбоку от него раскладываются отдельно, по ширине оставшегося места, а
+    рисунок в Word становится плавающим. Возвращает остальные строки и
+    группы (строки, левый край, правый край)."""
+    groups = []
+    rest = list(lines)
+    width = max(1.0, R - L)
+    for pic in pictures:
+        cx, cy = (pic.x0 + pic.x1) / 2, (pic.y0 + pic.y1) / 2
+        if any(c.x0 <= cx <= c.x1 and c.y0 <= cy <= c.y1 for t in tables for c in t.cells):
+            continue                       # рисунок в ячейке таблицы
+        beside = [ln for ln in rest
+                  if min(ln.y1, pic.y1) - max(ln.y0, pic.y0) >= 0.5 * (ln.y1 - ln.y0)]
+        right = [ln for ln in beside if ln.x0 >= pic.x1 - 2]
+        left = [ln for ln in beside if ln.x1 <= pic.x0 + 2]
+        if len(right) >= 2 and not left and pic.x0 - L < 0.25 * width:
+            l2, r2 = min(ln.x0 for ln in right), R
+            pic.wrap, pic.gap, side = "left", l2 - pic.x1, right
+        elif len(left) >= 2 and not right and R - pic.x1 < 0.25 * width:
+            l2, r2 = L, max(ln.x1 for ln in left)
+            pic.wrap, pic.gap, side = "right", pic.x0 - r2, left
+        else:
+            continue
+        if not 0 <= pic.gap < 0.15 * width:
+            pic.wrap = ""
+            continue
+        groups.append((side, l2, r2))
+        ids = {id(ln) for ln in side}
+        rest = [ln for ln in rest if id(ln) not in ids]
+    return rest, groups
+
+
+def _join_wrapped(elements: list, wrapped: list) -> None:
+    """Абзац, начатый сбоку от рисунка и продолженный под ним, — один абзац."""
+    for lines, _, _ in wrapped:
+        ids = {id(ln) for ln in lines}
+        group = [k for k, el in enumerate(elements)
+                 if isinstance(el, Para) and any(id(ln) in ids for ln in el.lines)]
+        if not group:
+            continue
+        k = group[-1]
+        nxt = next((j for j in range(k + 1, len(elements))
+                    if not getattr(elements[j], "wrap", "")), None)
+        if nxt is None or not isinstance(elements[nxt], Para):
+            continue
+        last, below = elements[k], elements[nxt]
+        if _continues(last, below):
+            last.lines.extend(below.lines)
+            if below.align == "justify":
+                last.align = "justify"
+            del elements[nxt]
+
+
+def _place_pictures(pictures: list[Picture], tables: list[tbl.Table], elements: list,
+                    L: float, R: float) -> None:
+    """Рисунок внутри ячейки — в ячейку, остальные — в поток текста на своё место."""
+    width = max(1.0, R - L)
+    for pic in pictures:
+        cx, cy = (pic.x0 + pic.x1) / 2, (pic.y0 + pic.y1) / 2
+        cell = next((c for t in tables for c in t.cells
+                     if c.x0 <= cx <= c.x1 and c.y0 <= cy <= c.y1), None)
+        if cell is not None:
+            cell.pictures.append(pic)
+            continue
+        if pic.wrap:
+            pic.left = max(0.0, pic.x0 - L)
+        elif abs(cx - (L + R) / 2) < 0.08 * width:
+            pic.align = "center"
+        elif pic.x0 > L + 0.4 * width:
+            pic.align = "right"
+        else:
+            pic.align, pic.left = "left", max(0.0, pic.x0 - L)
+        elements.append(pic)
 
 
 def _harmonize_alignment(paras: list[Para], L: float | None) -> None:
@@ -1204,10 +1422,14 @@ def _harmonize_alignment(paras: list[Para], L: float | None) -> None:
     firsts = [p.first for p in multi if p.first > 0]
     if L is not None and firsts:
         ind = median(firsts)
+        body_xh = median([q.lines[0].xh for q in multi]) or 20
         for p in paras:
             if len(p.lines) == 1 and p.align == "center" and p.segments is None:
-                xh = p.lines[0].xh or 20
-                if abs((p.lines[0].x0 - L) - ind) < 1.0 * xh:
+                ln = p.lines[0]
+                xh = ln.xh or 20
+                if xh > 1.25 * body_xh or all(w.bold for w in ln.words):
+                    continue                # заголовок крупнее или жирнее текста
+                if abs((ln.x0 - L) - ind) < 1.0 * xh:
                     p.align = "left"
                     p.first = ind
                     p.left = 0.0
@@ -1281,14 +1503,14 @@ def _attach_side_labels(tables: list[tbl.Table], text_lines: list[Line],
     return [ln for ln in text_lines if id(ln) not in used]
 
 
-def _drop_page_numbers(elements: list, H: int) -> None:
+def _drop_page_numbers(elements: list, H: int, margin: float) -> None:
     """Убирает номера страниц и колонтитулы вида «- 2 -», «Страница 2 из 5»."""
     pat = re.compile(r"^(стр\.?|страница|лист|page)?\s*[-–—]?\s*\d{1,4}\s*[-–—]?\s*(из\s*\d+)?$", re.I)
     for el in list(elements):
         if not isinstance(el, Para) or len(el.lines) != 1:
             continue
         txt = el.lines[0].text.strip()
-        if el.y1 < 0.08 * H or el.y0 > 0.92 * H:
+        if el.y1 < margin * H or el.y0 > (1 - margin) * H:
             if pat.match(txt):
                 elements.remove(el)
 
@@ -1300,17 +1522,85 @@ class SectionBreak:
     page: PageResult
 
 
+@dataclass
+class PageBreak:
+    """Следующий элемент начинается с новой страницы (новая глава и т. п.)."""
+
+
+def _content_bottom(page: PageResult) -> float:
+    return max((el.y1 for el in page.elements), default=0.0) / page.height_px
+
+
+def _chars(page: PageResult) -> tuple[int, int]:
+    """Сколько букв на странице всего и сколько из них — основным кеглем."""
+    total = body = 0
+    for p in _all_paras(page.elements):
+        n = _text_len(p)
+        total += n
+        if abs(p.size - page.body_size) < 0.6:
+            body += n
+    return total, body
+
+
+def _starts_chapter(page: PageResult) -> bool:
+    """Страница электронной книги начинается с крупного заголовка (глава,
+    часть, «Содержание»): в книгах такие страницы всегда с нового листа."""
+    first = page.elements[0] if page.elements else None
+    if not (page.layer and isinstance(first, Para) and first.exact and _text_len(first) >= 3):
+        return False
+    if first.size >= 1.3 * page.body_size:
+        return True
+    # «ВВЕДЕНИЕ», «ОГЛАВЛЕНИЕ», «СПИСОК ЛИТЕРАТУРЫ»: жирные прописные
+    words = [w for ln in first.lines for w in ln.words]
+    letters = "".join(ch for w in words for ch in w.text if ch.isalpha())
+    return len(first.lines) == 1 and len(letters) >= 4 and letters.isupper() and \
+        all(w.bold for w in words)
+
+
+def _ends_page(page: PageResult, full: float, typical: float) -> bool:
+    """После этой страницы следующая начинается с нового листа: текст кончился
+    заметно выше обычного или это титул, оборот титула и т. п. (мало текста,
+    и он в основном не основного кегля)."""
+    if not page.elements:
+        return False
+    bottom = _content_bottom(page)
+    if bottom < full - 0.1 or bottom < 0.75:
+        return True
+    total, body = _chars(page)
+    return page.layer and (total < 0.3 * typical or total < 0.4 * typical and body < 0.5 * total)
+
+
 def merge_pages(pages: list[PageResult]) -> list:
     """Склеивает страницы в один поток: переносы таблиц и абзацев.
 
-    Если ориентация листа меняется, вставляется SectionBreak."""
+    Если ориентация листа меняется, вставляется SectionBreak; если текст
+    страницы кончается намного выше обычного — PageBreak, чтобы следующая
+    страница (новая глава, новый документ) и в Word начиналась с нового листа."""
     flow: list = []
     prev_landscape = None
+    bottoms = [_content_bottom(p) for p in pages if p.elements]
+    full = float(np.percentile(bottoms, 75)) if len(bottoms) >= 2 else 1.0
+    typical = float(median([_chars(p)[0] for p in pages if p.elements] or [0]))
+    # верх текста на листе Word: поле сверху считается так же, как в docxwriter
+    tops = [p.body[1] / p.dpi for p in pages]
+    top = max(0.3, min(1.6, min(tops) - 0.05)) if tops else 0.8
+
+    def offset(el, page) -> float:
+        """Отступ сверху для первого элемента листа: титул, начало главы."""
+        gap = el.y0 / page.dpi - top
+        return gap * page.dpi if gap > 0.25 else 0.0
+
+    prev_page = None
     for page in pages:
         landscape = page.width_px > page.height_px
         els = list(page.elements)
         if prev_landscape is not None and landscape != prev_landscape:
             flow.append(SectionBreak(page))
+        elif flow and els and prev_page is not None and (
+                _ends_page(prev_page, full, typical) or _starts_chapter(page)):
+            flow.append(PageBreak())
+            # глава, начатая ниже обычного, и в Word начнётся ниже
+            els[0].space_before = offset(els[0], page)
         elif flow and els:
             last, first = flow[-1], els[0]
             if isinstance(last, tbl.Table) and isinstance(first, tbl.Table) and \
@@ -1325,8 +1615,11 @@ def merge_pages(pages: list[PageResult]) -> list:
             else:
                 # промежуток до первого элемента новой страницы — это поле листа
                 first.space_before = 0.0
+        if not flow and els:
+            els[0].space_before = offset(els[0], page)
         flow.extend(els)
         prev_landscape = landscape
+        prev_page = page
     return flow
 
 
@@ -1388,6 +1681,8 @@ def _append_table(a: tbl.Table, b: tbl.Table) -> None:
 def _continues(a: Para, b: Para) -> bool:
     if a.segments is not None or b.segments is not None:
         return False
+    if all(w.fill for w in a.lines[-1].words) or any(w.fill for w in b.lines[0].words):
+        return False                       # строка для заполнения бланка
     text_a = a.lines[-1].text.rstrip()
     text_b = b.lines[0].text.lstrip()
     if not text_a or not text_b:
@@ -1403,8 +1698,6 @@ def _continues(a: Para, b: Para) -> bool:
 
 def convert(path: str, out_path: str, opts: Options | None = None,
             progress: ProgressFn | None = None, engine: Engine | None = None) -> str:
-    from . import docxwriter
-
     opts = opts or Options()
     engine = engine or Engine(opts.langs)
     report = progress or (lambda f, m: None)
@@ -1452,15 +1745,87 @@ def convert(path: str, out_path: str, opts: Options | None = None,
                     f.cancel()
                 raise
         report(0.96, "Собираю документ Word…")
-        pages = [r for r in results if r is not None]
-        finalize_sizes(pages)
-        _fit_fills(pages)
-        docxwriter.write(pages, merge_pages(pages), out_path,
-                         title=os.path.splitext(os.path.basename(path))[0])
+        write_docx([r for r in results if r is not None], out_path,
+                   os.path.splitext(os.path.basename(path))[0])
         report(1.0, "Готово")
         return out_path
     finally:
         src.close()
+
+
+def write_docx(pages: list[PageResult], out_path: str, title: str = "") -> None:
+    """Общие для документа поправки и запись .docx."""
+    from . import docxwriter
+
+    _drop_repeated(pages)
+    finalize_sizes(pages)
+    _fit_fills(pages)
+    # в книге слова переносились по слогам — включаем автоперенос и в Word,
+    # иначе строки «по ширине» выйдут с огромными пробелами
+    hyphens = sum(w.text.endswith("\u00ad") for page in pages if page.layer
+                  for p in _all_paras(page.elements) for ln in p.lines for w in ln.words)
+    docxwriter.write(pages, merge_pages(pages), out_path, title=title,
+                     hyphenate=hyphens >= 3)
+
+
+def _drop_repeated(pages: list[PageResult]) -> None:
+    """Убирает то, что повторяется вверху и внизу многих страниц: колонтитулы
+    («Глава 1», «Введение», фамилии авторов с номером страницы), логотипы и
+    рекламные вставки сайтов, с которых скачан файл."""
+    pages = [p for p in pages if p.layer]   # у сканов повторы — часть бланков
+    if len(pages) < 3:
+        return
+
+    def head_key(el, H):
+        if not isinstance(el, Para) or len(el.lines) > 2:
+            return None
+        if not (el.y1 < 0.12 * H or el.y0 > 0.88 * H):
+            return None
+        # номер страницы и длина линии рядом с ним от страницы к странице разные
+        text = re.sub(r"[\d\s.,–—-]+", " ", layout.para_text(el)).strip().lower()
+        text = re.sub(r"_+", "_", text)
+        ok = 2 <= len(text) <= 150 or text == "_"     # «_» — линия с номером страницы
+        return ("text", text) if ok else None
+
+    def pic_key(el, W, H):
+        if not isinstance(el, Picture):
+            return None
+        place = (round(el.x0 / W * 40), round(el.y0 / H * 40),
+                 round((el.x1 - el.x0) / W * 40), round((el.y1 - el.y0) / H * 40))
+        if el.y1 < 0.12 * H or el.y0 > 0.88 * H:
+            return ("pic",) + place        # у края листа: логотип, реклама сайта
+        return ("pic",) + place + (_thumb(el.png),)
+
+    counts: dict = {}
+    keys: dict[int, object] = {}
+    for page in pages:
+        seen = set()
+        for el in page.elements:
+            k = head_key(el, page.height_px) or pic_key(el, page.width_px, page.height_px)
+            if k is not None:
+                keys[id(el)] = k
+                if k not in seen:
+                    seen.add(k)
+                    counts[k] = counts.get(k, 0) + 1
+    need = max(3, int(0.2 * len(pages)) if len(pages) <= 15 else 3)
+    for page in pages:
+        kept = [el for el in page.elements if counts.get(keys.get(id(el)), 0) < need]
+        if len(kept) < len(page.elements) and kept:
+            # поля листа — по тексту без колонтитулов, интервалы — без них же
+            x0, _, x1, _ = page.body
+            page.body = (x0, int(min(el.y0 for el in kept)), x1, int(max(el.y1 for el in kept)))
+            _space_before(kept, page.dpi, None)
+        page.elements = kept
+
+
+def _thumb(png: bytes) -> int:
+    """Отпечаток картинки: одинаковые картинки дают одинаковое число."""
+    try:
+        small = np.asarray(Image.open(io.BytesIO(png)).convert("L").resize((8, 8)), np.float32)
+    except Exception:
+        return len(png)
+    bits = (small > small.mean()).flatten()
+    return int(sum(1 << i for i, b in enumerate(bits) if b))
 
 
 def _failed_page(index: int, exc: Exception) -> PageResult:
