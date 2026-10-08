@@ -434,8 +434,10 @@ def _latin_pass(engine: Engine, words: list[TWord], image_of: Callable[[int], np
         new = by_page.get(k + 1, [])
         if not new or not any(textfix.LAT.search(w.text) for w in new):
             continue
-        rus_conf = float(np.mean([w.conf for w in run]))
-        eng_conf = float(np.mean([w.conf for w in new]))
+        # медиана, а не среднее: одно плохо прочитанное слово (артикул
+        # на размытом скане) не должно перечёркивать «Lenovo» рядом
+        rus_conf = float(np.median([w.conf for w in run]))
+        eng_conf = float(np.median([w.conf for w in new]))
         if eng_conf < 80 or eng_conf < rus_conf + 30:
             continue
         rus_text = " ".join(w.text for w in run)
