@@ -170,11 +170,12 @@ def _clean_cell_crop(crop: np.ndarray, pad: int) -> None:
             inner[labels == i] = 255
 
 
-def _glyph_crop(crop: np.ndarray, xh: float, scale: float = 1.5):
+def _glyph_crop(crop: np.ndarray, xh: float, scale: float = 1.5, faint: float = 140.0):
     """Плотная вырезка вокруг символов: бледный фон и обрывки линий убраны,
     добавлены поля, картинка увеличена — так Tesseract увереннее читает
-    одиночные цифры и короткие слова."""
-    if int(np.count_nonzero(crop < 140)) < 15:
+    одиночные цифры и короткие слова. faint — порог «настоящей» краски
+    (на размытом скане буквы светлее)."""
+    if int(np.count_nonzero(crop < faint)) < 15:
         return None             # только бледные следы линий — букв нет
     dark_px = crop[crop < 250]
     dark = float(np.percentile(dark_px, 5))
@@ -220,6 +221,7 @@ def _alnum_count(words) -> int:
 
 
 NUMBER = re.compile(r"[\d\s.,/\-–]*\d[\d\s.,/\-–]*")
+ONE_LIKE = re.compile(r"[lI|!ı]")
 
 
 def _is_number(text: str) -> bool:
@@ -267,8 +269,13 @@ def _pick_reading(cands: list[tuple], numeric: bool):
     if not ok:
         return None
     if numeric:
-        # в столбце чисел («№», «Кол-во») буква вместо цифры — почти всегда ошибка
-        nums = [c for c in ok if _is_number(c[0]) and c[1] >= 45]
+        # в столбце чисел («№», «Кол-во») буква вместо цифры — почти всегда ошибка;
+        # одиночные «l», «I», «|» там — это единица
+        ok = [(ONE_LIKE.sub("1", c[0]), c[1],
+               [TWord(w.page, w.block, w.par, w.line, w.x0, w.y0, w.x1, w.y1, w.conf,
+                      ONE_LIKE.sub("1", w.text)) for w in c[2]], c[3])
+              if ONE_LIKE.fullmatch(c[0]) else c for c in ok]
+        nums = [c for c in ok if _is_number(c[0]) and c[1] >= 40]
         if nums:
             ok = nums
 
@@ -289,8 +296,23 @@ def _pick_reading(cands: list[tuple], numeric: bool):
     return max(ok, key=score)
 
 
+def _lone_one(img: np.ndarray, xh: float) -> tuple[int, int, int, int] | None:
+    """Единственный тонкий вертикальный штрих высотой с цифру — «1»
+    (одиночную единицу Tesseract часто не читает вовсе). Рамка штриха или None."""
+    ink = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+    n, _, st, _ = cv2.connectedComponentsWithStats(ink, connectivity=8)
+    big = [st[i] for i in range(1, n) if st[i][cv2.CC_STAT_AREA] >= 0.05 * xh * xh]
+    if len(big) != 1:
+        return None
+    x, y, w, h, _ = big[0]
+    if 0.9 * xh <= h <= 2.0 * xh and w >= 2 and w <= 0.5 * h:
+        return int(x), int(y), int(x + w), int(y + h)
+    return None
+
+
 def _retry_short_cells(engine: Engine, words: list[TWord], crops: list[np.ndarray],
-                       jobs: list, dpi: int, langs: str, xh: float) -> list[TWord]:
+                       jobs: list, dpi: int, langs: str, xh: float,
+                       faint: float = 140.0) -> list[TWord]:
     """Ячейки с одной короткой строкой («1», «шт.», «500») распознаём ещё раз
     по плотной увеличенной вырезке русской и английской моделями и выбираем
     прочтение: по уверенности, по совпадению вариантов и по соседним ячейкам
@@ -305,7 +327,7 @@ def _retry_short_cells(engine: Engine, words: list[TWord], crops: list[np.ndarra
         weak = any(w.conf < 85 for w in ws)
         if ws and chars > 4 and not (weak and chars <= 12):
             continue
-        g = _glyph_crop(crop, xh)
+        g = _glyph_crop(crop, xh, faint=faint)
         if g is None:
             continue
         retry.append((i, g[1]))
@@ -341,9 +363,19 @@ def _retry_short_cells(engine: Engine, words: list[TWord], crops: list[np.ndarra
             cands.setdefault(i, []).append(
                 (" ".join(w.text for w in new), _reading_conf(new), placed, model))
     numeric = _numeric_columns(cands, jobs)
-    for i, _ in retry:
+    for k, (i, (ox, oy, sc)) in enumerate(retry):
         ti, cell, _ = jobs[i]
-        best = _pick_reading(cands.get(i, []), (ti, cell.c0) in numeric and cell.c1 - cell.c0 == 1)
+        in_numeric = (ti, cell.c0) in numeric and cell.c1 - cell.c0 == 1
+        if in_numeric and not cands.get(i):
+            # в столбце чисел ничего не прочитано, а в клетке один тонкий
+            # штрих высотой с цифру — это «1»
+            box = _lone_one(tight[k], xh * sc)
+            if box is not None:
+                bx0, by0, bx1, by1 = box
+                by_page[i + 1] = [TWord(i + 1, 1, 1, 1, int(bx0 / sc) + ox, int(by0 / sc) + oy,
+                                        int(bx1 / sc) + ox, int(by1 / sc) + oy, 60.0, "1")]
+                continue
+        best = _pick_reading(cands.get(i, []), in_numeric)
         if best is not None and best[3] != "old":
             by_page[i + 1] = best[2]
     out: list[TWord] = []
@@ -1001,7 +1033,10 @@ def _recognize(engine: Engine, gray: np.ndarray, color_mask: np.ndarray | None, 
         text_words = f_text.result()
         cell_words = f_cells.result()
     step(0.8)
-    cell_words = _retry_short_cells(engine, cell_words, crops, cell_jobs, dpi, langs, xh)
+    # «настоящая» краска — темнее середины между чернилами и бумагой
+    dark = clean[clean < 200]
+    faint = min(200.0, (float(np.percentile(dark, 5)) + 255.0) / 2.0) if dark.size else 140.0
+    cell_words = _retry_short_cells(engine, cell_words, crops, cell_jobs, dpi, langs, xh, faint)
     if "eng" not in langs:
         # английские названия и артикулы внутри русского текста
         def in_stamp(run):
