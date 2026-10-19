@@ -22,6 +22,8 @@ import argparse
 import codecs
 import datetime
 import getpass
+import hashlib
+import http.client
 import json
 import os
 import platform
@@ -41,7 +43,7 @@ try:
 except ImportError:
     pass
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 DEFAULT_MODEL = "qwen2.5:7b"
 DEFAULT_HOST = "http://localhost:11434"
 OLLAMA_SETUP_URL = "https://ollama.com/download/OllamaSetup.exe"
@@ -496,6 +498,200 @@ def install_ollama_windows():
     return True
 
 
+# ---------------------------------------------------------------- запасной сервер моделей
+#
+# Сервер моделей Ollama работает через Cloudflare. Из некоторых сетей (например, когда
+# провайдер замедляет Cloudflare) большие файлы с него не скачиваются: загрузка обрывается
+# с ошибкой «max retries exceeded: EOF». Тогда берём ту же модель с Hugging Face и
+# добавляем её в Ollama сами — с тем же шаблоном диалога, что у модели из библиотеки Ollama.
+
+HF_MIRRORS = ["https://huggingface.co", "https://hf-mirror.com"]
+
+# имя модели в Ollama -> (репозиторий, файл, размер, sha256) на Hugging Face
+HF_MODELS = {
+    "qwen2.5:0.5b": ("bartowski/Qwen2.5-0.5B-Instruct-GGUF", "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+                     397808192, "6eb923e7d26e9cea28811e1a8e852009b21242fb157b26149d3b188f3a8c8653"),
+    "qwen2.5:3b": ("bartowski/Qwen2.5-3B-Instruct-GGUF", "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+                   1929903264, "9c9f56a391a3abbd5b89d0245bf6106081bcc3173119d4229235dd9d23253f94"),
+    "qwen2.5:7b": ("bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+                   4683074240, "65b8fcd92af6b4fefa935c625d1ac27ea29dcb6ee14589c55a8f115ceaaa1423"),
+    "qwen2.5:14b": ("bartowski/Qwen2.5-14B-Instruct-GGUF", "Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+                    8988110976, "e47ad95dad6ff848b431053b375adb5d39321290ea2c638682577dafca87c008"),
+}
+HF_MODELS["qwen2.5:latest"] = HF_MODELS["qwen2.5:7b"]
+
+# Шаблон диалога и системный текст моделей qwen2.5 из библиотеки Ollama (одинаковые для всех размеров).
+QWEN25_SYSTEM = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
+QWEN25_TEMPLATE = r"""{{- if .Messages }}
+{{- if or .System .Tools }}<|im_start|>system
+{{- if .System }}
+{{ .System }}
+{{- end }}
+{{- if .Tools }}
+
+# Tools
+
+You may call one or more functions to assist with the user query.
+
+You are provided with function signatures within <tools></tools> XML tags:
+<tools>
+{{- range .Tools }}
+{"type": "function", "function": {{ .Function }}}
+{{- end }}
+</tools>
+
+For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:
+<tool_call>
+{"name": <function-name>, "arguments": <args-json-object>}
+</tool_call>
+{{- end }}<|im_end|>
+{{ end }}
+{{- range $i, $_ := .Messages }}
+{{- $last := eq (len (slice $.Messages $i)) 1 -}}
+{{- if eq .Role "user" }}<|im_start|>user
+{{ .Content }}<|im_end|>
+{{ else if eq .Role "assistant" }}<|im_start|>assistant
+{{ if .Content }}{{ .Content }}
+{{- else if .ToolCalls }}<tool_call>
+{{ range .ToolCalls }}{"name": "{{ .Function.Name }}", "arguments": {{ .Function.Arguments }}}
+{{ end }}</tool_call>
+{{- end }}{{ if not $last }}<|im_end|>
+{{ end }}
+{{- else if eq .Role "tool" }}<|im_start|>user
+<tool_response>
+{{ .Content }}
+</tool_response><|im_end|>
+{{ end }}
+{{- if and (ne .Role "assistant") $last }}<|im_start|>assistant
+{{ end }}
+{{- end }}
+{{- else }}
+{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}{{ if .Prompt }}<|im_start|>user
+{{ .Prompt }}<|im_end|>
+{{ end }}<|im_start|>assistant
+{{ end }}{{ .Response }}{{ if .Response }}<|im_end|>{{ end }}"""
+
+
+def mirror_source(model):
+    return HF_MODELS.get(model if ":" in model else model + ":latest")
+
+
+def data_dir():
+    """Папка для временных файлов помощника (недокачанные модели)."""
+    if IS_WINDOWS:
+        return os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "AI-Helper")
+    return os.path.join(os.path.expanduser("~"), ".cache", "ai-helper")
+
+
+class Progress:
+    """Строка прогресса: «Нейросеть: 42%  (1.97 из 4.68 ГБ, 12.3 МБ/с)»."""
+
+    def __init__(self, title, total, speed=True):
+        self.title, self.total, self.speed = title, total, speed
+        self.shown = 0.0
+        self.start = None
+
+    def update(self, done, force=False):
+        now = time.monotonic()
+        if self.start is None:
+            self.start = (now, done)
+        if not force and now - self.shown < 0.5:
+            return
+        self.shown = now
+        text = f"{self.title}: {done * 100 // max(self.total, 1)}%  ({done / 1e9:.2f} из {self.total / 1e9:.2f} ГБ"
+        elapsed = now - self.start[0]
+        if self.speed and elapsed > 1:
+            text += f", {(done - self.start[1]) / elapsed / 1e6:.1f} МБ/с"
+        sys.stdout.write("\r" + (text + ")").ljust(78))
+        sys.stdout.flush()
+
+
+class ProgressReader:
+    """Обёртка над файлом: показывает прогресс, пока файл отправляется по сети."""
+
+    def __init__(self, f, progress):
+        self.f, self.progress, self.done = f, progress, 0
+
+    def read(self, n=-1):
+        data = self.f.read(max(n, 1 << 20) if n and n > 0 else -1)
+        self.done += len(data)
+        self.progress.update(self.done, force=not data)
+        return data
+
+
+def download_resumable(urls, path, size, title):
+    """Скачать файл с докачкой: после обрыва продолжает с того же места, перебирает зеркала.
+    Недокачанный файл (.part) остаётся на диске, чтобы продолжить при следующем запуске."""
+    part = path + ".part"
+    progress = Progress(title, size)
+    for url in urls:
+        host = url.split("/")[2]
+        failures = 0
+        while failures < 4:
+            have = os.path.getsize(part) if os.path.exists(part) else 0
+            if have >= size:
+                break
+            request = urllib.request.Request(url, headers={"Range": f"bytes={have}-",
+                                                           "User-Agent": f"ai-helper/{VERSION}"})
+            got, error = 0, None
+            try:
+                with urllib.request.urlopen(request, timeout=60) as resp:
+                    mode = "ab"
+                    if have and resp.status != 206:  # сервер не умеет докачку — начинаем заново
+                        mode, have = "wb", 0
+                    with open(part, mode) as f:
+                        while True:
+                            chunk = resp.read(1 << 20)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            got += len(chunk)
+                            progress.update(have + got)
+            except urllib.error.HTTPError as e:
+                error = f"сервер ответил {e.code}"
+                if 400 <= e.code < 500 and e.code not in (408, 429):
+                    failures = 4  # файла здесь нет или доступ закрыт — к следующему зеркалу
+            except (OSError, ValueError, http.client.HTTPException) as e:
+                error = str(e)
+            if got:
+                failures = 0  # обрыв после части файла: просто продолжаем с нового места
+            else:
+                failures += 1
+                print()
+                say(f"Нет связи с {host} ({error or 'пустой ответ'}), пробую ещё раз...", Color.DIM)
+                time.sleep(2)
+    done = os.path.getsize(part) if os.path.exists(part) else 0
+    if done:
+        progress.update(done, force=True)
+        print()
+    if done == size:
+        os.replace(part, path)
+        return True
+    if os.path.exists(part) and os.path.getsize(part) > size:
+        os.remove(part)  # что-то пошло не так — в следующий раз начнём заново
+    return False
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    total = os.path.getsize(path)
+    progress = Progress("Проверяю файл", total, speed=False)
+    done = 0
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(4 << 20)
+            if not chunk:
+                break
+            digest.update(chunk)
+            done += len(chunk)
+            progress.update(done)
+    progress.update(done, force=True)
+    print()
+    return digest.hexdigest()
+
+
 def normalize_host(host):
     host = host.strip().rstrip("/")
     if "://" not in host:
@@ -617,7 +813,44 @@ class Agent:
         return self.pull_model()
 
     def pull_model(self):
+        source = mirror_source(self.model)
+        saved = source and os.path.join(data_dir(), source[1])
+        if saved and (os.path.exists(saved) or os.path.exists(saved + ".part")):
+            # В прошлый раз уже качали с запасного сервера — продолжаем оттуда.
+            say(f"Продолжаю скачивание нейросети «{self.model}» с запасного сервера.", Color.CYAN)
+            return self.pull_from_mirror(source)
+
         say(f"Скачиваю {self.model}... Это может занять несколько минут.", Color.CYAN)
+        best = 0
+        for _ in range(5):
+            status, error, completed = self.ollama_pull()
+            if status == "ok":
+                say("Модель скачана.", Color.GREEN)
+                return True
+            if status == "interrupted":
+                return False
+            say(f"Ошибка скачивания: {error}", Color.RED)
+            if completed - best < 50_000_000:
+                break  # почти ничего не скачалось — повторять бесполезно
+            best = completed
+            say("Связь оборвалась, но часть уже скачана — продолжаю с того же места...", Color.CYAN)
+
+        say("Сервер моделей Ollama недоступен из вашей сети: соединение обрывается. Так бывает, "
+            "если провайдер замедляет Cloudflare (на нём работает этот сервер) или сеть "
+            "организации блокирует загрузку.", Color.YELLOW)
+        if not source:
+            say("Для этой модели запасного сервера нет. Включите VPN и запустите помощника снова "
+                "или выберите модель qwen2.5 (например, /модель qwen2.5:7b): её можно скачать с "
+                "запасного сервера.", Color.YELLOW)
+            return False
+        if not ask_yes(f"Скачать эту же нейросеть с запасного сервера (Hugging Face, "
+                       f"{source[2] / 1e9:.1f} ГБ)? [Enter = да / н = нет]: "):
+            return False
+        return self.pull_from_mirror(source)
+
+    def ollama_pull(self):
+        """Скачать модель силами Ollama. Вернуть (ok | error | interrupted, ошибка, скачано байт)."""
+        completed = 0
         try:
             with self._open("/api/pull", {"model": self.model, "name": self.model, "stream": True}) as resp:
                 for raw in resp:
@@ -627,27 +860,118 @@ class Agent:
                     event = json.loads(line)
                     if "error" in event:
                         print()
-                        say(f"Ошибка скачивания: {event['error']}", Color.RED)
-                        return False
+                        return "error", event["error"], completed
                     status = event.get("status", "")
                     total, done = event.get("total"), event.get("completed")
                     if total and done is not None:
+                        completed = max(completed, done)
                         text = f"{status[:25]}  {done * 100 // total}%  ({done / 1e9:.2f} из {total / 1e9:.2f} ГБ)"
                     else:
                         text = status
                     sys.stdout.write("\r" + text[:78].ljust(78))
                     sys.stdout.flush()
-        except (OSError, OllamaError) as e:
+        except (OSError, OllamaError, ValueError, http.client.HTTPException) as e:
             print()
-            say(f"Ошибка скачивания: {e}", Color.RED)
-            return False
+            return "error", str(e), completed
         except KeyboardInterrupt:
             print()
             say("Скачивание прервано.", Color.YELLOW)
-            return False
+            return "interrupted", "", completed
         print()
-        say("Модель скачана.", Color.GREEN)
+        return "ok", "", completed
+
+    # --- запасной сервер моделей (Hugging Face)
+
+    def pull_from_mirror(self, source):
+        try:
+            return self.import_from_mirror(*source)
+        except KeyboardInterrupt:
+            print()
+            say("Остановлено. Скачанная часть сохранена: при следующем запуске загрузка "
+                "продолжится с того же места.", Color.YELLOW)
+            return False
+
+    def import_from_mirror(self, repo, filename, size, digest):
+        if self.blob_exists(digest):  # файл уже передан в Ollama в прошлый раз
+            return self.finish_import(filename, digest, None)
+
+        folder = data_dir()
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, filename)
+        part = path + ".part"
+        have = size if os.path.exists(path) else (os.path.getsize(part) if os.path.exists(part) else 0)
+        need = (size - have) + size + 500_000_000  # сам файл + его копия внутри Ollama
+        free = shutil.disk_usage(folder).free
+        if free < need:
+            say(f"Не хватает места на диске: нужно {need / 1e9:.1f} ГБ свободного места, а есть "
+                f"{free / 1e9:.1f} ГБ. Освободите место и запустите помощника снова.", Color.RED)
+            return False
+
+        if not os.path.exists(path):
+            urls = [f"{mirror}/{repo}/resolve/main/{filename}" for mirror in HF_MIRRORS]
+            if not download_resumable(urls, path, size, "Нейросеть"):
+                say("Не удалось скачать нейросеть с запасного сервера. Проверьте интернет и запустите "
+                    "помощника снова: загрузка продолжится с того же места. Если не помогает, "
+                    "включите VPN.", Color.RED)
+                return False
+
+        if sha256_file(path) != digest:
+            os.remove(path)
+            say("Файл скачался с ошибкой (не совпала контрольная сумма). Запустите помощника "
+                "снова, и он скачает его заново.", Color.RED)
+            return False
+        return self.finish_import(filename, digest, path)
+
+    def finish_import(self, filename, digest, path):
+        try:
+            if path:
+                self.upload_blob(path, digest)
+            self.create_model(filename, digest)
+        except (OSError, OllamaError, ValueError, http.client.HTTPException) as e:
+            print()
+            say(f"Не удалось добавить нейросеть в Ollama: {e}", Color.RED)
+            return False
+        if path:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        say("Нейросеть готова.", Color.GREEN)
         return True
+
+    def blob_exists(self, digest):
+        request = urllib.request.Request(f"{self.host}/api/blobs/sha256:{digest}", method="HEAD")
+        try:
+            self.http.open(request, timeout=30).close()
+            return True
+        except (OSError, http.client.HTTPException):
+            return False
+
+    def upload_blob(self, path, digest):
+        size = os.path.getsize(path)
+        with open(path, "rb") as f:
+            body = ProgressReader(f, Progress("Передаю нейросеть в Ollama", size, speed=False))
+            request = urllib.request.Request(
+                f"{self.host}/api/blobs/sha256:{digest}", data=body, method="POST",
+                headers={"Content-Length": str(size), "Content-Type": "application/octet-stream"})
+            try:
+                with self.http.open(request, timeout=1800) as resp:
+                    resp.read()
+            except urllib.error.HTTPError as e:
+                raise OllamaError(e.read().decode("utf-8", "replace") or f"HTTP {e.code}") from None
+        print()
+
+    def create_model(self, filename, digest):
+        say("Подключаю нейросеть к Ollama...", Color.CYAN)
+        payload = {"model": self.model, "files": {filename: "sha256:" + digest},
+                   "template": QWEN25_TEMPLATE, "system": QWEN25_SYSTEM, "stream": True}
+        with self._open("/api/create", payload, timeout=1800) as resp:
+            for raw in resp:
+                line = raw.decode("utf-8", "replace").strip()
+                if line:
+                    event = json.loads(line)
+                    if "error" in event:
+                        raise OllamaError(event["error"])
 
     def system_prompt(self):
         if IS_WINDOWS:
