@@ -1,0 +1,97 @@
+name: AI Helper - build EXE
+
+# Builds AI-Helper.exe for Windows, checks it with a fake Ollama server and
+# publishes it to Releases (tag ai-helper-latest). Direct download link:
+# https://github.com/di20021213-lab/-/releases/download/ai-helper-latest/AI-Helper.exe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - claude/local-command-bot-qbm4mu
+    paths:
+      - "agent.py"
+      - "tests/**"
+      - "tools/**"
+      - ".github/workflows/ai-helper.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ai-helper-release
+  cancel-in-progress: false
+
+jobs:
+  test-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Smoke test from source
+        env:
+          PYTHON: python
+        run: bash tests/smoke.sh python agent.py
+
+  build-windows:
+    needs: test-linux
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller pillow
+
+      - name: Build EXE
+        shell: bash
+        run: |
+          python tools/make_icon.py icon.ico
+          pyinstaller --noconfirm --onefile --console --name AI-Helper --icon icon.ico agent.py
+          ls -la dist
+
+      - name: Smoke test of the EXE (runs a real PowerShell command)
+        shell: bash
+        timeout-minutes: 5
+        env:
+          PYTHON: python
+        run: bash tests/smoke.sh ./dist/AI-Helper.exe
+
+      - name: Without Ollama the EXE explains what to install
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          set +e
+          ./dist/AI-Helper.exe --host 127.0.0.1:1 hello < /dev/null > no_ollama.txt 2>&1
+          code=$?
+          cat no_ollama.txt
+          [ "$code" -eq 1 ] && grep -q "ollama.com" no_ollama.txt
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Helper
+          path: dist/AI-Helper.exe
+          if-no-files-found: error
+
+      - name: Publish to Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete ai-helper-latest --yes --cleanup-tag || true
+          gh release create ai-helper-latest dist/AI-Helper.exe \
+            --target "$GITHUB_SHA" \
+            --title "ИИ-помощник для команд (готовый exe)" \
+            --notes-file tools/release_notes.md

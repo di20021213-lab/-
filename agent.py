@@ -9,7 +9,10 @@
 Модель работает через Ollama (https://ollama.com) прямо на вашем компьютере:
 ничего не уходит в интернет, ничего не нужно оплачивать.
 
-Нужно: Python 3.8+ и установленная Ollama. Сторонние пакеты не нужны.
+Если Ollama не установлена, помощник предложит скачать и установить её сам (Windows),
+а если не запущена — запустит.
+
+Нужно: Python 3.8+ (или готовый AI-Helper.exe). Сторонние пакеты не нужны.
 
 Запуск:   python agent.py
 Справка:  python agent.py --help
@@ -38,9 +41,12 @@ try:
 except ImportError:
     pass
 
+VERSION = "1.1.0"
 DEFAULT_MODEL = "qwen2.5:7b"
 DEFAULT_HOST = "http://localhost:11434"
+OLLAMA_SETUP_URL = "https://ollama.com/download/OllamaSetup.exe"
 IS_WINDOWS = os.name == "nt"
+FROZEN = getattr(sys, "frozen", False)  # запущены из готового .exe
 
 MAX_STEPS = 15              # максимум действий ИИ на одну просьбу
 MAX_OUTPUT_FOR_MODEL = 4000  # сколько символов вывода команды показываем модели
@@ -71,6 +77,11 @@ def setup_console():
             pass
     if IS_WINDOWS:
         os.system("")  # включает цветной вывод в консоли Windows 10/11
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleTitleW(f"ИИ-помощник {VERSION}")
+        except Exception:
+            pass
     if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
         for name in ("RESET", "BOLD", "DIM", "RED", "GREEN", "YELLOW", "CYAN"):
             setattr(Color, name, "")
@@ -78,6 +89,14 @@ def setup_console():
 
 def say(text, color=""):
     print(f"{color}{text}{Color.RESET if color else ''}")
+
+
+def ask_yes(question):
+    try:
+        return input(question).strip().lower() in YES
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
 
 
 class Spinner:
@@ -380,6 +399,103 @@ class OllamaError(Exception):
     pass
 
 
+def find_ollama():
+    """Найти установленную Ollama. Вернуть (путь к ollama, путь к приложению Ollama) или None."""
+    if IS_WINDOWS:
+        base = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama")
+        cli = shutil.which("ollama") or os.path.join(base, "ollama.exe")
+        app = os.path.join(base, "ollama app.exe")
+        return (cli if os.path.isfile(cli) else None), (app if os.path.isfile(app) else None)
+    cli = shutil.which("ollama")
+    if not cli:
+        for path in ("/usr/local/bin/ollama", "/opt/homebrew/bin/ollama",
+                     "/Applications/Ollama.app/Contents/Resources/ollama"):
+            if os.path.isfile(path):
+                cli = path
+                break
+    app = "/Applications/Ollama.app"
+    return cli, (app if sys.platform == "darwin" and os.path.isdir(app) else None)
+
+
+def start_ollama(cli, app):
+    """Запустить сервер Ollama в фоне (он продолжит работать и после закрытия помощника)."""
+    quiet = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    try:
+        if IS_WINDOWS:
+            flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+            if cli:
+                subprocess.Popen([cli, "serve"], creationflags=flags, **quiet)
+            else:
+                subprocess.Popen([app], **quiet)
+        elif cli:
+            subprocess.Popen([cli, "serve"], start_new_session=True, **quiet)
+        else:
+            subprocess.Popen(["open", "-a", app], **quiet)
+        return True
+    except OSError as e:
+        say(f"Не удалось запустить Ollama: {e}", Color.RED)
+        return False
+
+
+def download_file(url, path, title):
+    part = path + ".part"
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp, open(part, "wb") as f:
+            total = int(resp.headers.get("Content-Length") or 0)
+            done, shown = 0, 0.0
+            while True:
+                chunk = resp.read(1 << 20)
+                f.write(chunk)
+                done += len(chunk)
+                if not chunk or time.monotonic() - shown > 0.3:
+                    shown = time.monotonic()
+                    if total:
+                        text = f"{title}: {done * 100 // total}%  ({done / 1e6:.0f} из {total / 1e6:.0f} МБ)"
+                    else:
+                        text = f"{title}: {done / 1e6:.0f} МБ"
+                    sys.stdout.write("\r" + text.ljust(70))
+                    sys.stdout.flush()
+                if not chunk:
+                    break
+        print()
+        os.replace(part, path)
+        return True
+    except (OSError, ValueError) as e:
+        print()
+        say(f"Не удалось скачать {url}: {e}", Color.RED)
+    except KeyboardInterrupt:
+        print()
+        say("Скачивание прервано.", Color.YELLOW)
+    try:
+        os.remove(part)
+    except OSError:
+        pass
+    return False
+
+
+def install_ollama_windows():
+    setup = os.path.join(tempfile.gettempdir(), "OllamaSetup.exe")
+    say("Скачиваю установщик Ollama (около 1 ГБ, это займёт несколько минут)...", Color.CYAN)
+    if not download_file(OLLAMA_SETUP_URL, setup, "Ollama"):
+        return False
+    say("Устанавливаю Ollama — появится окно установки, просто подождите...", Color.CYAN)
+    try:
+        code = subprocess.run([setup, "/SP-", "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]).returncode
+    except OSError as e:
+        say(f"Не удалось запустить установщик: {e}", Color.RED)
+        return False
+    finally:
+        try:
+            os.remove(setup)
+        except OSError:
+            pass
+    if code != 0:
+        say(f"Установка Ollama не завершилась (код {code}).", Color.RED)
+        return False
+    say("Ollama установлена.", Color.GREEN)
+    return True
+
+
 def normalize_host(host):
     host = host.strip().rstrip("/")
     if "://" not in host:
@@ -422,14 +538,65 @@ class Agent:
         with self._open(path, payload, timeout) as response:
             return json.loads(response.read().decode("utf-8"))
 
-    def ensure_ready(self):
-        """Проверить, что Ollama запущена и модель скачана (предложить скачать)."""
+    def ollama_alive(self):
         try:
-            tags = self.api("/api/tags", timeout=5)
-        except (OSError, OllamaError) as e:
-            say(f"Не получается подключиться к Ollama ({self.host}): {e}", Color.RED)
-            say("Установите Ollama с https://ollama.com/download и запустите её, "
-                "затем снова запустите этого помощника.", Color.YELLOW)
+            self.api("/api/tags", timeout=3)
+            return True
+        except (OSError, OllamaError, ValueError):
+            return False
+
+    def wait_for_ollama(self, seconds):
+        deadline = time.monotonic() + seconds
+        with Spinner("Жду, пока Ollama запустится"):
+            while time.monotonic() < deadline:
+                if self.ollama_alive():
+                    return True
+                time.sleep(1)
+        return False
+
+    def ensure_ollama(self):
+        """Убедиться, что Ollama работает: при необходимости запустить или установить её."""
+        if self.ollama_alive():
+            return True
+        if not re.match(r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$", self.host, re.I):
+            say(f"Не получается подключиться к Ollama по адресу {self.host}.", Color.RED)
+            return False
+
+        cli, app = find_ollama()
+        if not (cli or app):
+            say("Для работы нужна бесплатная программа Ollama — она запускает нейросеть "
+                "прямо на вашем компьютере.", Color.YELLOW)
+            if not IS_WINDOWS:
+                if sys.platform == "darwin":
+                    say("Скачайте её с https://ollama.com/download, установите и откройте помощника снова.")
+                else:
+                    say("Установите её командой:  curl -fsSL https://ollama.com/install.sh | sh")
+                return False
+            if not ask_yes("Скачать и установить Ollama автоматически? [Enter = да / н = нет]: "):
+                say("Скачать вручную можно здесь: https://ollama.com/download", Color.DIM)
+                return False
+            if not install_ollama_windows():
+                return False
+            if self.wait_for_ollama(10):  # установщик мог запустить её сам
+                return True
+            cli, app = find_ollama()
+
+        if cli or app:
+            say("Запускаю Ollama...", Color.CYAN)
+            if start_ollama(cli, app) and self.wait_for_ollama(60):
+                return True
+        say("Не удалось запустить Ollama. Запустите её вручную (из меню «Пуск» или командой "
+            "«ollama serve») и откройте помощника снова.", Color.RED)
+        return False
+
+    def ensure_ready(self):
+        """Проверить, что Ollama работает и модель скачана (если нет — предложить скачать)."""
+        if not self.ensure_ollama():
+            return False
+        try:
+            tags = self.api("/api/tags", timeout=10)
+        except (OSError, OllamaError, ValueError) as e:
+            say(f"Ошибка связи с Ollama: {e}", Color.RED)
             return False
 
         names = set()
@@ -440,16 +607,11 @@ class Agent:
         if self.model in names or wanted in names:
             return True
 
-        say(f"Модель «{self.model}» ещё не скачана.", Color.YELLOW)
+        say(f"Нейросеть «{self.model}» ещё не скачана (это нужно сделать один раз).", Color.YELLOW)
         installed = sorted(n for n in names if n)
         if installed:
             say("Уже скачаны: " + ", ".join(installed), Color.DIM)
-        try:
-            answer = input("Скачать её сейчас? [Enter = да / н = нет]: ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return False
-        if answer not in YES:
+        if not ask_yes("Скачать её сейчас? Это несколько гигабайт. [Enter = да / н = нет]: "):
             say(f"Скачать можно командой:  ollama pull {self.model}", Color.DIM)
             return False
         return self.pull_model()
@@ -760,7 +922,8 @@ class Agent:
 
     def banner(self):
         mode = "без подтверждения" if self.auto else "с подтверждением каждой команды"
-        say(f"Локальный ИИ-помощник  ·  модель: {self.model}  ·  оболочка: {self.shell_name}", Color.BOLD)
+        say(f"Локальный ИИ-помощник {VERSION}  ·  модель: {self.model}  ·  оболочка: {self.shell_name}",
+            Color.BOLD)
         say(f"Режим: {mode}. Напишите, что сделать, например: «покажи, сколько свободного места на дисках».",
             Color.DIM)
         say("/помощь — список команд, выход — закрыть.", Color.DIM)
@@ -865,8 +1028,31 @@ def trim_history(history, limit):
     return history
 
 
+def prepare_frozen():
+    """Настройки для запуска из готового .exe (собранного PyInstaller)."""
+    if IS_WINDOWS:
+        try:
+            import ctypes
+            # чтобы запускаемые команды не подхватывали библиотеки из распакованного .exe
+            ctypes.windll.kernel32.SetDllDirectoryW(None)
+        except Exception:
+            pass
+    else:
+        original = os.environ.pop("LD_LIBRARY_PATH_ORIG", None)
+        if original is not None:
+            os.environ["LD_LIBRARY_PATH"] = original
+        else:
+            os.environ.pop("LD_LIBRARY_PATH", None)
+    # При двойном щелчке текущая папка — та, где лежит .exe. Удобнее начать с домашней.
+    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    if os.path.normcase(os.getcwd()) == os.path.normcase(exe_dir):
+        os.chdir(os.path.expanduser("~"))
+
+
 def main():
     setup_console()
+    if FROZEN:
+        prepare_frozen()
     parser = argparse.ArgumentParser(
         description="Локальный ИИ-помощник: выполняет на компьютере то, что вы попросите (через Ollama).")
     parser.add_argument("-m", "--model", default=os.environ.get("AGENT_MODEL", DEFAULT_MODEL),
@@ -881,6 +1067,7 @@ def main():
                         help="размер контекста модели в токенах (по умолчанию 8192)")
     parser.add_argument("request", nargs="*",
                         help="просьба, которую выполнить сразу и выйти (необязательно)")
+    parser.add_argument("--version", action="version", version=VERSION)
     args = parser.parse_args()
 
     agent = Agent(args)
@@ -896,5 +1083,25 @@ def main():
     return 0
 
 
+def run():
+    try:
+        code = main()
+    except KeyboardInterrupt:
+        print()
+        return 130
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        say("Произошла непредвиденная ошибка (подробности выше).", Color.RED)
+        code = 1
+    if code and FROZEN and IS_WINDOWS:
+        # Иначе окно .exe закроется сразу, и сообщение об ошибке не успеть прочитать.
+        try:
+            input("\nНажмите Enter, чтобы закрыть окно...")
+        except (EOFError, KeyboardInterrupt):
+            pass
+    return code
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run())

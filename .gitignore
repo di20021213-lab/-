@@ -1,2 +1,8 @@
 __pycache__/
 *.pyc
+build/
+dist/
+*.spec
+icon.ico
+smoke_out.txt
+smoke_test_output.txt
