@@ -43,7 +43,7 @@ try:
 except ImportError:
     pass
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 DEFAULT_MODEL = "qwen2.5:7b"
 DEFAULT_HOST = "http://localhost:11434"
 OLLAMA_SETUP_URL = "https://ollama.com/download/OllamaSetup.exe"
@@ -117,9 +117,12 @@ class Spinner:
 
     def _run(self):
         frames = "|/-\\"
+        started = time.monotonic()
         i = 0
         while not self.stop_event.wait(0.12):
-            sys.stdout.write(f"\r{Color.DIM}{self.text} {frames[i % 4]}{Color.RESET}")
+            seconds = int(time.monotonic() - started)
+            line = f"{self.text} {frames[i % 4]}" + (f"  {seconds} с" if seconds >= 3 else "")
+            sys.stdout.write(f"\r{Color.DIM}{line}{Color.RESET}   ")
             sys.stdout.flush()
             i += 1
 
@@ -127,7 +130,7 @@ class Spinner:
         if self.thread:
             self.stop_event.set()
             self.thread.join()
-            sys.stdout.write("\r" + " " * (len(self.text) + 4) + "\r")
+            sys.stdout.write("\r" + " " * (len(self.text) + 20) + "\r")
             sys.stdout.flush()
 
 
@@ -224,22 +227,93 @@ def clean_content(text):
     return text.strip()
 
 
-def extract_text_tool_call(content):
-    """Некоторые модели пишут вызов инструмента текстом (JSON), а не через API. Разбираем такое."""
-    m = re.search(r"\{.*\}", content, re.S)
-    if not m:
-        return None
+# Описание инструментов для модели — тот же текст, что подставляет Ollama для моделей qwen2.5.
+# Вызовы инструментов разбираем сами (а не через Ollama): так можно простить модели частые
+# ошибки — одиночные «\» в путях Windows (это невалидный JSON) или команду, написанную текстом.
+TOOLS_PROMPT = """# Tools
+
+You may call one or more functions to assist with the user query.
+
+You are provided with function signatures within <tools></tools> XML tags:
+<tools>
+{tools}
+</tools>
+
+For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:
+<tool_call>
+{{"name": <function-name>, "arguments": <args-json-object>}}
+</tool_call>"""
+
+TOOL_CALL_RE = re.compile(r"<tool_call>\s*(.*?)\s*(?:</tool_call>|$)", re.S)
+CODE_BLOCK_RE = re.compile(r"```[ \t]*(?:powershell|pwsh|ps1?|bash|sh|shell|cmd|bat|batch|console)?[ \t]*\n(.*?)```",
+                           re.S | re.I)
+# Строка, похожая на команду: командлет PowerShell (Get-Process) или известная программа.
+VERB_NOUN_RE = re.compile(r"^\$?[A-Z][a-z]+-[A-Z][A-Za-z]+\b")
+PROGRAM_RE = re.compile(r"^(?:start-process|start|explorer(?:\.exe)?|ipconfig|ping|systeminfo|tasklist|taskkill|"
+                        r"notepad|calc|control|winget|dir|ls|cd|mkdir|df|du|sudo|apt|brew|xdg-open|git|pip|"
+                        r"python3?)(?:\s|$)", re.I)
+
+
+def loads_lenient(text):
+    """json.loads, который прощает одиночные «\\» (C:\\Users в JSON без удвоения)."""
     try:
-        obj = json.loads(m.group(0))
+        return json.loads(text)
+    except ValueError:
+        pass
+    fixed = re.sub(r'\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})', r"\\\\", text)
+    try:
+        return json.loads(fixed)
     except ValueError:
         return None
+
+
+def to_tool_call(obj):
     if not isinstance(obj, dict):
         return None
     name = obj.get("name") or obj.get("tool")
     args = obj.get("arguments", obj.get("parameters", obj.get("args")))
-    if name in TOOL_NAMES and isinstance(args, (dict, str)):
+    if isinstance(args, str):
+        args = loads_lenient(args) or {"command": args}
+    if name in TOOL_NAMES and isinstance(args, dict):
         return {"function": {"name": name, "arguments": args}}
     return None
+
+
+def extract_text_tool_call(content):
+    """Вызов инструмента, написанный просто JSON-ом, без тегов <tool_call>."""
+    m = re.search(r"\{.*\}", content, re.S)
+    return to_tool_call(loads_lenient(m.group(0))) if m else None
+
+
+def extract_command(text):
+    """Команда, которую модель написала текстом (в блоке кода или отдельной строкой).
+    Вернуть (команда, остальной текст) или None."""
+    m = CODE_BLOCK_RE.search(text)
+    if m and m.group(1).strip():
+        return m.group(1).strip(), (text[:m.start()] + text[m.end():]).strip()
+    line = text.strip().strip("`").strip()
+    if line and "\n" not in line and (VERB_NOUN_RE.match(line) or PROGRAM_RE.match(line)):
+        # «Ping прошёл успешно» — это фраза, а не команда: русских слов вне кавычек больше одного
+        unquoted = re.sub(r"\"[^\"]*\"|'[^']*'", "", line)
+        if len(re.findall(r"[А-Яа-яЁё]{2,}", unquoted)) < 2:
+            return line, ""
+    return None
+
+
+def parse_reply(content):
+    """Разобрать ответ модели. Вернуть (текст для пользователя, список вызовов инструментов)."""
+    calls = [c for c in (to_tool_call(loads_lenient(m.group(1))) for m in TOOL_CALL_RE.finditer(content)) if c]
+    text = TOOL_CALL_RE.sub("", content).strip()
+    if calls:
+        return text, calls
+    call = extract_text_tool_call(text)
+    if call:
+        return "", [call]
+    found = extract_command(text)
+    if found:
+        command, rest = found
+        return rest, [{"function": {"name": "run_command", "arguments": {"command": command}}}]
+    return text, []
 
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
@@ -774,6 +848,7 @@ class Agent:
         self.num_ctx = args.ctx
         self.shell_name, self.shell_path = find_shell()
         self.history = []
+        self.slow_tip_shown = False
         # Прокси для localhost не нужен (и часто мешает), поэтому отключаем.
         self.http = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -1045,16 +1120,27 @@ class Agent:
                         raise OllamaError(event["error"])
 
     def system_prompt(self):
+        """Инструкция для модели. Текущего времени в ней нет специально: пока текст не меняется,
+        Ollama не перечитывает его заново, и ответы приходят намного быстрее."""
+        shell = self.shell_name
         if IS_WINDOWS:
-            os_name = f"Windows {platform.release()} (сборка {platform.version()})"
-            tips = ("Команды выполняются в Windows PowerShell — пиши команды на PowerShell "
-                    "(Get-ChildItem, Get-Content, Get-Process, Get-PSDrive и т.п.). "
-                    "Чтобы открыть программу, файл, папку или сайт, используй Start-Process. "
-                    "Права администратора недоступны, если помощник запущен не от имени администратора.")
+            os_name = f"Windows {platform.release()}"
+            tips = (
+                "Команды для run_command пиши на PowerShell. Готовые команды Windows:\n"
+                "- открыть программу, файл, папку или сайт: Start-Process \"путь или адрес\"\n"
+                "- корзина: Start-Process shell:RecycleBinFolder\n"
+                "- загрузки: Start-Process shell:Downloads; рабочий стол: Start-Process shell:Desktop; "
+                "документы: Start-Process shell:Personal\n"
+                "- путь к рабочему столу: [Environment]::GetFolderPath('Desktop'); к документам: "
+                "[Environment]::GetFolderPath('MyDocuments'); загрузки: \"$HOME\\Downloads\"\n"
+                "- параметры Windows: Start-Process ms-settings:; панель управления: control; "
+                "диспетчер задач: taskmgr; блокнот: notepad\n"
+                "- место на дисках: Get-PSDrive -PSProvider FileSystem; IP-адрес: ipconfig\n"
+                "Права администратора недоступны, если помощник запущен не от имени администратора.")
         elif sys.platform == "darwin":
             os_name = f"macOS {platform.mac_ver()[0]}"
-            tips = (f"Команды выполняются в {self.shell_name}. Чтобы открыть программу, файл или сайт, "
-                    "используй open.")
+            tips = (f"Команды для run_command пиши для {shell}. Открыть программу, файл, папку или сайт: "
+                    "open; корзина: open ~/.Trash.")
         else:
             os_name = platform.platform()
             try:
@@ -1064,42 +1150,53 @@ class Agent:
                         os_name = m.group(1)
             except OSError:
                 pass
-            tips = (f"Команды выполняются в {self.shell_name}. Чтобы открыть файл или сайт, используй "
-                    "xdg-open. Программы с окном запускай в фоне: nohup программа >/dev/null 2>&1 &. "
-                    "Если нужен sudo — пользователь сам введёт пароль.")
+            tips = (f"Команды для run_command пиши для {shell}. Открыть файл, папку или сайт: xdg-open; "
+                    "корзина: xdg-open trash:///. Программы с окном запускай в фоне: "
+                    "nohup программа >/dev/null 2>&1 &. Если нужен sudo — пользователь сам введёт пароль.")
 
-        return f"""Ты — ИИ-помощник, который работает прямо на компьютере пользователя и умеет выполнять на нём команды.
-Инструменты: run_command — выполнить команду в терминале; write_file — создать или перезаписать текстовый файл.
+        rules = f"""Ты — помощник, который работает прямо на компьютере пользователя и сам выполняет на нём действия.
 
-Сведения о компьютере:
-- ОС: {os_name}
-- Оболочка: {self.shell_name}
-- Пользователь: {getpass.getuser()}
-- Домашняя папка: {os.path.expanduser("~")}
-- Текущая папка: {os.getcwd()}
-- Сейчас: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
+Компьютер: {os_name}, оболочка {shell}. Пользователь: {getpass.getuser()}. Домашняя папка: {os.path.expanduser("~")}. Текущая папка: {os.getcwd()}. Сегодня {datetime.date.today().strftime("%d.%m.%Y")}.
 
-{tips}
+Как работать:
+1. Любую просьбу открыть, найти, показать, узнать, создать или изменить что-то на компьютере выполняй сам: вызови инструмент run_command с нужной командой. Пользователь не вводит команды сам — никогда не пиши ему команду текстом, всегда вызывай инструмент.
+2. Чтобы создать или перезаписать текстовый файл, вызывай write_file.
+3. Каждая команда выполняется в новом окне {shell}: переменные не сохраняются. Отдельная команда «cd ПАПКА» меняет текущую папку для следующих команд.
+4. Не запускай программы, которые ждут ввода с клавиатуры или работают бесконечно.
+5. Опирайся только на настоящий вывод команды, ничего не выдумывай. Если команда завершилась ошибкой — разберись в причине и попробуй по-другому.
+6. Перед удалением файлов или изменением настроек системы убедись, что пользователь этого хочет.
+7. Когда дело сделано, коротко скажи по-русски, что получилось.
+8. Если вопрос не про этот компьютер, просто ответь, без инструментов.
 
-Правила:
-1. Если просьбу можно выполнить на компьютере — сразу вызывай инструмент, а не объясняй, как это сделать.
-2. Никогда не выдумывай результат. Сначала выполни команду и опирайся только на её реальный вывод.
-3. Каждая команда запускается в новом процессе: переменные и прочее состояние не сохраняются. Исключение — отдельная команда «cd ПАПКА»: она меняет текущую папку для следующих команд.
-4. Не запускай программы, которые ждут ввода с клавиатуры или работают бесконечно (vim, nano, top, ping без ограничения числа запросов и т.п.). Используй неинтерактивные варианты и флаги.
-5. Получив вывод, кратко сообщи пользователю результат. Если команда завершилась с ошибкой — разберись в причине и попробуй исправить.
-6. Для необратимых действий (удаление файлов, изменение системных настроек) сначала убедись, что пользователь точно этого хочет.
-7. Если для ответа команды не нужны — просто ответь.
-8. Отвечай по-русски, коротко и по делу."""
+{tips}"""
+        tools = "\n".join(json.dumps(t, ensure_ascii=False) for t in TOOLS)
+        return rules + "\n\n" + TOOLS_PROMPT.format(tools=tools)
+
+    def chat_payload(self, messages=None, num_predict=None):
+        options = {"num_ctx": self.num_ctx, "temperature": 0.2}
+        if num_predict:
+            options["num_predict"] = num_predict
+        return {
+            "model": self.model,
+            "messages": [{"role": "system", "content": self.system_prompt()}] + (
+                self.history if messages is None else messages),
+            "stream": False,
+            "keep_alive": "60m",  # держать модель в памяти: повторная загрузка занимает время
+            "options": options,
+        }
+
+    def warm_up(self):
+        """Загрузить модель и заранее прочитать инструкцию, пока пользователь печатает просьбу."""
+        def worker():
+            try:
+                self.api("/api/chat", self.chat_payload(messages=[], num_predict=1), timeout=900)
+            except Exception:
+                pass
+        threading.Thread(target=worker, daemon=True).start()
 
     def call_model(self):
         self.history = trim_history(self.history, HISTORY_LIMIT)
-        payload = {
-            "model": self.model,
-            "messages": [{"role": "system", "content": self.system_prompt()}] + self.history,
-            "tools": TOOLS,
-            "stream": False,
-            "options": {"num_ctx": self.num_ctx, "temperature": 0.2},
-        }
+        payload = self.chat_payload()
         result = {}
 
         def worker():
@@ -1111,11 +1208,18 @@ class Agent:
         # Запрос идёт в отдельном потоке, чтобы Ctrl+C срабатывал сразу (особенно в Windows).
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
+        started = time.monotonic()
         with Spinner("ИИ думает"):
             while thread.is_alive():
                 thread.join(0.1)
+        elapsed = time.monotonic() - started
         if "error" in result:
             raise result["error"]
+        if elapsed > 45 and not self.slow_tip_shown:
+            self.slow_tip_shown = True
+            say(f"Ответ занял {elapsed:.0f} с — похоже, нейросеть работает на процессоре без видеокарты. "
+                f"Быстрее будет модель поменьше: /модель qwen2.5:3b (примерно вдвое быстрее, но чаще "
+                f"ошибается).", Color.DIM)
         return result["data"].get("message") or {}
 
     # --- основной цикл одной просьбы
@@ -1133,20 +1237,21 @@ class Agent:
                 return
 
             content = clean_content(message.get("content") or "")
-            tool_calls = message.get("tool_calls") or []
-            if not tool_calls:
-                parsed = extract_text_tool_call(content)
-                if parsed:
-                    tool_calls, content = [parsed], ""
+            native_calls = message.get("tool_calls") or []
+            text, tool_calls = parse_reply(content)
+            tool_calls = native_calls or tool_calls
 
+            # В историю кладём ответ как есть: модель видит свои вызовы в привычном ей виде.
             entry = {"role": "assistant", "content": content}
-            if tool_calls:
-                entry["tool_calls"] = tool_calls
+            if native_calls:
+                entry["tool_calls"] = native_calls
             self.history.append(entry)
-            if content:
+            if text:
                 print()
-                say(content, Color.CYAN)
+                say(text, Color.CYAN)
             if not tool_calls:
+                if not text:
+                    say("ИИ ничего не ответил. Попробуйте сформулировать просьбу иначе.", Color.YELLOW)
                 return
 
             stop = False
@@ -1325,6 +1430,11 @@ class Agent:
 
     def help(self):
         print("""
+  Просто напишите, что сделать, например:
+    открой корзину · сколько места на дисках? · покажи файлы на рабочем столе
+    создай на рабочем столе папку Отчёты · какой у меня IP-адрес? · открой блокнот
+
+  Команды помощника:
   /помощь  (/help)    — эта справка
   /авто    (/auto)    — включить/выключить выполнение без подтверждения
                         (опасные команды всё равно требуют «да»)
@@ -1340,7 +1450,8 @@ class Agent:
         low = text.lower()
         if low in {"выход", "/выход", "exit", "/exit", "quit", "/quit", "q"}:
             return "exit"
-        if low in {"/помощь", "/help", "помощь", "/?"}:
+        if low.rstrip("?!. ") in {"/помощь", "/help", "помощь", "help", "/?", "справка", "список команд",
+                                  "команды", "что ты умеешь", "что умеешь"}:
             self.help()
             return True
         if low in {"/авто", "/auto"}:
@@ -1361,6 +1472,7 @@ class Agent:
             self.model = parts[1].strip()
             if self.ensure_ready():
                 say(f"Модель изменена на {self.model}.", Color.GREEN)
+                self.warm_up()
             else:
                 self.model = old
                 say(f"Оставляю модель {old}.", Color.YELLOW)
@@ -1382,6 +1494,7 @@ class Agent:
 
     def repl(self):
         self.banner()
+        self.warm_up()
         home = os.path.expanduser("~")
         while True:
             cwd = os.getcwd()

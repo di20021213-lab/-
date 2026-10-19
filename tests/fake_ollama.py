@@ -45,12 +45,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply({"error": "not found"}, 404)
         messages = request["messages"]
         powershell = "PowerShell" in messages[0]["content"]
-        last_user = max(i for i, m in enumerate(messages) if m["role"] == "user")
-        tool_results = [m for m in messages[last_user:] if m["role"] == "tool"]
+        users = [i for i, m in enumerate(messages) if m["role"] == "user"]
+        if not users:  # «прогрев» модели при запуске помощника
+            return self.reply({"model": MODEL, "message": {"role": "assistant", "content": ""}, "done": True})
+        tool_results = [m for m in messages[users[-1]:] if m["role"] == "tool"]
 
         if len(tool_results) == 0:
-            command = 'Write-Output ("ok-" + (2+3))' if powershell else 'echo "ok-$((2+3))"'
-            message = tool_call("run_command", {"command": command, "explanation": "test"})
+            # Вызов текстом, как его пишет qwen2.5, и с одиночной «\» в пути (невалидный JSON):
+            # помощник должен разобрать его сам.
+            command = ('Write-Output (\\"ok-\\" + (2+3)); $null = Test-Path C:\\Windows' if powershell
+                       else 'echo \\"ok-$((2+3))\\"; true C:\\Windows')
+            message = {"role": "assistant", "content": '<tool_call>\n{"name": "run_command", "arguments": '
+                                                       '{"command": "' + command + '"}}\n</tool_call>'}
         elif len(tool_results) == 1:
             message = tool_call("write_file", {"path": "smoke_test_output.txt",
                                                "content": "smoke-file\nстрока по-русски\n"})
