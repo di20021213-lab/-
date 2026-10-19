@@ -43,7 +43,7 @@ try:
 except ImportError:
     pass
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 DEFAULT_MODEL = "qwen2.5:7b"
 DEFAULT_HOST = "http://localhost:11434"
 OLLAMA_SETUP_URL = "https://ollama.com/download/OllamaSetup.exe"
@@ -502,12 +502,19 @@ def install_ollama_windows():
 #
 # Сервер моделей Ollama работает через Cloudflare. Из некоторых сетей (например, когда
 # провайдер замедляет Cloudflare) большие файлы с него не скачиваются: загрузка обрывается
-# с ошибкой «max retries exceeded: EOF». Тогда берём ту же модель с Hugging Face и
-# добавляем её в Ollama сами — с тем же шаблоном диалога, что у модели из библиотеки Ollama.
+# с ошибкой «max retries exceeded: EOF». Тогда берём тот же файл модели (GGUF) с других
+# серверов и добавляем его в Ollama сами — с тем же шаблоном диалога, что у модели из
+# библиотеки Ollama. Источники перебираются по очереди: Hugging Face, копия в Releases этого
+# репозитория на GitHub, ModelScope (тот же файл, что на Hugging Face), hf-mirror.com.
 
-HF_MIRRORS = ["https://huggingface.co", "https://hf-mirror.com"]
+GITHUB_MODEL_MIRROR = "https://github.com/di20021213-lab/-/releases/download"
+# GitHub не принимает файлы больше 2 ГБ, поэтому модель лежит там кусками (.001, .002, ...).
+# Их выкладывает .github/workflows/model-mirror.yml.
+GITHUB_MODEL_PARTS = {
+    "Qwen2.5-7B-Instruct-Q4_K_M.gguf": ("model-qwen2.5-7b", [1610612736, 1610612736, 1461848768]),
+}
 
-# имя модели в Ollama -> (репозиторий, файл, размер, sha256) на Hugging Face
+# имя модели в Ollama -> (репозиторий, файл, размер, sha256) на Hugging Face и ModelScope
 HF_MODELS = {
     "qwen2.5:0.5b": ("bartowski/Qwen2.5-0.5B-Instruct-GGUF", "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
                      397808192, "6eb923e7d26e9cea28811e1a8e852009b21242fb157b26149d3b188f3a8c8653"),
@@ -578,6 +585,18 @@ def mirror_source(model):
     return HF_MODELS.get(model if ":" in model else model + ":latest")
 
 
+def model_mirrors(repo, filename, size):
+    """Откуда можно скачать файл модели. Источник — список кусков (адрес, размер)."""
+    mirrors = [[(f"https://huggingface.co/{repo}/resolve/main/{filename}", size)]]
+    if filename in GITHUB_MODEL_PARTS:
+        tag, sizes = GITHUB_MODEL_PARTS[filename]
+        mirrors.append([(f"{GITHUB_MODEL_MIRROR}/{tag}/{filename}.{i:03d}", s)
+                        for i, s in enumerate(sizes, 1)])
+    mirrors.append([(f"https://modelscope.cn/models/{repo}/resolve/master/{filename}", size)])
+    mirrors.append([(f"https://hf-mirror.com/{repo}/resolve/main/{filename}", size)])
+    return mirrors
+
+
 def data_dir():
     """Папка для временных файлов помощника (недокачанные модели)."""
     if IS_WINDOWS:
@@ -592,6 +611,7 @@ class Progress:
         self.title, self.total, self.speed = title, total, speed
         self.shown = 0.0
         self.start = None
+        self.line_open = False
 
     def update(self, done, force=False):
         now = time.monotonic()
@@ -606,6 +626,16 @@ class Progress:
             text += f", {(done - self.start[1]) / elapsed / 1e6:.1f} МБ/с"
         sys.stdout.write("\r" + (text + ")").ljust(78))
         sys.stdout.flush()
+        self.line_open = True
+
+    def end_line(self):
+        """Перейти на новую строку, если сейчас выведена строка прогресса."""
+        if self.line_open:
+            print()
+            self.line_open = False
+
+    def restart_speed(self):
+        self.start = None
 
 
 class ProgressReader:
@@ -621,55 +651,91 @@ class ProgressReader:
         return data
 
 
-def download_resumable(urls, path, size, title):
-    """Скачать файл с докачкой: после обрыва продолжает с того же места, перебирает зеркала.
+def _truncate(path, length):
+    if os.path.exists(path):
+        with open(path, "r+b") as f:
+            f.truncate(length)
+
+
+def download_resumable(mirrors, path, size, title):
+    """Скачать файл с докачкой: после обрыва продолжает с того же места, перебирает источники.
+    Источник — список кусков (адрес, размер), которые вместе дают файл.
     Недокачанный файл (.part) остаётся на диске, чтобы продолжить при следующем запуске."""
     part = path + ".part"
     progress = Progress(title, size)
-    for url in urls:
-        host = url.split("/")[2]
-        failures = 0
+    for chunks in mirrors:
+        if (os.path.getsize(part) if os.path.exists(part) else 0) >= size:
+            break
+        host = chunks[0][0].split("/")[2]
+        progress.end_line()
+        say(f"Скачиваю с {host}...", Color.DIM)
+        progress.restart_speed()
+        failures, restarted = 0, False
         while failures < 4:
             have = os.path.getsize(part) if os.path.exists(part) else 0
             if have >= size:
                 break
-            request = urllib.request.Request(url, headers={"Range": f"bytes={have}-",
-                                                           "User-Agent": f"ai-helper/{VERSION}"})
+            start = 0  # с какого куска и с какого места в нём продолжать
+            for url, chunk_size in chunks:
+                if have < start + chunk_size:
+                    break
+                start += chunk_size
+            offset = have - start
+            headers = {"User-Agent": f"ai-helper/{VERSION}"}
+            if offset:  # просим продолжение только для докачки: с нуля качаем обычным запросом
+                headers["Range"] = f"bytes={offset}-"
             got, error = 0, None
             try:
-                with urllib.request.urlopen(request, timeout=60) as resp:
-                    mode = "ab"
-                    if have and resp.status != 206:  # сервер не умеет докачку — начинаем заново
-                        mode, have = "wb", 0
-                    with open(part, mode) as f:
-                        while True:
-                            chunk = resp.read(1 << 20)
-                            if not chunk:
+                with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=60) as resp:
+                    final_host = resp.geturl().split("/")[2]
+                    if offset and resp.status != 206:
+                        # сервер не умеет докачку и прислал кусок целиком — начинаем кусок заново
+                        _truncate(part, start)
+                        have, offset = start, 0
+                    length = resp.headers.get("Content-Length")
+                    if "text/html" in (resp.headers.get("Content-Type") or ""):
+                        raise ValueError(f"{final_host} прислал веб-страницу вместо файла "
+                                         "(похоже, доступ к сайту закрыт)")
+                    if length and int(length) != chunk_size - offset:
+                        raise ValueError(f"{final_host} прислал файл другого размера ({length} байт)")
+                    with open(part, "ab") as f:
+                        while got < chunk_size - offset:
+                            data = resp.read(min(1 << 20, chunk_size - offset - got))
+                            if not data:
                                 break
-                            f.write(chunk)
-                            got += len(chunk)
+                            f.write(data)
+                            got += len(data)
                             progress.update(have + got)
             except urllib.error.HTTPError as e:
-                error = f"сервер ответил {e.code}"
+                error = f"{(e.filename or url).split('/')[2]} ответил {e.code}"
+                if e.code == 416 and offset and not restarted:
+                    # докачка не работает (часто мешает фильтр в сети) — качаем кусок заново
+                    _truncate(part, start)
+                    restarted = True
+                    continue
                 if 400 <= e.code < 500 and e.code not in (408, 429):
-                    failures = 4  # файла здесь нет или доступ закрыт — к следующему зеркалу
-            except (OSError, ValueError, http.client.HTTPException) as e:
+                    failures = 4  # файла здесь нет или доступ закрыт — к следующему источнику
+            except ValueError as e:
                 error = str(e)
+                failures = 4  # пришло не то — к следующему источнику
+            except (OSError, http.client.HTTPException) as e:
+                error = str(e) or type(e).__name__
             if got:
                 failures = 0  # обрыв после части файла: просто продолжаем с нового места
             else:
                 failures += 1
-                print()
-                say(f"Нет связи с {host} ({error or 'пустой ответ'}), пробую ещё раз...", Color.DIM)
-                time.sleep(2)
+                progress.end_line()
+                say(f"  не получилось: {error or 'пустой ответ'}", Color.DIM)
+                if failures < 4:
+                    time.sleep(2)
     done = os.path.getsize(part) if os.path.exists(part) else 0
     if done:
         progress.update(done, force=True)
-        print()
+    progress.end_line()
     if done == size:
         os.replace(part, path)
         return True
-    if os.path.exists(part) and os.path.getsize(part) > size:
+    if done > size:
         os.remove(part)  # что-то пошло не так — в следующий раз начнём заново
     return False
 
@@ -815,9 +881,11 @@ class Agent:
     def pull_model(self):
         source = mirror_source(self.model)
         saved = source and os.path.join(data_dir(), source[1])
-        if saved and (os.path.exists(saved) or os.path.exists(saved + ".part")):
-            # В прошлый раз уже качали с запасного сервера — продолжаем оттуда.
-            say(f"Продолжаю скачивание нейросети «{self.model}» с запасного сервера.", Color.CYAN)
+        marker = os.path.join(data_dir(), "ollama_registry_failed")
+        if saved and (os.path.exists(saved) or os.path.exists(saved + ".part") or os.path.exists(marker)):
+            # В прошлый раз сервер Ollama не отдал модель — сразу качаем с запасных серверов.
+            say(f"Скачиваю нейросеть «{self.model}» с запасных серверов "
+                f"({source[2] / 1e9:.1f} ГБ, это займёт время)...", Color.CYAN)
             return self.pull_from_mirror(source)
 
         say(f"Скачиваю {self.model}... Это может занять несколько минут.", Color.CYAN)
@@ -843,9 +911,13 @@ class Agent:
                 "или выберите модель qwen2.5 (например, /модель qwen2.5:7b): её можно скачать с "
                 "запасного сервера.", Color.YELLOW)
             return False
-        if not ask_yes(f"Скачать эту же нейросеть с запасного сервера (Hugging Face, "
-                       f"{source[2] / 1e9:.1f} ГБ)? [Enter = да / н = нет]: "):
-            return False
+        try:
+            os.makedirs(data_dir(), exist_ok=True)
+            with open(marker, "w") as f:  # чтобы в следующий раз не ждать сервер Ollama
+                f.write(error or "")
+        except OSError:
+            pass
+        say(f"Скачиваю эту же нейросеть с запасных серверов ({source[2] / 1e9:.1f} ГБ)...", Color.CYAN)
         return self.pull_from_mirror(source)
 
     def ollama_pull(self):
@@ -908,11 +980,10 @@ class Agent:
             return False
 
         if not os.path.exists(path):
-            urls = [f"{mirror}/{repo}/resolve/main/{filename}" for mirror in HF_MIRRORS]
-            if not download_resumable(urls, path, size, "Нейросеть"):
-                say("Не удалось скачать нейросеть с запасного сервера. Проверьте интернет и запустите "
+            if not download_resumable(model_mirrors(repo, filename, size), path, size, "Нейросеть"):
+                say("Не удалось скачать нейросеть ни с одного сервера. Проверьте интернет и запустите "
                     "помощника снова: загрузка продолжится с того же места. Если не помогает, "
-                    "включите VPN.", Color.RED)
+                    "включите VPN на время скачивания или пришлите фото этого окна.", Color.RED)
                 return False
 
         if sha256_file(path) != digest:
